@@ -5,15 +5,16 @@ import { afterEach, expect, it, vi } from 'vitest'
 import TopBar from '@/components/custom/TopBar.vue'
 import { queryKeys } from '@/query/keys'
 
-const api = vi.hoisted(() => ({ document: vi.fn(), page: vi.fn() }))
+const api = vi.hoisted(() => ({ document: vi.fn(), page: vi.fn(), entity: vi.fn() }))
 vi.mock('@/client', async (original) => ({
   ...(await original<object>()),
   lookupDocumentRouteApiV1DocumentsLookupGet: api.document,
   lookupPageRouteApiV1PagesLookupGet: api.page,
+  getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
 }))
 afterEach(() => vi.resetAllMocks())
 
-async function setup() {
+async function setup(start = '/lib/doc/one') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -25,9 +26,10 @@ async function setup() {
       { path: '/', name: 'document-list', component: { template: '<div />' } },
       { path: '/scans', name: 'document-search', component: { template: '<div />' } },
       { path: '/people', name: 'people-search', component: { template: '<div />' } },
+      { path: '/people/:personId', name: 'person-detail', component: { template: '<div />' } },
     ],
   })
-  await router.push('/lib/doc/one')
+  await router.push(start)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   const wrapper = mount(TopBar, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient: client }]] },
@@ -126,5 +128,48 @@ it('keeps the document name while a different page loads or fails', async () => 
   expect(labels()[2]).toBe('A very long catalogue title '.repeat(20).trim())
   expect(labels()[3]).toBe('Page missing')
   expect(wrapper.findAll('[aria-label="Breadcrumb"] a')[2]!.attributes('title')).toBe(labels()[2])
+  dispose()
+})
+
+it.each([
+  ['Hana Sidebar', 'Hana Sidebar'],
+  ['   ', 'p1'],
+  [null, 'p1'],
+])('names the person breadcrumb: %s', async (name, label) => {
+  api.entity.mockResolvedValue({ data: { entity_id: 'p1', name } })
+  const { wrapper, labels, dispose } = await setup('/people/p1?tab=faces')
+  expect(labels()).toEqual(['PeopleGator', 'People', label])
+  const links = wrapper.findAll('[aria-label="Breadcrumb"] a')
+  expect(links.map((a) => a.attributes('title'))).toEqual(labels())
+  expect(links[1]!.attributes('href')).toBe('/people')
+  expect(links[2]!.attributes('href')).toBe('/people/p1?tab=faces')
+  // Phones use the logo as the home link, leaving room for the name.
+  expect(links[0]!.element.closest('li')!.className).toContain('hidden sm:inline-flex')
+  expect(api.document).not.toHaveBeenCalled()
+  expect(api.page).not.toHaveBeenCalled()
+  dispose()
+})
+
+it('keeps the person breadcrumb current across renames, navigation and failures', async () => {
+  api.entity.mockResolvedValueOnce({ data: { entity_id: 'p1', name: 'Hana Sidebar' } })
+  const { router, client, labels, dispose } = await setup('/people/p1')
+  expect(labels()[2]).toBe('Hana Sidebar')
+  client.setQueryData(queryKeys.entities.detail('p1'), { entity_id: 'p1', name: 'Hana Renamed' })
+  await flushPromises()
+  expect(labels()[2]).toBe('Hana Renamed')
+
+  let rejectEntity!: (error: Error) => void
+  api.entity.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectEntity = reject
+      }),
+  )
+  await router.push('/people/p2')
+  await flushPromises()
+  expect(labels()[2]).toBe('p2')
+  rejectEntity(new Error('Not found'))
+  await flushPromises()
+  expect(labels()[2]).toBe('p2')
   dispose()
 })

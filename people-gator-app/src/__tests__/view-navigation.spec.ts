@@ -9,6 +9,9 @@ vi.mock('@/query/media', () => ({
   useDocumentLookupQuery: () => ({ data: ref(undefined) }),
   usePageLookupQuery: () => ({ data: ref(undefined) }),
 }))
+vi.mock('@/query/entities', () => ({
+  useEntityQuery: () => ({ data: ref(undefined) }),
+}))
 
 const query = {
   library: 'preview-mzk', document: '00000000-0000-4000-8000-000000000001',
