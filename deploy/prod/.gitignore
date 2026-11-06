@@ -1,0 +1,4 @@
+*.env
+!example.env
+# Users files contain password hashes.
+*.json

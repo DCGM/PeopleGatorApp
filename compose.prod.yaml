@@ -1,0 +1,201 @@
+# Production stack: API, frontend and pgvector PostgreSQL behind an external Traefik.
+#
+# Build the production images once, then deploy them to any configured environment
+# by selecting that environment's file (copy deploy/prod/example.env):
+#
+#   docker compose -f compose.prod.yaml --env-file deploy/prod/<env>.env build
+#   docker compose -f compose.prod.yaml --env-file deploy/prod/<env>.env push
+#   docker compose -f compose.prod.yaml --env-file deploy/prod/<env>.env pull
+#   docker compose -f compose.prod.yaml --env-file deploy/prod/<env>.env up -d --no-build
+#
+# The frontend is built for same-origin API routing, so one image tag serves every
+# environment. See docs/DEPLOYMENT.md#self-contained-production-compose.
+name: ${APP_NAME:-people-gator}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: '5'
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+x-backend: &backend
+  <<: *hardening
+  image: ${IMAGE_REGISTRY:-people-gator}/people-gator-api:${IMAGE_TAG:-latest}
+  logging: *logging
+  user: '10001:10001'
+  tmpfs: ['/tmp:size=256m,mode=1777']
+  env_file:
+    # Optional extra API settings (OpenRouter, OTEL, embedding service, ...).
+    - path: ${API_ENV_FILE:-/dev/null}
+  environment: &backend-environment
+    PEOPLE_GATOR_API__HOST: 0.0.0.0
+    PEOPLE_GATOR_API__PORT: '8000'
+    PEOPLE_GATOR_API__DEBUG: 'false'
+    PEOPLE_GATOR_API__RELOAD: 'false'
+    PEOPLE_GATOR_API__LOG_LEVEL: ${API_LOG_LEVEL:-info}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: db
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: '5432'
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${POSTGRES_USER:-people_gator}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${POSTGRES_PASSWORD:?required}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:-people_gator}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
+    # Local storage in the api-data volume by default; set API_STORAGE for S3.
+    PEOPLE_GATOR_API__STORAGE: '${API_STORAGE:-{"local":{"root":"/data"},"s3":null}}'
+    PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["${APP_SCHEME:-https}://${APP_HOST:?required}"]'
+    PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ''
+    PEOPLE_GATOR_API__JWK__ISSUER: ${APP_SCHEME:-https}://${APP_HOST}
+    PEOPLE_GATOR_API__JWK__AUDIENCE: ${APP_HOST}
+    PEOPLE_GATOR_API__DEPLOYMENT__ENVIRONMENT: ${DEPLOY_ENVIRONMENT:-production}
+    PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${IMAGE_TAG:-latest}
+    PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
+    PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER: ''
+  volumes:
+    - api-data:/data
+  networks: [database]
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-people_gator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-people_gator}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks: [database]
+
+  # Gives the API user ownership of the local storage root and, when USERS_FILE
+  # is set, validates it and installs it into the configured storage (local or S3).
+  storage-init:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-people-gator}/people-gator-api:${IMAGE_TAG:-latest}
+    logging: *logging
+    env_file:
+      - path: ${API_ENV_FILE:-/dev/null}
+    environment: *backend-environment
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    user: '0:0'
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    entrypoint: [sh, -c]
+    command:
+      - |
+        set -eu
+        mkdir -p /data/peoplegator_api
+        chown 10001:10001 /data /data/peoplegator_api
+        if [ -s /run/users.json ]; then
+          python - <<'PY'
+        import asyncio
+        from people_gator_api.services.auth_service import _users_adapter
+        from people_gator_api.services.filesystem_service import get_filesystem
+        from people_gator_api.settings import settings
+        data = open("/run/users.json", "rb").read()
+        _users_adapter.validate_json(data)
+        asyncio.run(get_filesystem().write_bytes(settings.jwk.users_path, data))
+        print("Installed USERS_FILE into", settings.storage.backend, "storage")
+        PY
+          find /data/peoplegator_api -maxdepth 1 -user 0 -exec chown 10001:10001 {} +
+        fi
+    volumes:
+      - api-data:/data
+      - type: bind
+        source: ${USERS_FILE:-/dev/null}
+        target: /run/users.json
+        read_only: true
+    # Same egress path as the backend, for S3 storage.
+    networks: [traefik]
+
+  # One-shot schema migration; the API starts only after it succeeds.
+  migrate:
+    <<: *backend
+    command: [migrate]
+    restart: 'no'
+    depends_on:
+      db:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+
+  backend:
+    <<: *backend
+    build:
+      context: ./people-gator-api
+      dockerfile: Dockerfile
+    command: [api]
+    restart: unless-stopped
+    mem_limit: ${BACKEND_MEMORY:-4g}
+    pids_limit: 512
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [database, traefik]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - 'traefik.docker.network=${TRAEFIK_NETWORK:-web}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.rule=Host(`${APP_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.priority=100'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.service=${APP_NAME:-people-gator}-api'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.tls=${TRAEFIK_TLS:-true}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-api.tls.certresolver=${TRAEFIK_CERTRESOLVER-tlschallenge}'
+      - 'traefik.http.services.${APP_NAME:-people-gator}-api.loadbalancer.server.port=8000'
+
+  frontend:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-people-gator}/people-gator-app:${IMAGE_TAG:-latest}
+    build:
+      context: ./people-gator-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /
+    logging: *logging
+    restart: unless-stopped
+    tmpfs: ['/tmp:size=32m,mode=1777']
+    mem_limit: 256m
+    pids_limit: 128
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - 'traefik.docker.network=${TRAEFIK_NETWORK:-web}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.rule=Host(`${APP_HOST}`)'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.priority=10'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.service=${APP_NAME:-people-gator}-app'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.tls=${TRAEFIK_TLS:-true}'
+      - 'traefik.http.routers.${APP_NAME:-people-gator}-app.tls.certresolver=${TRAEFIK_CERTRESOLVER-tlschallenge}'
+      - 'traefik.http.services.${APP_NAME:-people-gator}-app.loadbalancer.server.port=8080'
+
+volumes:
+  postgres-data:
+  api-data:
+
+networks:
+  # Private network for the database; never routed by Traefik.
+  database:
+    internal: true
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-web}

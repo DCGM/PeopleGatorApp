@@ -10,6 +10,7 @@
 | PR preview | [`people-gator-deploy pr`](../deploy/people-gator-deploy/README.md) | Isolated synthetic review environment per same-repository PR |
 | Staging | [`people-gator-deploy staging`](../deploy/people-gator-deploy/README.md) | Every successful `main` build on retained database snapshot; storage managed externally |
 | Tagged release | [`people-gator-deploy release`](../deploy/people-gator-deploy/README.md) | Production stack for `v*` tags on tested `main` commits |
+| Self-contained production | [`compose.prod.yaml`](#self-contained-production-compose) | Production images with bundled PostgreSQL, deployed to any host with external Traefik |
 | Production-format images | `people-gator-api/Dockerfile`, `people-gator-app/Dockerfile` | Building blocks for a separately configured deployment |
 
 The packaged release stack (`compose.release.yaml`) is the supplied production
@@ -19,6 +20,51 @@ prerequisite below. `compose.live-preview.yaml` uses development images/reload a
 it is not a production release template. It needs the existing `web` network,
 Traefik/TLS and S3 settings. Its startup migrates/adopts before API validation;
 see [Database migrations](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
+
+## Self-contained production Compose
+
+[`compose.prod.yaml`](../compose.prod.yaml) builds both production Dockerfiles
+and runs the API, frontend and a pgvector PostgreSQL database. Traefik is
+external: the stack joins its Docker network and adds router labels. Each target
+environment is one env file; copy [`deploy/prod/example.env`](../deploy/prod/example.env)
+to `deploy/prod/<env>.env` (ignored by Git) and set at least `APP_HOST`,
+`POSTGRES_PASSWORD`, `IMAGE_REGISTRY`/`IMAGE_TAG` and `TRAEFIK_NETWORK`.
+
+The frontend is built for same-origin routing (`VITE_API_BASE_URL=/`), so the
+same images serve every environment. Build and push once, then deploy anywhere:
+
+```sh
+f="-f compose.prod.yaml --env-file deploy/prod/staging.env"
+docker compose $f build && docker compose $f push      # build host
+docker compose $f pull && docker compose $f up -d --no-build --wait   # target host
+```
+
+Startup order: `db` healthy → `storage-init` (gives `10001:10001` ownership of the
+`api-data` root and, if `USERS_FILE` is set, validates it and writes it to the
+configured storage, local or S3) → one-shot `migrate` → `backend`
+healthy → `frontend`. Re-running `up -d` reruns the idempotent migration and keeps
+the `postgres-data` and `api-data` volumes. A failed migration stops the rollout
+before the API starts.
+
+| Variable | Purpose / default |
+| --- | --- |
+| `APP_NAME` | Compose project and Traefik router prefix; unique per environment on a host (`people-gator`) |
+| `APP_HOST`, `APP_SCHEME` | Routed hostname (required) and scheme (`https`); set CORS origin, token issuer and audience |
+| `IMAGE_REGISTRY`, `IMAGE_TAG`, `COMMIT_SHA` | Images `<registry>/people-gator-api:<tag>` and `<registry>/people-gator-app:<tag>` and reported deployment version |
+| `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` | External Traefik network (`web`) and entrypoint (`websecure`) |
+| `TRAEFIK_TLS`, `TRAEFIK_CERTRESOLVER` | Router TLS (`true`) and resolver (`tlschallenge`); use `false` and empty for HTTP-only entrypoints |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_IMAGE` | Bundled database; password required |
+| `USERS_FILE` | Optional users file written to the configured storage (local or S3) on every start; relative paths resolve from the repository root |
+| `API_STORAGE` | Storage JSON; defaults to local `/data` in the `api-data` volume, set an S3 object instead |
+| `API_ENV_FILE` | Optional dotenv file with other `PEOPLE_GATOR_API__*` settings (OpenRouter, OTEL, embeddings); values cannot override the stack's fixed settings |
+| `API_LOG_LEVEL`, `BACKEND_MEMORY` | API log level (`info`) and memory limit (`4g`) |
+
+The database sits on an internal network reachable only by `migrate` and
+`backend`. The API uses the database owner role for migrations and runtime; for a
+restricted runtime role, use [`compose.release.yaml`](#choose-a-deployment-workflow)
+or the [production startup guide](../people-gator-api/docs/PRODUCTION-STARTUP.md).
+Back up both volumes as described in [Data maintenance](DATA_MAINTENANCE.md). The
+browser login limitation below applies to this stack too.
 
 ## Production-format images
 
