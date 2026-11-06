@@ -417,7 +417,7 @@ function startMove(event: PointerEvent, id: string) {
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
               :style="{ width: `${header.getSize()}px` }"
-              class="relative border-r pr-4 align-top last:border-r-0"
+              class="relative h-px border-r p-0 align-top last:border-r-0"
               :class="{
                 'opacity-50': dragging?.id === header.column.id,
                 'before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary':
@@ -426,27 +426,13 @@ function startMove(event: PointerEvent, id: string) {
                   dragging?.drop?.target === header.column.id && dragging.drop.after,
               }"
             >
-              <div v-if="!header.column.columns.length" class="flex justify-center pt-1">
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  class="cursor-grab touch-none active:cursor-grabbing"
-                  :data-move-column="header.column.id"
-                  :aria-label="`Move ${columnLabel(header.column.id)} column`"
-                  aria-keyshortcuts="ArrowLeft ArrowRight"
-                  title="Drag to move; arrow keys move"
-                  @pointerdown="startMove($event, header.column.id)"
-                  @keydown="moveKey($event, header.column.id)"
-                >
-                  <GripHorizontal aria-hidden="true" />
-                </Button>
-              </div>
-              <div class="flex items-center gap-1 pb-2 whitespace-normal">
+              <!-- Sort strip on the left; move handle above a centered, content-width name. -->
+              <div class="flex h-full min-h-16 items-stretch pr-3">
                 <Button
                   v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
                   variant="ghost"
                   size="icon"
-                  class="size-8 shrink-0"
+                  class="h-auto w-8 shrink-0 rounded-none"
                   :aria-label="sortLabel(header.column.id, columnLabel(header.column.id))"
                   @click="toggleSort(header.column.id)"
                 >
@@ -462,29 +448,49 @@ function startMove(event: PointerEvent, id: string) {
                   />
                   <ArrowUpDown v-else class="size-4" aria-hidden="true" />
                 </Button>
-                <DropdownMenu v-if="header.column.getCanHide()">
-                  <DropdownMenuTrigger as-child>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      class="h-auto min-h-8 min-w-0 justify-start px-1 text-left whitespace-normal"
-                      :data-column-menu="header.column.id"
-                      ><span class="min-w-0 [overflow-wrap:anywhere]"
-                        ><HeaderLabel :id="header.column.id" /></span
-                    ></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      variant="destructive"
-                      @select="removeColumn(header.column.id)"
-                    >
-                      <X aria-hidden="true" />Remove column
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <span v-else class="min-w-0 [overflow-wrap:anywhere]"
-                  ><HeaderLabel :id="header.column.id"
-                /></span>
+                <div class="flex min-w-0 flex-1 flex-col items-center px-1">
+                  <Button
+                    v-if="!header.column.columns.length"
+                    variant="ghost"
+                    size="icon-xs"
+                    class="mt-1 cursor-grab touch-none active:cursor-grabbing"
+                    :data-move-column="header.column.id"
+                    :aria-label="`Move ${columnLabel(header.column.id)} column`"
+                    aria-keyshortcuts="ArrowLeft ArrowRight"
+                    title="Drag to move; arrow keys move"
+                    @pointerdown="startMove($event, header.column.id)"
+                    @keydown="moveKey($event, header.column.id)"
+                  >
+                    <GripHorizontal aria-hidden="true" />
+                  </Button>
+                  <div
+                    class="flex max-w-full flex-1 items-center justify-center pb-1 text-center whitespace-normal"
+                  >
+                    <DropdownMenu v-if="header.column.getCanHide()">
+                      <DropdownMenuTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-auto min-h-8 max-w-full min-w-0 px-1 whitespace-normal"
+                          :data-column-menu="header.column.id"
+                          ><span class="min-w-0 [overflow-wrap:anywhere]"
+                            ><HeaderLabel :id="header.column.id" /></span
+                        ></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center">
+                        <DropdownMenuItem
+                          variant="destructive"
+                          @select="removeColumn(header.column.id)"
+                        >
+                          <X aria-hidden="true" />Remove column
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <span v-else class="min-w-0 px-1 [overflow-wrap:anywhere]"
+                      ><HeaderLabel :id="header.column.id"
+                    /></span>
+                  </div>
+                </div>
               </div>
               <Button
                 v-if="!header.column.columns.length"

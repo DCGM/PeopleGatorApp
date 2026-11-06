@@ -180,6 +180,44 @@ try {
       assert.ok(header.y >= bar - 1, 'top bar does not cover the table header')
     }
     await capture('defaults')
+    // Header cells: full-height sort strip with a centered icon; the move handle and a
+    // content-width name are centered in the remaining width; the resize grip is full height.
+    const cells = await page.locator('thead th[data-column]').evaluateAll((ths) =>
+      ths.map((th) => {
+        const box = (e) => e?.getBoundingClientRect()
+        const sort = th.querySelector('button[aria-label^="Sort by"]')
+        return {
+          id: th.dataset.column,
+          th: box(th),
+          sort: box(sort),
+          icon: box(sort?.querySelector('svg')),
+          move: box(th.querySelector('[data-move-column]')),
+          name: box(th.querySelector('[data-column-menu]')),
+          resize: box(th.querySelector('[role="separator"]')),
+        }
+      }),
+    )
+    for (const c of cells) {
+      const near = (a, b, what) => assert.ok(Math.abs(a - b) <= 1.5, `${c.id}: ${what}`)
+      const rest = { left: c.sort ? c.sort.right : c.th.left, right: c.resize.left }
+      const mid = (r) => (r.left + r.right) / 2
+      if (c.sort) {
+        near(c.sort.top, c.th.top, 'sort strip starts at the top')
+        near(c.sort.bottom, c.th.bottom - 1, 'sort strip reaches the bottom')
+        near(c.sort.left, c.th.left, 'sort strip on the left edge')
+        near(
+          (c.icon.top + c.icon.bottom) / 2,
+          (c.sort.top + c.sort.bottom) / 2,
+          'sort icon centered',
+        )
+      }
+      near(c.resize.top, c.th.top, 'resize grip from the top')
+      near(c.resize.bottom, c.th.bottom - 1, 'resize grip to the bottom')
+      near(mid(c.move), mid(rest), 'move handle centered')
+      assert.ok(c.move.top < c.name.top, `${c.id}: move handle above the name`)
+      near(mid(c.name), mid(rest), 'name centered')
+      assert.ok(c.name.width < rest.right - rest.left - 4, `${c.id}: name fits its content`)
+    }
     assert.equal(await page.getByRole('button', { name: 'Columns', exact: true }).count(), 0)
     // The add column takes the remaining width; any of its cells opens the header menu.
     assert.ok((await widths()).add >= 160, 'add column keeps its minimum width')

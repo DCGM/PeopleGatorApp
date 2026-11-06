@@ -1264,7 +1264,9 @@ replaces a removed name cannot be removed. Visible fields and order persist in s
 including reload/navigation back. **Restore default columns** restores the eight fields and order; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 104px, Linked entities 144px, Annotations 144px, Faces/Mentions 128px and
-optional NDK 80px. Header text wraps independently of sort icons.
+optional NDK 80px. Each header has a full-height sort strip on its left with a centered
+icon; the move handle is centered at the top of the remaining width with the content-width
+name centered below it, and the resize grip spans the full height on the right.
 
 The Documents view uses the available content width. It has no footer, page title or subtitle; only the small **Documents index** label precedes the search panel. On desktop (1024px and wider), the table fills the entire remaining viewport height below the filters. On mobile, the table section occupies the viewport below the sticky top bar, so the bar never covers the table header; the label and filters are reachable by page scrolling. There is no Load more button: reaching the last row loads the next batch. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
 Choose extra fields and scroll vertically at left, middle and right positions;

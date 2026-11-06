@@ -25,7 +25,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    centered top handle (or use ←/→ on it) to reorder columns; click a header label
    and choose **Remove column** to remove one. Defaults show First page, Document
    name, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
-   choices and order persist for the browser tab. Use a header’s separate sort icon to cycle ascending, descending
+   choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky
    header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
    and first breadcrumb return here. Open **Scan search** for pages and evidence;

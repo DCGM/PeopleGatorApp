@@ -43,6 +43,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
   selector, URL, Back/Forward, and real server requests stay synchronized.
   Clearing restores name ascending for browse or relevance for search.
 - No Columns button. The last **Add column** column fills the remaining width (desktop, after removing a column) or keeps 160px. Clicking a body cell in it opens the header menu, which lists only hidden fields grouped as Document fields, Annotations, Faces and Mentions. Count headers show their title with the mode (All, Automatic, …) in small text below. Choosing one appends that column last and closes the menu.
+- Header layout: a full-height sort strip with a centered icon on the left; the move handle centered at the top of the remaining width, the content-width name centered below it, and a full-height resize grip on the right.
 - Dragging a header's top handle (mouse on desktop, Chromium touch events on mobile) shows a drop indicator and moves the column without scrolling the table; the order survives reload. ←/→ on the handle moves it one position and announces the new position.
 - Removal sits behind the header label: clicking it opens a menu with a red **Remove column** item. Escape closes the menu without removing; choosing the item removes the column.
 - Session column choices and order survive reload and navigation away/back; Restore default columns
