@@ -57,6 +57,7 @@ from people_gator_api.schemas.search import (
     SearchEntitiesRequest,
 )
 from people_gator_api.seeding import preview
+from people_gator_api.schemas.missing import MISSING
 from people_gator_api.seeding.fixtures import (
     BREADCRUMB_PAGES,
     DOCUMENTS,
@@ -108,7 +109,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (44, 162, 108)
-    assert len(result.documents) == 55 and len(result.pages) == 116
+    assert len(result.documents) == 57 and len(result.pages) == 117
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -1308,7 +1309,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     expected_libraries = [
         'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
-        'preview-table-widths', 'preview-table-widths-long-archive-label',
+        'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
     assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
     assert all(len(batch.items) == 1 for batch in batches)
@@ -4570,6 +4571,99 @@ async def test_reset_navigation_scenario_has_results_outside_source_filters(seed
     with Image.open(io.BytesIO(image.content)) as stored:
         assert stored.width > 0 and stored.height > 0
     assert await preview.seed_preview(db, filesystem) == seed
+
+
+@pytest.mark.asyncio
+async def test_document_count_range_examples_filter_lists_and_search(seed_target):
+    """#111: document-wide maxima and linked-people bounds, with zero for no evidence."""
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+
+    def link_filter(key, **extra):
+        query = parse_qs(urlsplit(seeded.filter_examples[key]).query)
+        counts = {name: int(values[0]) for name, values in query.items() if name.startswith(("min_", "max_"))}
+        return DocumentListFilter(library=query["library"], **{**counts, **extra})
+
+    async def listed(filter_):
+        result = await database.sources.list_documents(
+            DocumentListRequest(limit=100, filter_=filter_, return_total_count=True))
+        assert result.total_count == len(result.items)
+        return {item.source_id for item in result.items}
+
+    ledger = seeded.documents["table-ledger"]
+    zero = {seeded.documents[key] for key in ("table-mirror", "table-nav-empty", "table-nav-missing")}
+    every = await listed(link_filter("document-filter-no-people").model_copy(update={"max_linked_entity_count": MISSING}))
+    assert every == {ledger, *zero}
+
+    # Faces 1-4 and exactly two linked people keep only the ledger (4 faces, 2 people).
+    assert await listed(link_filter("document-filter-ranges")) == {ledger}
+    ledger_row = await database.sources.get_document(ledger)
+    assert ledger_row.linked_entity_count == 2 and ledger_row.entity_link_stats.faces.total == 4
+    # Bounds are inclusive on both sides; one below excludes it.
+    assert await listed(link_filter("document-filter-ranges", max_faces_total_count=3)) == set()
+    assert await listed(link_filter("document-filter-ranges", min_linked_entity_count=3, max_linked_entity_count=3)) == set()
+    # Maxima keep documents without evidence: no linked people, or zero faces.
+    assert await listed(link_filter("document-filter-no-people")) == zero
+    assert await listed(link_filter("document-filter-no-people", max_linked_entity_count=MISSING, max_faces_total_count=0)) == zero
+    # Sorting by a count joins the counts directly; the same bounds still apply.
+    sorted_result = await database.sources.list_documents(DocumentListRequest(
+        limit=100, sort="faces_total_count", filter_=link_filter("document-filter-no-people")))
+    assert {item.source_id for item in sorted_result.items} == zero
+    # Search applies the same document filter.
+    found = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=["ledger"]), limit=100, filter_=link_filter("document-filter-ranges")))
+    assert [item.source_id for item in found.items] == [ledger]
+    excluded = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=["ledger"]), limit=100, filter_=link_filter("document-filter-no-people")))
+    assert ledger not in {item.source_id for item in excluded.items}
+
+
+@pytest.mark.asyncio
+async def test_document_navigation_defaults_scenario_is_additive_and_preserves_review(seed_target, monkeypatch):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    with monkeypatch.context() as old:
+        old.setattr(preview, "DOCUMENTS", tuple(d for d in DOCUMENTS if not d.key.startswith("table-nav-")))
+        old.setattr(preview, "PAGES", tuple(p for p in PAGES if not p.key.startswith("table-nav-")))
+        previous = await preview.seed_preview(database, filesystem)
+    ledger_before = await database.sources.get_document(previous.documents["table-ledger"])
+    seeded = await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(previous.documents["table-ledger"]) == ledger_before
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-navigation"]).query)
+    request = DocumentListRequest(limit=12, sort="name", filter_=DocumentListFilter(library=query["library"]))
+    first = await database.sources.list_documents(request)
+    second = await database.sources.list_documents(request.model_copy(update={"cursor": first.cursor}))
+    assert len(first.items) == 12 and first.cursor
+    assert len(second.items) == 7 and second.cursor is None
+    rows = {row.source_id: row for row in [*first.items, *second.items]}
+    empty = rows[seeded.documents["table-nav-empty"]]
+    missing = rows[seeded.documents["table-nav-missing"]]
+    assert empty.registered_page_count == 0 and empty.first_page_source_id is None
+    assert empty.linked_entity_count == 0
+    assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
+    assert missing.registered_page_count == 1
+    page = await database.sources.get_page(missing.first_page_source_id)
+    assert page.source_id == seeded.pages["table-nav-missing-1"]
+    assert page.library == missing.library and page.document_id == missing.document_id
+    with pytest.raises(SourceResolutionError, match="Page image not found"):
+        await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    ledger = rows[seeded.documents["table-ledger"]]
+    assert ledger.registered_page_count == 2 and ledger.linked_entity_count == 2
+    assert ledger.entity_link_stats.faces.total == 4
+    assert ledger.entity_link_stats.mentions.total == 5
+    assert seeded.filter_examples["document-table-first-page-editor"] == f"/pages/{ledger.first_page_source_id}"
+    thumbnail_page = await database.sources.get_page(ledger.first_page_source_id)
+    image = await get_page_image(thumbnail_page.library, thumbnail_page.document_id, thumbnail_page.page_id, max_width=256)
+    assert Image.open(io.BytesIO(image.content)).width == 256
+    actor = GenericActor(user_id=seeded.users["reviewer"])
+    await database.text_mentions.patch(seeded.mentions["table-manual-mention"], TextMentionPatchRequest(entity_id=None), actor)
+    edited = await database.sources.get_document(ledger.source_id)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    assert await database.sources.get_document(ledger.source_id) == edited
+    assert (await database.text_mentions.get(seeded.mentions["table-manual-mention"])).entity_id is None
 
 
 async def _all_items(fetch, request_type, limit, **kwargs):

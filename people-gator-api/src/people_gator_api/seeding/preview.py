@@ -914,6 +914,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-unknown-names": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-name-fallback": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-unnamed": "/documents?" + urlencode({"document": documents["legacy-document"]}),
+            "document-table-first-page-editor": f"/pages/{pages["table-1"]}",
+            "document-table-navigation": "/documents?" + urlencode({
+                "library": ["preview-table-navigation", "preview-table", "preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination"],
+            }, doseq=True),
             "document-table-widths": "/documents?" + urlencode({
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",
@@ -930,6 +934,17 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "annotation-count-documents": "/documents?" + urlencode({"library": ["preview-counts", "preview-table", "preview-table-mirror"], "min_faces_manual_count": "1", "min_mentions_total_count": "3", "sort": "annotations_verified_count", "dir": "desc"}, doseq=True),
             "annotation-count-pages": "/scans?" + urlencode({"library": "preview-counts", "min_faces_unassigned_count": "1", "sort": "faces_total_count", "dir": "asc"}),
             "document-table": "/documents?" + urlencode({"library": "preview-table"}),
+            # #111: sidebar count ranges. The ledger has 4 faces and 2 linked people;
+            # the mirror and navigation documents have no evidence (zero).
+            "document-filter-ranges": "/documents?" + urlencode({
+                "library": ["preview-table", "preview-table-mirror", "preview-table-navigation"],
+                "min_faces_total_count": 1, "max_faces_total_count": 4,
+                "min_linked_entity_count": 2, "max_linked_entity_count": 2,
+            }, doseq=True),
+            "document-filter-no-people": "/documents?" + urlencode({
+                "library": ["preview-table", "preview-table-mirror", "preview-table-navigation"],
+                "max_linked_entity_count": 0,
+            }, doseq=True),
             "mobile-filters": "/people?"
             + urlencode(
                 {

@@ -289,7 +289,7 @@ keyboard-focus one, then remove its filter while preserving the search text.
 The document table shows registered page counts, modification metadata and
 annotation statistics in configurable columns. Click a document name to open its
 scan list. The existing `document-preview-remainder` link now demonstrates a
-six-page document through its Pages total; enable First page for one optional
+six-page document through its Pages total; First page provides one
 thumbnail, or open the name link to browse all six scans.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
@@ -801,40 +801,36 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Columns can hide each data field, including Document name, and restore defaults. Document
-name is the first default column and links to the document page. There is no
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
+name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
 The `document-table-unnamed` manifest link demonstrates the document-ID fallback
 using the existing unnamed legacy document and its registered page.
 The table uses document-wide counts even when evidence filters select matching documents. Scroll horizontally to reach
-all fields and vertically to append cursor batches; Load more and Retry remain
-keyboard accessible. The optional **First page** column is hidden by default. Enable it in Columns to
-show a single thumbnail per document. The document response supplies its source
+all fields and vertically to append cursor batches automatically; Retry remains
+keyboard accessible after a failed batch. The **First page** column is shown by default, with a single thumbnail and a link to that registered page in the viewer/editor. The document response supplies its source
 UUID in the same batched projection as the page total; enabling the column adds
 only thumbnail requests, without page-list or annotation/name queries. Hidden
-previews make no media requests. First means the first registered page in archive
-page-ID order, matching the existing page browser, independent of evidence filters.
+previews make no media requests. First means the first registered numbered page, with unknown numbers last and
+source UUIDs breaking ties, independent of evidence filters.
 No pages and unavailable media have short fallbacks. The
 `document-table-first-page` manifest link opens the seeded two-page example;
 both local page images are usable and repository/media tests verify its first page.
 
 
 Sortable table headers (Document name, Library, Document ID, Pages and Last
-modified) use the same server sort as the Sort selector. Click a heading to select
-its normal initial direction; click again to reverse it. An arrow and accessible
-sort state identify the active heading. The `document-table-sort` manifest link
+modified), plus supported annotation counts, use the same server sort as the Sort selector. The separate icon button to the left of each label cycles no explicit sort → ascending → descending → no explicit sort. Clearing restores name ascending for browsing or relevance for text search. An arrow, action name and table sort semantics identify the active heading. The `document-table-sort` manifest link
 opens the 14 pagination ledgers by name descending; reverse Document name and
 scroll to verify ascending order across the cursor boundary. Relevance remains
-available in the selector during text search. Other metadata/count headings have
-no sort action because their fields are not supported by the API.
+available in the selector during text search. Unsupported metadata headings have no sort action.
 
-The `document-table-scroll` link opens the 14 pagination ledgers. Enable First
-page for taller rows, then scroll the full page: the table headings scroll away
-with the rows. There is no sticky table header or separate vertical table scroll
-area. Horizontal scrolling and automatic cursor loading still work. The earlier
-`document-table-page-header`, `document-table-sticky-header` and
-`document-table-scroll-performance` links remain aliases for this same scenario.
+The `document-table-scroll` link opens the 14 pagination ledgers. Scroll the
+bounded table region: its header stays visible, and the horizontal scrollbar
+belongs to the same region. Reaching its last row appends the next cursor batch
+at any horizontal position. The earlier `document-table-page-header`,
+`document-table-sticky-header` and `document-table-scroll-performance` links
+remain aliases for this scenario.
 
 The `document-table-unknown-names` link (also available as the older
 `document-table-name-fallback` link) sorts `preview-mzk` by Document name.
@@ -846,19 +842,19 @@ stable identity. Multiple unknown names tie-break by source UUID ascending.
 
 
 Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
-still works). **NDK** is a default column immediately after Document name: a
-simple source link with an external-link icon. Hover or keyboard-focus it for
+still works). **NDK** is a default column after Document name (re-add it from **Add column** after removing it): a compact
+source link with an external-link icon. Hover or keyboard-focus it for
 **Národní digitální knihovna**; it opens the stored source URL in a new tab. It is
-independent of the optional First page thumbnail, which has no overlay link. The
+independent of the First page thumbnail, which links to the first scan. The
 document-name column still opens the application's document page. The canonical
 source and optional image belong to the same archive document, and reruns retain
 existing identities and edits.
 
 Open `document-table-annotation-groups` for the ledger and its empty same-ID
-mirror in another library. Columns groups counts under **All annotations**,
-**Faces** and **Text mentions**, each with Total, Automatic, Manual, Verified and
-Unassigned. Combined counts remain shown by default; choose individual face or
-mention fields to compare them. Selected groups also label the table headers.
+mirror in another library. The **Add column** menu groups counts under **Annotations**,
+**Faces** and **Mentions**, each with All, Automatic, Manual, Verified and
+Unassigned. Each count header shows its title with the mode in small text below,
+for example **Faces** / *Manual*. The default columns show the three totals as Annotations / All, Faces / All and Mentions / All; choose additional state fields to compare them. Each header names its count independently.
 The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
@@ -1067,7 +1063,8 @@ and total-mention minima and sort by verified All annotations. Open
 `annotation-count-pages` to select pages with an unassigned face and order total
 faces ascending. Inspect **Minimum annotations**, individual tags, document
 count-column headers and sort selectors. Try zero, multiple minima, clear search,
-clear all and Back/Forward; on mobile expand the filter toggle. Assignment,
+clear all and Back/Forward; on mobile expand the filter toggle (Documents opens
+its filter drawer). Assignment,
 verification, unassignment and deletion update counts and matching results.
 
 The count matrix integration test compares independent expected counts against
@@ -1122,7 +1119,7 @@ fixtures: `table-width-short` (title **A**, no pages) and `table-width-long`
 and a local page image with an Ada mention). Existing identities, checkpoints,
 reviewed assignments and last-processing timestamps are preserved on reruns.
 
-Sort Document name in both directions, then enable First page, Modified by,
+Sort Document name in both directions, then enable Modified by,
 API key and the face/text-mention count groups. At desktop and mobile sizes,
 column boundaries have vertical separators and widths stay constant while full titles and other long values wrap
 inside their cells; row heights grow with the text. The title width is 320 CSS
@@ -1133,14 +1130,12 @@ Drag the grip at a leaf header's right edge to resize that column with mouse or
 touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
 Home/End (bounds), or Enter (that column's default); double-click also restores
 one column. Titles can range from 200 to 720px. Other columns retain readable
-header minima and purpose-specific maxima. Restore column widths resets widths
-only, preserving visibility, filters and sorting. Width choices survive row changes
-and hidden/restored columns within the mounted Documents view; reloads use defaults.
-No browser-local persistence is included.
+header minima and purpose-specific maxima. There is no bulk width-reset action; use each header grip to restore its width. Width choices survive row changes
+and hidden/restored columns within the mounted Documents view; reloads use default widths. Visible column selections persist in sessionStorage for the browser tab.
 
 Scroll horizontally to the middle/far right and vertically to the final row to
-load the second cursor batch automatically; Load more documents is the keyboard
-fallback. Search/filter/sort URLs and counts retain their existing semantics.
+load the second cursor batch automatically; keyboard scrolling of the focused
+table reaches it too. Search/filter/sort URLs and counts retain their existing semantics.
 
 ### People count states
 
@@ -1247,6 +1242,79 @@ Start with a checkbox, then click cards to add people. Clicking a selected card
 keeps it selected; only its checkbox removes it. Shift-click either control to add
 a range, and Clear restores card navigation. Existing linked fixtures demonstrate
 these interactions without a fixture or persistence upgrade.
+
+### Documents navigation and column defaults (#111)
+
+Open `document-table-navigation`. It combines the existing table ledger (2 pages,
+2 distinct linked people, 9 annotations = 4 faces + 5 mentions), width examples and
+14 pagination ledgers with two additive `preview-table-navigation` documents:
+**Navigation: no pages** and **Navigation: missing preview**. The latter has a
+registered page without stored image media; its first-page link still opens the
+scan result. No existing fixture, assignment, timestamp or checkpoint is reset.
+
+A fresh tab shows First page, Document name, NDK, Library, Pages, Linked entities,
+Annotations, Faces and Mentions in that order. The Library link opens Documents
+filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. The last column is **Add column**:
+it fills the remaining table width (at least 160px), its sticky header stays readable while rows
+scroll, and clicking any of its cells opens the header menu of hidden fields, grouped by Document
+fields, Annotations, Faces and Mentions. Choosing a field appends that one column last
+and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
+on the focused handle moves one position. Clicking a header's chevron-marked name opens a menu
+with **Move left**, **Move right** and **Remove column**; Escape closes it without removing. The document-link fallback that
+replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
+including reload/navigation back. **Restore default columns** restores the nine fields and order; unavailable/invalid storage recovers
+safely. Widths remain fixed at every viewport: title 320px, preview 120px,
+library 200px, Pages 120px, Linked entities 144px, All annotations columns 168px, Mentions columns 144px, Faces columns 128px and
+optional NDK 80px. Each header has a full-height sort strip on its left with a centered
+icon; the move handle is centered at the top of the remaining width with the content-width
+name centered below it, and the resize grip spans the full height on the right.
+
+The Documents view uses the available content width. It has no footer, page title or subtitle; only the small **Documents index** label precedes the search panel. On desktop (1024px and wider), the table fills the entire remaining viewport height below the filters. On mobile, the table section occupies the viewport below the sticky top bar, so the bar never covers the table header; the label and filters are reachable by page scrolling. There is no Load more button: reaching the last row loads the next batch. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
+Choose extra fields and scroll vertically at left, middle and right positions;
+the loading sentinel remains visible across the horizontal content. Counts retain
+full-document semantics, including unassigned and direct document evidence.
+
+Use the separate header icon buttons with mouse or keyboard to cycle no explicit
+sort → ascending → descending → no explicit sort. The shared selector, URL and
+Back/Forward follow the same server order. Clearing returns to name ascending
+for browse and relevance for search. The new seed integration scenario checks
+cursor batches, totals, media/link identities and additive rerun/edit preservation.
+
+
+The `document-table-first-page-editor` example links directly by the first page's
+stable source UUID. The application resolves its archive identifiers on navigation
+and opens the existing viewer/editor without listing all pages or prefetching
+page metadata per document row. Document name/ID/fallback links and First page
+use the same destination; missing image media does not prevent opening the editor.
+A failed metadata lookup offers Retry page and a Documents link.
+
+While the next document batch is loading, a standard shadcn Skeleton row appears
+after the loaded rows, aligned with the visible columns. Existing rows remain
+usable; the skeleton disappears after success or failure, and the existing retry
+control handles failed requests. Loading, error and empty states appear inside
+the table's scroll area.
+
+### Documents filter sidebar and count ranges (#111)
+
+Documents shows only the **Documents index** label, search and Sort above the
+table. Filters are in a left sidebar from 1024px; below that, the sliders button
+beside search opens them in a left drawer (Escape or × closes it and keeps the
+selections). Applied-filter tags and **Clear all filters** follow the selectors in the
+sidebar; on mobile they stay under search so they remain visible with the drawer
+closed. The filters are Libraries, Modified by, Modified via key, Modified
+from/to, and **All annotations**, **Faces**, **Text mentions** and **People**.
+Each count button opens State (All, Automatic, Manual, Verified, Unassigned),
+Min, Max and Apply; People has Min and Max for distinct linked people. Links
+that still carry Documents, Pages, link-state or Unassigned faces parameters
+apply them and show removable tags.
+
+Open `document-filter-ranges`: faces 1–4 and exactly two people leave only
+**Document table ledger** (4 faces, 2 linked people). Open
+`document-filter-no-people`: People ≤ 0 lists the mirror and both navigation
+documents, which have no evidence and therefore count as zero. The links reuse
+existing fixtures; no record is added or reset. The seed integration test checks
+both links through repository list and search queries, inclusive bounds and the
+count-sorted path.
 
 ### Top-bar document and page breadcrumbs (#114)
 

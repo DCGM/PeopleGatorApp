@@ -215,7 +215,7 @@ cursors include the criteria and must be discarded when they change.
 | Entities | `entity_id`, `entity_type`, `wikidata_id`, `nlcr_authority_id`, related `source_id`, `detection_id`, `mention_id`, `has_mentions`, `has_detections` |
 | Faces | `entity_id`, exact `source_id`, `detection_id`; face-similarity search remains a separate modality |
 | Text mentions | `entity_id`, exact `source_id`, exact recorded `name` |
-| Documents | `url`, archive `document_id`, exact internal `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_unassigned_faces` |
+| Documents | `url`, archive `document_id`, exact internal `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_unassigned_faces`, count maxima `max_<field>`, `min_linked_entity_count`/`max_linked_entity_count` |
 | Pages | `url`, archive `document_id`, archive `page_id`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_mentions`, `has_faces`, `has_entities` |
 | Images | `url`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id` |
 
@@ -396,13 +396,24 @@ resource review state. Counts are independent of evidence filters and loaded
 previews; empty resources count as zero. Count sort/filter operations do not alter
 First page selection, which remains in archive page-ID order.
 
+Documents (`/documents`, `/search-documents`) also accept an inclusive
+`filter.max_<field>` for every count field, plus `filter.min_linked_entity_count`
+and `filter.max_linked_entity_count`. The linked count is the number of distinct
+people linked by faces or text mentions anywhere in the document scope (the
+table's Linked entities). Documents without such evidence count as zero, so a
+maximum keeps them. A minimum greater than its maximum returns 422 (#111).
+
 Search keeps its existing bounded candidate retrieval and ranking semantics.
 Count minima constrain candidate retrieval; explicit count sorting orders the
 supported candidate set before search pagination. It does not perform an
 unbounded archive search.
 
-Documents and Scan search share a compact **Minimum annotations** control with
-category/state selectors and a whole-number minimum. Each applied minimum has
+Scan search has a compact **Minimum annotations** control with
+category/state selectors and a whole-number minimum. Documents instead shows
+**All annotations**, **Faces**, **Text mentions** and **People** range controls
+in its filter sidebar (a drawer below 1024px): choose a state where offered,
+then Min and/or Max. Documents URL keys are `min_<field>`, `max_<field>`,
+`min_linked_entity_count` and `max_linked_entity_count`. Each applied minimum has
 an individually removable tag, even with mobile filters collapsed. Clear all
 preserves search and sort; clear search preserves minima. URL keys are
 `min_<field>` plus the existing `sort`/`dir`; reload and Back/Forward restore them.

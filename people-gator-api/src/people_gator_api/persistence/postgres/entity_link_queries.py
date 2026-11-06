@@ -190,6 +190,24 @@ async def load_link_stats(session, objects, *, entities=False):
         await load_document_summaries(session, objects)
 
 
+def linked_entity_counts(owner_ids=None):
+    """Distinct people linked by faces or mentions anywhere in each owner's scope.
+
+    Owners without linked evidence have no row and therefore count as zero.
+    """
+    scope = source_scope()
+    evidence = union_all(
+        select(ImageOccurrence.source_id, ImageOccurrence.entity_id).where(ImageOccurrence.occurrence_type == "face"),
+        select(TextMention.source_id, TextMention.entity_id),
+    ).subquery("linked_evidence")
+    return (
+        select(scope.c.owner_id, func.count(func.distinct(evidence.c.entity_id)).label("linked_entity_count"))
+        .select_from(scope).join(evidence, evidence.c.source_id == scope.c.source_id)
+        .where(scope.c.owner_id.in_(owner_ids) if owner_ids is not None else True)
+        .group_by(scope.c.owner_id)
+    )
+
+
 async def load_document_summaries(session, objects):
     """Three bounded batch queries, with no page/evidence Cartesian product."""
     documents = {obj.id: obj for obj in objects if isinstance(obj, Document)}
@@ -207,16 +225,7 @@ async def load_document_summaries(session, objects):
     )
     for owner, count, first_page, number in await session.execute(pages):
         documents[owner]._document_summary.update(registered_page_count=count, first_page_source_id=first_page, first_page_number=number)
-    scope = source_scope()
-    evidence = union_all(
-        select(ImageOccurrence.source_id, ImageOccurrence.entity_id).where(ImageOccurrence.occurrence_type == "face"),
-        select(TextMention.source_id, TextMention.entity_id),
-    ).subquery("linked_evidence")
-    linked = (
-        select(scope.c.owner_id, func.count(func.distinct(evidence.c.entity_id)))
-        .select_from(scope).join(evidence, evidence.c.source_id == scope.c.source_id)
-        .where(scope.c.owner_id.in_(documents)).group_by(scope.c.owner_id)
-    )
+    linked = linked_entity_counts(list(documents))
     for owner, count in await session.execute(linked):
         documents[owner]._document_summary["linked_entity_count"] = count
     attribution = (

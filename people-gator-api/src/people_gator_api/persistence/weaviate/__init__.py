@@ -53,6 +53,7 @@ from people_gator_api.schemas.common import (
     GenericListResponse,
 )
 from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
+from people_gator_api.schemas.annotation_counts import DOCUMENT_RANGE_FIELDS
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityListFilter,
@@ -1111,7 +1112,8 @@ class WeaviateSourceRepository(SourceRepository):
         _require_default_sort(query)
         if not is_missing(query.filter_) and any(not is_missing(getattr(query.filter_, name)) for name in (
             "last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id", "has_unassigned_faces",
-        )):
+            *(f"max_{field}" for field in DOCUMENT_RANGE_FIELDS), "min_linked_entity_count",
+        ) if hasattr(query.filter_, name)):
             raise NotImplementedError("Source processing filters require PostgreSQL")
         fs = _direct(
             query.filter_,

@@ -1,3 +1,4 @@
+import { ref, watch, type Ref } from 'vue'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import type { ColumnVisibilityState } from '@tanstack/vue-table'
 
@@ -22,21 +23,131 @@ export function annotationColumnId(scope: AnnotationScope, state: AnnotationStat
   return scope === 'all' ? state : `${scope}_${state}`
 }
 
+export const DOCUMENT_COLUMN_IDS = [
+  'first_page',
+  'name',
+  'ndk',
+  'library',
+  'registered_page_count',
+  'linked_entity_count',
+  ...DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
+    DOCUMENT_ANNOTATION_STATES.map((state) => annotationColumnId(group.scope, state.id)),
+  ),
+  'document_id',
+  'last_modified',
+  'modified_by',
+  'api_key',
+] as const
+const DEFAULT_COLUMNS = new Set([
+  'first_page',
+  'name',
+  'ndk',
+  'library',
+  'registered_page_count',
+  'linked_entity_count',
+  'total',
+  'faces_total',
+  'mentions_total',
+])
+export const DOCUMENT_COLUMNS_STORAGE_KEY = 'people-gator:document-columns'
+
 export function defaultDocumentColumns(): ColumnVisibilityState {
-  return {
-    first_page: false,
-    document_id: false,
-    modified_by: false,
-    api_key: false,
-    ...Object.fromEntries(
-      DOCUMENT_ANNOTATION_GROUPS.filter((group) => group.scope !== 'all').flatMap((group) =>
-        DOCUMENT_ANNOTATION_STATES.map((state) => [
-          annotationColumnId(group.scope, state.id),
-          false,
-        ]),
-      ),
-    ),
+  return Object.fromEntries(DOCUMENT_COLUMN_IDS.map((id) => [id, DEFAULT_COLUMNS.has(id)]))
+}
+
+export function readDocumentColumns(storage: Pick<Storage, 'getItem'>): ColumnVisibilityState {
+  const fallback = defaultDocumentColumns()
+  try {
+    const saved: unknown = JSON.parse(storage.getItem(DOCUMENT_COLUMNS_STORAGE_KEY) ?? 'null')
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return fallback
+    const valid = Object.entries(saved).filter(
+      ([id, value]) =>
+        DOCUMENT_COLUMN_IDS.includes(id as (typeof DOCUMENT_COLUMN_IDS)[number]) &&
+        typeof value === 'boolean',
+    )
+    if (!valid.length) return fallback
+    return { ...fallback, ...Object.fromEntries(valid) }
+  } catch {
+    return fallback
   }
+}
+
+export const DOCUMENT_COLUMN_ORDER_STORAGE_KEY = 'people-gator:document-column-order'
+
+export function defaultDocumentColumnOrder(): string[] {
+  return [...DOCUMENT_COLUMN_IDS]
+}
+
+/** Saved order with unknown IDs dropped and new fields appended in default order. */
+export function readDocumentColumnOrder(storage: Pick<Storage, 'getItem'>): string[] {
+  const fallback = defaultDocumentColumnOrder()
+  try {
+    const saved: unknown = JSON.parse(storage.getItem(DOCUMENT_COLUMN_ORDER_STORAGE_KEY) ?? 'null')
+    if (!Array.isArray(saved)) return fallback
+    const known = [...new Set(saved.filter((id) => fallback.includes(id)))]
+    return [...known, ...fallback.filter((id) => !known.includes(id))]
+  } catch {
+    return fallback
+  }
+}
+
+/** Places `id` before or after `target`; other columns keep their relative order. */
+export function moveDocumentColumn(order: string[], id: string, target: string, after: boolean) {
+  if (id === target) return order
+  const next = order.filter((column) => column !== id)
+  const index = next.indexOf(target)
+  if (index < 0) return order
+  next.splice(after ? index + 1 : index, 0, id)
+  return next
+}
+
+/** Moves `id` one position among the visible columns. */
+export function stepDocumentColumn(order: string[], visible: string[], id: string, step: -1 | 1) {
+  const neighbour = visible[visible.indexOf(id) + step]
+  return neighbour === undefined ? order : moveDocumentColumn(order, id, neighbour, step > 0)
+}
+
+/** Places a newly shown column after the last visible one. */
+export function appendDocumentColumn(order: string[], visible: string[], id: string) {
+  const others = visible.filter((column) => column !== id)
+  const last = others[others.length - 1]
+  return last === undefined
+    ? [id, ...order.filter((column) => column !== id)]
+    : moveDocumentColumn(order, id, last, true)
+}
+
+function usePersisted<T>(key: string, read: (storage: Storage) => T, fallback: () => T) {
+  let initial = fallback()
+  try {
+    initial = read(window.sessionStorage)
+  } catch {
+    /* Storage can be disabled. */
+  }
+  const value = ref(initial) as Ref<T>
+  watch(
+    value,
+    (next) => {
+      try {
+        window.sessionStorage.setItem(key, JSON.stringify(next))
+      } catch {
+        /* Keep in-memory choices usable. */
+      }
+    },
+    { deep: true },
+  )
+  return value
+}
+
+export function useDocumentColumns() {
+  return usePersisted(DOCUMENT_COLUMNS_STORAGE_KEY, readDocumentColumns, defaultDocumentColumns)
+}
+
+export function useDocumentColumnOrder() {
+  return usePersisted(
+    DOCUMENT_COLUMN_ORDER_STORAGE_KEY,
+    readDocumentColumnOrder,
+    defaultDocumentColumnOrder,
+  )
 }
 
 export function annotationCount(
@@ -74,17 +185,20 @@ export function documentColumnSizing(id: string) {
   const widths: Record<string, number> = {
     identity: 280,
     name: 320,
-    ndk: 96,
-    first_page: 144,
-    library: 224,
+    ndk: 80,
+    first_page: 120,
+    library: 200,
     document_id: 320,
-    registered_page_count: 128,
+    registered_page_count: 120,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
-    linked_entity_count: 160,
+    linked_entity_count: 144,
   }
-  const size = widths[id] ?? 160 // Annotation counts include the longest label + arrow.
+  // Count headers fit their title, menu chevron and sort strip on one line:
+  // Annotations needs the most room, then Mentions; Faces keeps the 128px default.
+  const annotation = DOCUMENT_ANNOTATION_STATES.some((s) => s.id === id)
+  const size = widths[id] ?? (annotation ? 168 : id.startsWith('mentions_') ? 144 : 128)
   const minSize = id === 'name' || id === 'identity' || id === 'document_id' ? 200 : size
   const maxSize =
     id === 'name' || id === 'identity' || id === 'document_id' ? 720 : Math.max(size * 2, 240)

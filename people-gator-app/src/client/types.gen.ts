@@ -3913,6 +3913,108 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'filter.min_mentions_unassigned_count'?: MinimumCount | null;
         /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count; non-negative integer.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count; non-negative integer.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count; non-negative integer.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count; non-negative integer.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Unassigned Count
+         *
+         * Inclusive maximum annotations unassigned count; non-negative integer.
+         */
+        'filter.max_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count; non-negative integer.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count; non-negative integer.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count; non-negative integer.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count; non-negative integer.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Unassigned Count
+         *
+         * Inclusive maximum faces unassigned count; non-negative integer.
+         */
+        'filter.max_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count; non-negative integer.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count; non-negative integer.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count; non-negative integer.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count; non-negative integer.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Unassigned Count
+         *
+         * Inclusive maximum mentions unassigned count; non-negative integer.
+         */
+        'filter.max_mentions_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Linked Entity Count
+         *
+         * Inclusive minimum number of distinct linked people; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_linked_entity_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Linked Entity Count
+         *
+         * Inclusive maximum number of distinct linked people; non-negative integer.
+         */
+        'filter.max_linked_entity_count'?: MinimumCount | null;
+        /**
          * Filter.Entity Link State
          *
          * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -5788,6 +5890,108 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          * Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.
          */
         'filter.min_mentions_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count; non-negative integer.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count; non-negative integer.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count; non-negative integer.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count; non-negative integer.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Unassigned Count
+         *
+         * Inclusive maximum annotations unassigned count; non-negative integer.
+         */
+        'filter.max_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count; non-negative integer.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count; non-negative integer.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count; non-negative integer.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count; non-negative integer.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Unassigned Count
+         *
+         * Inclusive maximum faces unassigned count; non-negative integer.
+         */
+        'filter.max_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count; non-negative integer.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count; non-negative integer.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count; non-negative integer.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count; non-negative integer.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Unassigned Count
+         *
+         * Inclusive maximum mentions unassigned count; non-negative integer.
+         */
+        'filter.max_mentions_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Linked Entity Count
+         *
+         * Inclusive minimum number of distinct linked people; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_linked_entity_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Linked Entity Count
+         *
+         * Inclusive maximum number of distinct linked people; non-negative integer.
+         */
+        'filter.max_linked_entity_count'?: MinimumCount | null;
         /**
          * Filter.Entity Link State
          *

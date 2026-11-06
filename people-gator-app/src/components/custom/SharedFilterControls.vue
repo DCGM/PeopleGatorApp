@@ -7,6 +7,12 @@ import FilterDateTimePicker from './FilterDateTimePicker.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 
 // The one shared configuration (#52); each screen applies it to its own records.
+type Control = 'libraries' | 'documents' | 'pages' | 'linkStates' | 'actors' | 'dates'
+// Screens may show a subset (Documents, #111); hidden values still apply from the URL.
+const props = withDefaults(defineProps<{ controls?: readonly Control[] }>(), {
+  controls: () => ['libraries', 'documents', 'pages', 'linkStates', 'actors', 'dates'],
+})
+const shown = (control: Control) => props.controls.includes(control)
 const { filters, error } = useSharedFilters()
 function field<K extends keyof SharedFilters>(key: K) {
   return computed({
@@ -45,10 +51,25 @@ const option = (key: keyof typeof searches, kind: Parameters<typeof usePeopleFil
     }),
   )
 const lookups = [
-  { key: 'libraries' as const, label: 'Libraries', options: option('libraries', 'library') },
-  { key: 'documentIds' as const, label: 'Documents', options: option('documentIds', 'document') },
-  { key: 'pageIds' as const, label: 'Pages', options: option('pageIds', 'page') },
-]
+  {
+    key: 'libraries' as const,
+    control: 'libraries' as const,
+    label: 'Libraries',
+    options: option('libraries', 'library'),
+  },
+  {
+    key: 'documentIds' as const,
+    control: 'documents' as const,
+    label: 'Documents',
+    options: option('documentIds', 'document'),
+  },
+  {
+    key: 'pageIds' as const,
+    control: 'pages' as const,
+    label: 'Pages',
+    options: option('pageIds', 'page'),
+  },
+].filter((lookup) => shown(lookup.control))
 const actors = [
   { key: 'userIds' as const, label: 'Modified by', options: option('userIds', 'user') },
   { key: 'apiKeyIds' as const, label: 'Modified via key', options: option('apiKeyIds', 'api-key') },
@@ -71,9 +92,9 @@ const actors = [
     @load-more="lookup.options.loadMore()"
     @retry="lookup.options.retry()"
   />
-  <EntityLinkStateFilter v-model="linkStates" />
+  <EntityLinkStateFilter v-if="shown('linkStates')" v-model="linkStates" />
   <FilterMultiSelect
-    v-for="lookup in actors"
+    v-for="lookup in shown('actors') ? actors : []"
     :key="lookup.key"
     v-model="selections[lookup.key].value"
     v-model:search="searches[lookup.key].value"
@@ -88,6 +109,8 @@ const actors = [
     @load-more="lookup.options.loadMore()"
     @retry="lookup.options.retry()"
   />
-  <FilterDateTimePicker v-model="from" label="Modified from" :invalid="!!error" />
-  <FilterDateTimePicker v-model="to" label="Modified to" :invalid="!!error" />
+  <template v-if="shown('dates')">
+    <FilterDateTimePicker v-model="from" label="Modified from" :invalid="!!error" />
+    <FilterDateTimePicker v-model="to" label="Modified to" :invalid="!!error" />
+  </template>
 </template>

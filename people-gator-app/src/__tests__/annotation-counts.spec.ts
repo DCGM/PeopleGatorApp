@@ -104,7 +104,8 @@ describe('annotation count controls and URL state', () => {
       'filter.min_mentions_total_count': 3,
     })
     expect(wrapper.text()).toContain('Faces: Manual ≥ 2')
-    expect(wrapper.text()).toContain('Text mentions: Total ≥ 3')
+    // Documents tags name the All state implicitly, like the People list.
+    expect(wrapper.text()).toContain('Text mentions ≥ 3')
     // Individual count removal preserves other filters and immediately changes query state.
     counts.remove(counts.tags.value[0]!)
     await flushPromises()

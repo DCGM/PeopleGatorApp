@@ -5,7 +5,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn() }))
-vi.mock('@/query/entities', () => ({ fetchEntities: api.list, useMergeEntitiesMutation: () => ({ mutateAsync: vi.fn() }) }))
+vi.mock('@/query/entities', () => ({
+  fetchEntities: api.list,
+  useMergeEntitiesMutation: () => ({ mutateAsync: vi.fn() }),
+}))
 vi.mock('@/query/media', () => ({ fetchPages: api.list, fetchDocuments: api.list }))
 vi.mock('@/query/faces', () => ({ fetchFaces: vi.fn() }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: vi.fn() }))
@@ -123,9 +126,10 @@ afterEach(() => {
 })
 
 const screens = [
-  { name: 'people', view: PeopleSearchView, sort: 'name' },
-  { name: 'scans', view: DocumentSearchView, sort: 'page_id' },
-  { name: 'documents', view: DocumentListView, sort: 'name' },
+  { name: 'people', view: PeopleSearchView, sort: 'name', manual: true },
+  { name: 'scans', view: DocumentSearchView, sort: 'page_id', manual: true },
+  // Documents loads only on scroll: it has no manual Load more control.
+  { name: 'documents', view: DocumentListView, sort: 'name', manual: false },
 ]
 for (const screen of screens)
   describe(`automatic ${screen.name} pagination`, () => {
@@ -155,7 +159,7 @@ for (const screen of screens)
             DocumentTable: {
               props: ['documents'],
               template:
-                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span></div>',
+                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span><slot name="list-end" /></div>',
             },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
             DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },
@@ -237,7 +241,7 @@ for (const screen of screens)
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(3)
     })
-    it('serializes delayed requests, guards the manual button, and cleans up on navigation', async () => {
+    it('serializes delayed requests, guards any manual button, and cleans up on navigation', async () => {
       const { wrapper } = await render()
       let complete!: (value: ReturnType<typeof batch>) => void
       api.list.mockImplementation(
@@ -254,7 +258,8 @@ for (const screen of screens)
       window.dispatchEvent(new Event('resize'))
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      if (screen.manual) expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      else expect(wrapper.find('button').exists()).toBe(false)
       wrapper.unmount()
       complete(batch(['second'], 'last'))
       window.dispatchEvent(new Event('scroll'))
@@ -344,7 +349,7 @@ for (const screen of screens)
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(2)
     })
-    it('keeps the manual control available and guards background refetches', async () => {
+    it('guards background refetches, then loads from the manual control or scrolling', async () => {
       const { wrapper, client } = await render()
       let complete!: (value: ReturnType<typeof batch>) => void
       api.list.mockImplementationOnce(
@@ -359,13 +364,17 @@ for (const screen of screens)
       intersection()
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      if (screen.manual) expect(wrapper.get('button').attributes('disabled')).toBeDefined()
       complete(batch(['first'], 'next'))
       await refetch
       endTop = 1500
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      await wrapper.get('button').trigger('click')
+      if (screen.manual) await wrapper.get('button').trigger('click')
+      else {
+        endTop = 500
+        intersection()
+      }
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(2)
     })

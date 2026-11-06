@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import type { DocumentResponse } from '@/client'
 import { usePageImageQuery } from '@/query/media'
 import { useObjectUrl } from '@/composables/object-url'
-import { documentTitle } from '@/viewmodels/document-list'
+import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import LoadableImage from './LoadableImage.vue'
 import PagePosition from './PagePosition.vue'
 
@@ -13,19 +14,28 @@ const url = useObjectUrl(() => image.data.value)
 
 <template>
   <div class="space-y-1">
-    <LoadableImage
-      :src="url"
-      :alt="`First registered page of ${documentTitle(document)}`"
-      :loading="Boolean(document.first_page_source_id) && image.isPending.value"
-      class="h-28 w-20"
-      image-class="object-contain"
+    <component
+      :is="document.first_page_source_id ? RouterLink : 'div'"
+      :to="document.first_page_source_id ? documentOpenLocation(document) : undefined"
+      :aria-label="
+        document.first_page_source_id ? `Open first page of ${documentTitle(document)}` : undefined
+      "
+      class="block"
     >
-      <template #fallback>
-        <span class="flex h-full items-center whitespace-normal text-sm text-muted-foreground">{{
-          document.registered_page_count === 0 ? 'No pages' : 'No preview'
-        }}</span>
-      </template>
-    </LoadableImage>
+      <LoadableImage
+        :src="url"
+        :alt="`First registered page of ${documentTitle(document)}`"
+        :loading="Boolean(document.first_page_source_id) && image.isPending.value"
+        class="h-28 w-20"
+        image-class="object-contain"
+      >
+        <template #fallback>
+          <span class="flex h-full items-center whitespace-normal text-sm text-muted-foreground">{{
+            document.registered_page_count === 0 ? 'No pages' : 'No preview'
+          }}</span>
+        </template>
+      </LoadableImage>
+    </component>
     <PagePosition
       v-if="document.first_page_source_id"
       :number="document.first_page_number"

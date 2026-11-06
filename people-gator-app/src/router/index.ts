@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { legacyFilterNotice, migrateLegacyFilters } from '@/viewmodels/shared-filters'
 
+import PageSourceView from '@/views/PageSourceView.vue'
 import DocumentPageView from '@/views/DocumentPageView.vue'
 import DocumentSearchView from '@/views/DocumentSearchView.vue'
 import DocumentListView from '@/views/DocumentListView.vue'
@@ -10,6 +11,12 @@ import PersonDetailView from '@/views/PersonDetailView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/pages/:pageSourceId',
+      name: 'page-source',
+      component: PageSourceView,
+      meta: { title: 'Document page' },
+    },
     { path: '/', redirect: { name: 'document-list' } },
     {
       path: '/scans',

@@ -215,10 +215,7 @@ describe('App', () => {
     await router.push({ query: { ...router.currentRoute.value.query, panel: undefined } })
     await flushPromises()
     expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('People')
-    expect(sidebar.get('input[aria-label="Search people"]').element).toHaveProperty(
-      'value',
-      'Ada',
-    )
+    expect(sidebar.get('input[aria-label="Search people"]').element).toHaveProperty('value', 'Ada')
     expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
     // Never-applied origin text is dropped from copied links (#52).
     expect(router.currentRoute.value.query).not.toHaveProperty('origin_text')
@@ -582,7 +579,8 @@ describe('Scans and Documents navigation', () => {
       expect(router.currentRoute.value.query).toEqual({ library: 'preview-mzk' })
       expect(router.currentRoute.value.hash).toBe('#results')
       expect(document.title).toBe('Documents | People Gator')
-      expect(wrapper.get('h1').text()).toBe('Browse documents')
+      expect(wrapper.find('main h1').exists()).toBe(false)
+      expect(wrapper.get('main header').text()).toBe('Documents index')
       expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
       expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
     },

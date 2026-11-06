@@ -102,8 +102,10 @@ export function sortUrl<Field extends string>(
   state: SortState<Field>,
   fallback: SortState<Field>,
   keys: SortUrlKeys = DEFAULT_SORT_KEYS,
+  preserveDefault = false,
 ): LocationQueryRaw {
-  const isDefault = state.field === fallback.field && state.direction === fallback.direction
+  const isDefault =
+    !preserveDefault && state.field === fallback.field && state.direction === fallback.direction
   return {
     [keys.field]: isDefault ? undefined : state.field,
     [keys.direction]:
@@ -135,6 +137,7 @@ export function useRouteSort<Field extends string>(
   options: MaybeRefOrGetter<readonly SortOption<Field>[]>,
   fallback: MaybeRefOrGetter<SortState<Field>>,
   navigation: 'push' | 'replace' = 'push',
+  preserveDefault = false,
 ) {
   const route = useRoute()
   const router = useRouter()
@@ -142,7 +145,11 @@ export function useRouteSort<Field extends string>(
     get: () => readSort(route.query, keys, toValue(options), toValue(fallback)),
     set: (state) => {
       void router[navigation]({
-        query: { ...route.query, cursor: undefined, ...sortUrl(state, toValue(fallback), keys) },
+        query: {
+          ...route.query,
+          cursor: undefined,
+          ...sortUrl(state, toValue(fallback), keys, preserveDefault),
+        },
       })
     },
   })

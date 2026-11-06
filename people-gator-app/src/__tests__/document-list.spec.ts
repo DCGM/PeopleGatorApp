@@ -1,5 +1,5 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,7 +84,32 @@ async function render(url = '/documents') {
   return { wrapper, router, queryClient }
 }
 
+// jsdom has no layout: give every element a visible box, then scroll so the
+// automatic pagination reads the table's list end as visible.
+async function scrollToEnd() {
+  const spies = [
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 100,
+      left: 0,
+      right: 300,
+      width: 300,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100),
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(300),
+  ]
+  cleanups.push(() => spies.forEach((spy) => spy.mockRestore()))
+  window.dispatchEvent(new Event('scroll'))
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+  await flushPromises()
+}
+
 beforeEach(() => {
+  window.sessionStorage.clear()
   vi.clearAllMocks()
   desktop.value = true
   api.libraries.mockResolvedValue(response([{ library: 'a' }, { library: 'b' }]))
@@ -102,7 +127,7 @@ describe('document table results', () => {
   it('renders document identities without legacy previews or extra page/name requests', async () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
-    expect(wrapper.findAll('tbody td:first-child').map((cell) => cell.text())).toEqual([
+    expect(wrapper.findAll('tbody td[data-column="name"]').map((cell) => cell.text())).toEqual([
       'Album',
       'Document shared',
     ])
@@ -126,6 +151,33 @@ describe('document table results', () => {
       document: 'a-shared',
     })
   })
+  it('loads the next cursor on scroll, keeping rows and one aligned skeleton until it resolves', async () => {
+    let complete!: (value: ReturnType<typeof response>) => void
+    api.documents.mockImplementation(({ query }) =>
+      !query.cursor
+        ? Promise.resolve(response([doc('a')], 2, 'docs-next'))
+        : new Promise((resolve) => {
+            complete = resolve
+          }),
+    )
+    const { wrapper } = await render()
+    expect(wrapper.find('footer').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Load more'))).toBe(false)
+    expect(api.documents).toHaveBeenCalledTimes(1)
+    await scrollToEnd()
+    const loading = wrapper.get('[data-slot="document-loading-row"]')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(9)
+    expect(loading.attributes('aria-hidden')).toBe('true')
+    expect(wrapper.text()).toContain('Album')
+    expect(wrapper.get('[data-slot="document-list-status"] p.sr-only').text()).toBe(
+      'Loading more documents…',
+    )
+    complete(response([doc('b')], 2))
+    await flushPromises()
+    expect(wrapper.find('[data-slot="document-loading-row"]').exists()).toBe(false)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+  })
   it('retains document results after a next-page error and retries that cursor', async () => {
     let fail = true
     api.documents.mockImplementation(({ query }) =>
@@ -136,11 +188,7 @@ describe('document table results', () => {
           : Promise.resolve(response([doc('b')], 2)),
     )
     const { wrapper } = await render()
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Load more documents')!
-      .trigger('click')
-    await flushPromises()
+    await scrollToEnd()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.text()).toContain('Could not load documents.')
     fail = false
@@ -214,25 +262,31 @@ describe('document table results', () => {
     },
   )
   it.each(['', 'items', 'table'])(
-    'keeps active tags accessible with mobile filters collapsed in %s',
+    'keeps active tags accessible with the mobile filter drawer closed in %s',
     async (view) => {
       desktop.value = false
       const { wrapper, router } = await render(
         `/documents?q=Ada&library=a${view ? '&view=' + view : ''}`,
       )
-      expect(wrapper.get('button[aria-label="Show filters"]').attributes('aria-expanded')).toBe(
-        'false',
-      )
-      expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(false)
-      const panel = wrapper.get('.search-filter-panel')
+      const toggle = () => wrapper.get('button[aria-haspopup="dialog"]')
+      expect(toggle().attributes('aria-label')).toBe('Show filters')
+      expect(toggle().attributes('aria-expanded')).toBe('false')
+      expect(wrapper.find('aside').exists()).toBe(false)
+      expect(document.querySelector('button[aria-label="Libraries"]')).toBeNull()
+      const panel = wrapper.get('[role="search"]')
       const active = wrapper.get('.active-filters')
       expect(panel.element.contains(active.element)).toBe(false)
       expect(active.find('[data-slot="badge"]').exists()).toBe(true)
-      await wrapper.get('button[aria-label="Show filters"]').trigger('click')
+      await toggle().trigger('click')
       await flushPromises()
-      expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(true)
-      await wrapper.get('button[aria-label="Hide filters"]').trigger('click')
+      const drawer = document.querySelector('[role="dialog"]')!
+      expect(drawer.querySelector('h2')?.textContent).toBe('Filters')
+      expect(drawer.querySelector('button[aria-label="Libraries"]')).not.toBeNull()
+      expect(toggle().attributes('aria-expanded')).toBe('true')
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       await flushPromises()
+      expect(document.querySelector('[role="dialog"]')).toBeNull()
+      expect(toggle().attributes('aria-expanded')).toBe('false')
       expect(wrapper.find('.active-filters').exists()).toBe(true)
       await active.get('button[aria-label="Remove Library: a"]').trigger('click')
       await flushPromises()
@@ -240,6 +294,92 @@ describe('document table results', () => {
       expect(wrapper.find('.active-filters').exists()).toBe(false)
     },
   )
+  it('shows only the Documents filter set, in a desktop sidebar beside search and sort', async () => {
+    const { wrapper } = await render('/documents?unassigned=yes&link_state=verified')
+    const sidebar = wrapper.get('aside[aria-label="Document filters"]')
+    const group = sidebar.get('[role="group"][aria-label="Filters"]')
+    const names = group
+      .findAll('button')
+      .map((button) => button.attributes('aria-label') || button.text().trim())
+    expect(names).toEqual([
+      'Libraries',
+      'Modified by',
+      'Modified via key',
+      'Modified from',
+      'Modified to',
+      'All annotations',
+      'Faces',
+      'Text mentions',
+      'People',
+    ])
+    // Search and sort stay above the table; there is no drawer toggle on desktop.
+    const search = wrapper.get('[role="search"]')
+    expect(search.find('input[aria-label="Search documents"]').exists()).toBe(true)
+    expect(search.find('[aria-label="Sort by"]').exists()).toBe(true)
+    expect(search.find('button[aria-haspopup="dialog"]').exists()).toBe(false)
+    // Applied filters sit in the sidebar below the selectors, not above the table.
+    const active = sidebar.get('.active-filters')
+    expect(
+      group.element.compareDocumentPosition(active.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(search.find('.active-filters').exists()).toBe(false)
+    expect(wrapper.findAll('.active-filters')).toHaveLength(1)
+    // Hidden filters still apply from links and remain removable as tags.
+    const tags = active.text()
+    expect(tags).toContain('Unassigned faces: Has unassigned faces')
+    expect(tags).toMatch(/Verified/)
+  })
+  it('applies count and people ranges from the sidebar and sends them to the API', async () => {
+    const { wrapper, router } = await render('/documents?library=a')
+    const open = async (label: string) => {
+      await wrapper
+        .get('aside')
+        .findAll('button')
+        .find((b) => b.text() === label)!
+        .trigger('click')
+      await flushPromises()
+    }
+    await open('Faces')
+    const submit = (form: HTMLFormElement) => new DOMWrapper(form).trigger('submit')
+    const fill = (input: HTMLInputElement, value: string) => new DOMWrapper(input).setValue(value)
+    const form = () =>
+      document.querySelector<HTMLFormElement>('form[aria-label="Faces count range"]')!
+    const input = (name: string) =>
+      form().querySelector<HTMLInputElement>(`[aria-label="${name}"]`)!
+    await fill(input('Faces minimum'), '5')
+    await fill(input('Faces maximum'), '2')
+    await submit(form())
+    await flushPromises()
+    expect(form().textContent).toContain('Minimum must not exceed maximum.')
+    await fill(input('Faces maximum'), '7')
+    await submit(form())
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({
+      min_faces_total_count: '5',
+      max_faces_total_count: '7',
+    })
+    await open('People')
+    const people = document.querySelector<HTMLFormElement>('form[aria-label="People count range"]')!
+    expect(people.querySelector('[aria-label="State"]')).toBeNull()
+    const max = people.querySelector<HTMLInputElement>('[aria-label="People maximum"]')!
+    await fill(max, '0')
+    await submit(people)
+    await flushPromises()
+    expect(router.currentRoute.value.query.max_linked_entity_count).toBe('0')
+    expect(api.documents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({
+          'filter.min_faces_total_count': 5,
+          'filter.max_faces_total_count': 7,
+          'filter.max_linked_entity_count': 0,
+        }),
+      }),
+    )
+    const tags = wrapper.get('.active-filters').text()
+    expect(tags).toContain('Faces ≥ 5')
+    expect(tags).toContain('Faces ≤ 7')
+    expect(tags).toContain('People ≤ 0')
+  })
   it('keeps scan result envelopes separate from raw page list cache entries', async () => {
     const { queryClient, wrapper } = await render()
     let search: ReturnType<typeof useDocumentSearch> | undefined
@@ -295,33 +435,48 @@ describe('table-only document navigation', () => {
         '/documents?view=table&library=a&unassigned=no' + search,
       )
       const params = () => (search ? api.search : api.documents).mock.calls.slice(-1)[0]![0].query
-      const pages = wrapper.get('button[aria-label="Sort by Pages"]')
+      const pages = wrapper.get('button[aria-label="Sort by Pages: sort ascending"]')
+      for (const [direction, label] of [
+        ['asc', 'Lowest'],
+        ['desc', 'Highest'],
+      ] as const) {
+        await pages.trigger('click')
+        await flushPromises()
+        expect(params()).toMatchObject({
+          sort: 'page_count',
+          sort_direction: direction,
+          cursor: null,
+          'filter.library': ['a'],
+          'filter.has_unassigned_faces': false,
+        })
+        expect(router.currentRoute.value.query.sort).toBe('page_count')
+        expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe(
+          direction === 'asc' ? 'ascending' : 'descending',
+        )
+        expect(wrapper.get('[aria-label="Sort by"]').text()).toContain(`Pages · ${label} first`)
+      }
       await pages.trigger('click')
       await flushPromises()
-      expect(router.currentRoute.value.query).toMatchObject({
-        view: 'table',
-        library: 'a',
-        unassigned: 'no',
-        sort: 'page_count',
-      })
+      expect(router.currentRoute.value.query.sort).toBeUndefined()
+      expect(router.currentRoute.value.query.dir).toBeUndefined()
       expect(params()).toMatchObject({
-        sort: 'page_count',
-        sort_direction: 'desc',
+        sort: search ? 'relevance' : 'name',
+        sort_direction: search ? 'desc' : 'asc',
         cursor: null,
-        'filter.library': ['a'],
-        'filter.has_unassigned_faces': false,
       })
-      expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
-      expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Highest first')
-      await pages.trigger('click')
-      await flushPromises()
-      expect(params()).toMatchObject({ sort: 'page_count', sort_direction: 'asc', cursor: null })
-      expect(router.currentRoute.value.query.dir).toBe('asc')
-      expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
-      expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Lowest first')
+      expect(wrapper.find('th[aria-sort]').exists()).toBe(false)
       router.back()
       await flushPromises()
       expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
+      router.forward()
+      await flushPromises()
+      expect(wrapper.find('th[aria-sort]').exists()).toBe(false)
+      const name = wrapper.get('button[aria-label="Sort by Document name: sort ascending"]')
+      await name.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query.sort).toBe('name')
+      expect(name.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
+
       if (search) {
         expect(params()['query.text']).toEqual(['Album'])
         await router.push('/documents?view=table&q=Album')

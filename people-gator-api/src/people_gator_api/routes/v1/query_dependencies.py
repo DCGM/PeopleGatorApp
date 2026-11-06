@@ -514,6 +514,28 @@ def annotation_count_filter_dependency(
     return {name: value for name, value in locals().items() if value is not None}
 
 
+def document_count_range_filter_dependency(
+    max_annotations_total_count: Annotated[MinimumCount | None, Query(alias="filter.max_annotations_total_count", description="Inclusive maximum annotations total count; non-negative integer.")] = None,
+    max_annotations_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.max_annotations_automatic_count", description="Inclusive maximum annotations automatic count; non-negative integer.")] = None,
+    max_annotations_manual_count: Annotated[MinimumCount | None, Query(alias="filter.max_annotations_manual_count", description="Inclusive maximum annotations manual count; non-negative integer.")] = None,
+    max_annotations_verified_count: Annotated[MinimumCount | None, Query(alias="filter.max_annotations_verified_count", description="Inclusive maximum annotations verified count; non-negative integer.")] = None,
+    max_annotations_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.max_annotations_unassigned_count", description="Inclusive maximum annotations unassigned count; non-negative integer.")] = None,
+    max_faces_total_count: Annotated[MinimumCount | None, Query(alias="filter.max_faces_total_count", description="Inclusive maximum faces total count; non-negative integer.")] = None,
+    max_faces_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.max_faces_automatic_count", description="Inclusive maximum faces automatic count; non-negative integer.")] = None,
+    max_faces_manual_count: Annotated[MinimumCount | None, Query(alias="filter.max_faces_manual_count", description="Inclusive maximum faces manual count; non-negative integer.")] = None,
+    max_faces_verified_count: Annotated[MinimumCount | None, Query(alias="filter.max_faces_verified_count", description="Inclusive maximum faces verified count; non-negative integer.")] = None,
+    max_faces_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.max_faces_unassigned_count", description="Inclusive maximum faces unassigned count; non-negative integer.")] = None,
+    max_mentions_total_count: Annotated[MinimumCount | None, Query(alias="filter.max_mentions_total_count", description="Inclusive maximum mentions total count; non-negative integer.")] = None,
+    max_mentions_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.max_mentions_automatic_count", description="Inclusive maximum mentions automatic count; non-negative integer.")] = None,
+    max_mentions_manual_count: Annotated[MinimumCount | None, Query(alias="filter.max_mentions_manual_count", description="Inclusive maximum mentions manual count; non-negative integer.")] = None,
+    max_mentions_verified_count: Annotated[MinimumCount | None, Query(alias="filter.max_mentions_verified_count", description="Inclusive maximum mentions verified count; non-negative integer.")] = None,
+    max_mentions_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.max_mentions_unassigned_count", description="Inclusive maximum mentions unassigned count; non-negative integer.")] = None,
+    min_linked_entity_count: Annotated[MinimumCount | None, Query(alias="filter.min_linked_entity_count", description="Inclusive minimum number of distinct linked people; non-negative integer, zero imposes no restriction.")] = None,
+    max_linked_entity_count: Annotated[MinimumCount | None, Query(alias="filter.max_linked_entity_count", description="Inclusive maximum number of distinct linked people; non-negative integer.")] = None,
+) -> dict[str, object]:
+    return {name: value for name, value in locals().items() if value is not None}
+
+
 def page_list_filter_dependency(
     counts: Annotated[dict[str, object], Depends(annotation_count_filter_dependency)],
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
@@ -578,6 +600,7 @@ def page_list_filter_dependency(
 
 def document_list_filter_dependency(
     counts: Annotated[dict[str, object], Depends(annotation_count_filter_dependency)],
+    ranges: Annotated[dict[str, object], Depends(document_count_range_filter_dependency)],
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
@@ -609,6 +632,7 @@ def document_list_filter_dependency(
         DocumentListFilter,
         **shared,
         **counts,
+        **ranges,
         has_unassigned_faces=has_unassigned_faces,
 
         url=url,

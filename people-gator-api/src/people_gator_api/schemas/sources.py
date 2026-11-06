@@ -14,7 +14,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
-from people_gator_api.schemas.annotation_counts import AnnotationCountFilter
+from people_gator_api.schemas.annotation_counts import AnnotationCountFilter, DocumentCountRangeFilter
 from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
@@ -602,7 +602,7 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 # ---------------------------------------------------------------------------
 
 
-class GenericSourceListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
+class GenericSourceListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter, DocumentCountRangeFilter):
     """Filter for listing generic sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -762,7 +762,7 @@ class PageListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
         )
 
 
-class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
+class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter, DocumentCountRangeFilter):
     """Filter for listing documents."""
 
     has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
@@ -795,6 +795,7 @@ class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
         return GenericSourceListFilter(
             **self.shared_values(),
             **self.count_values(),
+            **self.range_values(),
             has_unassigned_faces=self.has_unassigned_faces,
             source_type=[SourceKind.document],
             url=self.url,

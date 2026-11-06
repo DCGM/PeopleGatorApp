@@ -20,11 +20,14 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 4. Open the application root to land on **Documents** and explore registered
    documents in the table across libraries. Compare document-wide page/evidence
    totals and last-change metadata. Use
-   **Columns** to choose fields, including All annotations, Faces and Text mentions
-   count groups and the optional **First page** thumbnail.
-   Click a sortable heading to sort; click again to reverse the order. Horizontal
-   scrolling keeps the page width bounded, and reaching the final row loads the
-   next cursor batch. The PeopleGator logo
+   the last **Add column** column (or click any of its cells) to add a hidden field,
+   including Annotations, Faces and Mentions counts by mode (All, Automatic, Manual, Verified, Unassigned). Drag a header's
+   centered top handle (or use ←/→ on it) to reorder columns; click a header label
+   (marked by a chevron) to move it left or right or choose **Remove column**. Defaults show First page, Document
+   name, NDK, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
+   choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
+   and default ordering. The bounded table scrolls in both directions with a sticky
+   header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
    and first breadcrumb return here. Open **Scan search** for pages and evidence;
    follow a result into its page workspace and inspect the OCR/face overlays. Use the
    **Document pages** strip below the scan to open other pages of that document.
@@ -101,8 +104,11 @@ results and applicable desktop/mobile screenshot evidence. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.
 
-Documents and Scan search also offer **Minimum annotations**: choose All
-annotations, Faces or Text mentions, then a state and inclusive minimum.
+Scan search offers **Minimum annotations**: choose All annotations, Faces or
+Text mentions, then a state and inclusive minimum. Documents keeps only search
+and sort above its table; its filter sidebar (a drawer from the sliders button
+below 1024px) holds Libraries, Modified by/via key/from/to and **All
+annotations**, **Faces**, **Text mentions** and **People** ranges (State, Min, Max).
 Use several minima together, remove their tags individually, and sort by the
 same counts. Document count headers offer the same ordering as the selector.
 See [count rules and URL fields](SEARCH_FILTERS.md#annotation-count-ordering-and-minima-78)

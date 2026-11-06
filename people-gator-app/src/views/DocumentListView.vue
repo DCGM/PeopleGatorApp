@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { useAnnotationCounts } from '@/viewmodels/annotation-counts'
+import { useDocumentCounts } from '@/viewmodels/document-counts'
+import { useMediaQuery } from '@vueuse/core'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
-import { defaultDocumentColumns } from '@/viewmodels/document-table'
+import { useDocumentColumnOrder, useDocumentColumns } from '@/viewmodels/document-table'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
+import DocumentFilters from '@/components/custom/DocumentFilters.vue'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
 import { useDocumentFilters } from '@/viewmodels/document-filters'
@@ -18,16 +21,35 @@ import {
   scoredOptions,
 } from '@/viewmodels/sort-options'
 const route = useRoute()
-const visibility = ref(defaultDocumentColumns())
+const router = useRouter()
+const visibility = useDocumentColumns()
+const columnOrder = useDocumentColumnOrder()
 const shared = useSharedFilters()
-const counts = useAnnotationCounts()
+const counts = useDocumentCounts()
+// Filters sit in a sidebar from 1024px and in a drawer below that (#111).
+const desktop = useMediaQuery('(min-width: 1024px)')
+const filtersOpen = ref(false)
 const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
 const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
-const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
-  searching.value ? RELEVANCE : DOCUMENT_BROWSE_DEFAULT,
+const sort = useRouteSort(
+  DEFAULT_SORT_KEYS,
+  sortOptions,
+  () => (searching.value ? RELEVANCE : DOCUMENT_BROWSE_DEFAULT),
+  'push',
+  true,
 )
+const explicitSort = computed({
+  get: () => (route.query.sort === sort.value.field ? sort.value : undefined),
+  set: (value) => {
+    if (value) sort.value = value
+    else
+      void router.push({
+        query: { ...route.query, sort: undefined, dir: undefined, cursor: undefined },
+      })
+  },
+})
 const {
   documents,
   resultCount,
@@ -66,61 +88,79 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full min-w-0 max-w-6xl px-2 md:px-4">
-    <header class="pb-4 pt-6">
+  <main class="mx-auto w-full min-w-0 px-2 pb-4 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <header class="pb-2 pt-4 lg:shrink-0">
       <small class="font-semibold uppercase text-secondary">Documents index</small>
-      <h1>Browse documents</h1>
-      <p class="mt-2 text-sm text-muted-foreground">Registered documents and their page scans.</p>
     </header>
-    <DocumentListSearchBar
-      v-model:search-term="searchTerm"
-      v-model:unassigned="unassigned"
-      v-model:sort="sort"
-      :sort-options="sortOptions"
-      :result-count="resultCount"
-    />
-    <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
-      Search reports a bounded set of ranked document candidates.
-    </p>
-    <DocumentTable
-      v-model:visibility="visibility"
-      v-model:sort="sort"
-      :documents="documents"
-      class="pt-4"
-    />
-    <p
-      v-if="isLoading || isFetchingNextPage"
-      class="py-6 text-center text-sm text-muted-foreground"
-      role="status"
-    >
-      Loading documents…
-    </p>
-    <div v-if="error" class="py-6 text-center" role="alert">
-      <p class="text-sm text-destructive">Could not load documents.</p>
-      <Button type="button" variant="outline" class="mt-2" :disabled="isFetching" @click="retry()"
-        >Retry documents</Button
+    <div class="lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
+      <aside
+        v-if="desktop"
+        class="w-60 shrink-0 overflow-y-auto pb-1"
+        aria-label="Document filters"
       >
+        <DocumentFilters tags />
+      </aside>
+      <div class="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1">
+        <div class="flex min-w-0 flex-col gap-2 lg:shrink-0">
+          <DocumentListSearchBar
+            v-model:search-term="searchTerm"
+            v-model:sort="sort"
+            v-model:filters-open="filtersOpen"
+            :sort-options="sortOptions"
+            :result-count="resultCount"
+          />
+          <p v-if="searchTerm.trim()" class="text-sm text-muted-foreground">
+            Search reports a bounded set of ranked document candidates.
+          </p>
+        </div>
+        <DocumentTable
+          v-model:visibility="visibility"
+          v-model:order="columnOrder"
+          v-model:sort="explicitSort"
+          :documents="documents"
+          :loading-more="isFetchingNextPage"
+          class="pt-2 lg:min-h-0 lg:flex-1"
+        >
+          <template #list-end>
+            <div class="sticky left-0 w-max max-w-full px-4" data-slot="document-list-status">
+              <p v-if="isLoading" class="py-6 text-sm text-muted-foreground" role="status">
+                Loading documents…
+              </p>
+              <p v-if="isFetchingNextPage" class="sr-only" role="status">Loading more documents…</p>
+              <div v-if="error" class="py-6" role="alert">
+                <p class="text-sm text-destructive">Could not load documents.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="mt-2"
+                  :disabled="isFetching"
+                  @click="retry()"
+                  >Retry documents</Button
+                >
+              </div>
+              <p
+                v-else-if="
+                  !isLoading && !shared.error.value && !counts.error.value && documents.length === 0
+                "
+                class="py-10 text-sm text-muted-foreground"
+              >
+                {{
+                  filtered
+                    ? 'No documents match your search and filters.'
+                    : 'No documents have been registered yet.'
+                }}
+              </p>
+            </div>
+            <div ref="listEnd" class="sticky left-0 h-px w-px" aria-hidden="true" />
+          </template>
+        </DocumentTable>
+      </div>
     </div>
-    <p
-      v-else-if="!isLoading && !shared.error.value && !counts.error.value && documents.length === 0"
-      class="py-10 text-center text-sm text-muted-foreground"
-    >
-      {{
-        filtered
-          ? 'No documents match your search and filters.'
-          : 'No documents have been registered yet.'
-      }}
-    </p>
-
-    <div ref="listEnd" class="h-px" aria-hidden="true" />
-
-    <div v-if="hasNextPage && !error" class="flex justify-center pt-6">
-      <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{
-        isFetchingNextPage ? 'Loading documents…' : 'Load more documents'
-      }}</Button>
-    </div>
-    <footer class="pb-4 pt-6">
-      <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
-    </footer>
+    <Sheet v-if="!desktop" v-model:open="filtersOpen">
+      <SheetContent side="left" class="overflow-y-auto" :aria-describedby="undefined">
+        <SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader>
+        <div class="px-4 pb-4"><DocumentFilters /></div>
+      </SheetContent>
+    </Sheet>
   </main>
 </template>
