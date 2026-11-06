@@ -1,5 +1,5 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -262,25 +262,31 @@ describe('document table results', () => {
     },
   )
   it.each(['', 'items', 'table'])(
-    'keeps active tags accessible with mobile filters collapsed in %s',
+    'keeps active tags accessible with the mobile filter drawer closed in %s',
     async (view) => {
       desktop.value = false
       const { wrapper, router } = await render(
         `/documents?q=Ada&library=a${view ? '&view=' + view : ''}`,
       )
-      expect(wrapper.get('button[aria-label="Show filters"]').attributes('aria-expanded')).toBe(
-        'false',
-      )
-      expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(false)
-      const panel = wrapper.get('.search-filter-panel')
+      const toggle = () => wrapper.get('button[aria-haspopup="dialog"]')
+      expect(toggle().attributes('aria-label')).toBe('Show filters')
+      expect(toggle().attributes('aria-expanded')).toBe('false')
+      expect(wrapper.find('aside').exists()).toBe(false)
+      expect(document.querySelector('button[aria-label="Libraries"]')).toBeNull()
+      const panel = wrapper.get('[role="search"]')
       const active = wrapper.get('.active-filters')
       expect(panel.element.contains(active.element)).toBe(false)
       expect(active.find('[data-slot="badge"]').exists()).toBe(true)
-      await wrapper.get('button[aria-label="Show filters"]').trigger('click')
+      await toggle().trigger('click')
       await flushPromises()
-      expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(true)
-      await wrapper.get('button[aria-label="Hide filters"]').trigger('click')
+      const drawer = document.querySelector('[role="dialog"]')!
+      expect(drawer.querySelector('h2')?.textContent).toBe('Filters')
+      expect(drawer.querySelector('button[aria-label="Libraries"]')).not.toBeNull()
+      expect(toggle().attributes('aria-expanded')).toBe('true')
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       await flushPromises()
+      expect(document.querySelector('[role="dialog"]')).toBeNull()
+      expect(toggle().attributes('aria-expanded')).toBe('false')
       expect(wrapper.find('.active-filters').exists()).toBe(true)
       await active.get('button[aria-label="Remove Library: a"]').trigger('click')
       await flushPromises()
@@ -288,6 +294,84 @@ describe('document table results', () => {
       expect(wrapper.find('.active-filters').exists()).toBe(false)
     },
   )
+  it('shows only the Documents filter set, in a desktop sidebar beside search and sort', async () => {
+    const { wrapper } = await render('/documents?unassigned=yes&link_state=verified')
+    const sidebar = wrapper.get('aside[aria-label="Document filters"]')
+    const names = sidebar
+      .findAll('button')
+      .map((button) => button.attributes('aria-label') || button.text().trim())
+    expect(names).toEqual([
+      'Libraries',
+      'Modified by',
+      'Modified via key',
+      'Modified from',
+      'Modified to',
+      'All annotations',
+      'Faces',
+      'Text mentions',
+      'People',
+    ])
+    // Search and sort stay above the table; there is no drawer toggle on desktop.
+    const search = wrapper.get('[role="search"]')
+    expect(search.find('input[aria-label="Search documents"]').exists()).toBe(true)
+    expect(search.find('[aria-label="Sort by"]').exists()).toBe(true)
+    expect(search.find('button[aria-haspopup="dialog"]').exists()).toBe(false)
+    // Hidden filters still apply from links and remain removable as tags.
+    const tags = wrapper.get('.active-filters').text()
+    expect(tags).toContain('Unassigned faces: Has unassigned faces')
+    expect(tags).toMatch(/Verified/)
+  })
+  it('applies count and people ranges from the sidebar and sends them to the API', async () => {
+    const { wrapper, router } = await render('/documents?library=a')
+    const open = async (label: string) => {
+      await wrapper
+        .get('aside')
+        .findAll('button')
+        .find((b) => b.text() === label)!
+        .trigger('click')
+      await flushPromises()
+    }
+    await open('Faces')
+    const submit = (form: HTMLFormElement) => new DOMWrapper(form).trigger('submit')
+    const fill = (input: HTMLInputElement, value: string) => new DOMWrapper(input).setValue(value)
+    const form = () =>
+      document.querySelector<HTMLFormElement>('form[aria-label="Faces count range"]')!
+    const input = (name: string) =>
+      form().querySelector<HTMLInputElement>(`[aria-label="${name}"]`)!
+    await fill(input('Faces minimum'), '5')
+    await fill(input('Faces maximum'), '2')
+    await submit(form())
+    await flushPromises()
+    expect(form().textContent).toContain('Minimum must not exceed maximum.')
+    await fill(input('Faces maximum'), '7')
+    await submit(form())
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({
+      min_faces_total_count: '5',
+      max_faces_total_count: '7',
+    })
+    await open('People')
+    const people = document.querySelector<HTMLFormElement>('form[aria-label="People count range"]')!
+    expect(people.querySelector('[aria-label="State"]')).toBeNull()
+    const max = people.querySelector<HTMLInputElement>('[aria-label="People maximum"]')!
+    await fill(max, '0')
+    await submit(people)
+    await flushPromises()
+    expect(router.currentRoute.value.query.max_linked_entity_count).toBe('0')
+    expect(api.documents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({
+          'filter.min_faces_total_count': 5,
+          'filter.max_faces_total_count': 7,
+          'filter.max_linked_entity_count': 0,
+        }),
+      }),
+    )
+    const tags = wrapper.get('.active-filters').text()
+    expect(tags).toContain('Faces ≥ 5')
+    expect(tags).toContain('Faces ≤ 7')
+    expect(tags).toContain('People ≤ 0')
+  })
   it('keeps scan result envelopes separate from raw page list cache entries', async () => {
     const { queryClient, wrapper } = await render()
     let search: ReturnType<typeof useDocumentSearch> | undefined
