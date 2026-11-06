@@ -1248,6 +1248,23 @@ keeps it selected; only its checkbox removes it. Shift-click either control to a
 a range, and Clear restores card navigation. Existing linked fixtures demonstrate
 these interactions without a fixture or persistence upgrade.
 
+### Top-bar document and page breadcrumbs (#114)
+
+The seed result and CLI provide five direct page links: `breadcrumb-named`
+(Page gallery navigation, Page 1), `breadcrumb-missing-number` (the same named
+document with an unknown page number and a deliberately missing scan), `breadcrumb-unnamed` (document UUID,
+Page 1), `breadcrumb-unregistered` (unregistered parent UUID, Page 1), and
+`breadcrumb-long-name` (the long synthetic catalogue title, Page 1).
+These reuse stable linked fixtures and local page images; no records are reset.
+
+Open each link to inspect the persistent top bar. Available names and numbers
+replace their UUID labels and tooltips independently. Follow the document
+breadcrumb to its scoped scan list, switch pages and use Back/Forward.
+On disposable data, edit a page number and verify that its breadcrumb updates.
+At narrow widths the full document name remains available through the link's
+accessible text and title while the visible label truncates. The seed integration
+test resolves every link through repositories, checks metadata and local media,
+checks the intentional missing-scan response, then reruns the seed and verifies preservation of an edited number and timestamp.
 
 ## Scan sidebar practice (#103)
 

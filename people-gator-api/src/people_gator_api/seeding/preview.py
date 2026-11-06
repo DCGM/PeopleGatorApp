@@ -42,7 +42,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .fixtures import BREADCRUMB_PAGES, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -881,6 +881,14 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     "tab": "discover", "similar_sort": "confidence",
                 }),
             } if sorting_person else {}),
+            **{
+                "breadcrumb-" + state: (
+                    f"/libraries/{document.library}/documents/{document.document_id}/pages/{page.page_id}"
+                )
+                for state, page_key in BREADCRUMB_PAGES.items()
+                for page in PAGES if page.key == page_key
+                for document in DOCUMENTS if document.key == page.document
+            },
             "document-search": "/documents?q=pribehy",
             "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
             "compact-document-filters": "/documents?" + urlencode({

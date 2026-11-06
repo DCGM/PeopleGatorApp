@@ -58,6 +58,7 @@ from people_gator_api.schemas.search import (
 )
 from people_gator_api.seeding import preview
 from people_gator_api.seeding.fixtures import (
+    BREADCRUMB_PAGES,
     DOCUMENTS,
     MODEL,
     PAGE_GALLERY_MISSING_MEDIA,
@@ -4742,3 +4743,50 @@ async def test_scan_sidebar_upgrade_is_additive_and_preserves_reviews(seed_targe
     assert await counts(database) == before
     assert await database.faces.get(unlinked.detection_id) == unlinked
     assert await database.text_mentions.get(relinked.mention_id) == relinked
+
+
+@pytest.mark.asyncio
+async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_target):
+    from people_gator_api.schemas.sources import PagePatchRequest
+
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    for state, page_key in BREADCRUMB_PAGES.items():
+        fixture = next(item for item in PAGES if item.key == page_key)
+        parent = next(item for item in DOCUMENTS if item.key == fixture.document)
+        path = urlsplit(first.filter_examples["breadcrumb-" + state]).path
+        assert path == (
+            f"/libraries/{parent.library}/documents/{parent.document_id}/pages/{fixture.page_id}"
+        )
+        page = await database.sources.lookup_page(PageLookupRequest(
+            library=parent.library, document_id=parent.document_id, page_id=fixture.page_id,
+        ))
+        assert page.source_id == first.pages[page_key]
+        assert page.page_number == (None if state == "missing-number" else fixture.number)
+        document = await database.sources.lookup_document(DocumentLookupRequest(
+            library=parent.library, document_id=parent.document_id,
+        ))
+        if state == "unregistered":
+            assert document is None
+        else:
+            assert document.source_id == first.documents[parent.key]
+            assert document.name == (None if state == "unnamed" else parent.title)
+        if fixture.has_image:
+            image = await get_page_image(page.library, page.document_id, page.page_id)
+            assert image is not None
+        else:
+            # The existing unnumbered gallery page deliberately has no scan.
+            with pytest.raises(SourceResolutionError):
+                await get_page_image(page.library, page.document_id, page.page_id)
+
+    edited = await database.sources.patch_page(
+        first.pages["page-gallery-1"], PagePatchRequest(page_number=42),
+        context=GenericActor(user_id=first.users["reviewer"]),
+    )
+    second = await preview.seed_preview(database, filesystem)
+    assert {key: value for key, value in first.filter_examples.items() if key.startswith("breadcrumb-")} == {
+        key: value for key, value in second.filter_examples.items() if key.startswith("breadcrumb-")
+    }
+    preserved = await database.sources.lookup(GenericSourceLookupRequest(source_id=first.pages["page-gallery-1"]))
+    assert preserved.page_number == 42
+    assert preserved.last_touched_at == edited.last_touched_at

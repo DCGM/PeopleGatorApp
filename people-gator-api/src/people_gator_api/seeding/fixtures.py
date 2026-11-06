@@ -625,3 +625,14 @@ PAGES = (
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
 
 ISSUE8_IMAGE_PAGE = Page("issue8-image", "issue8-direct", 1, (Face("issue8-image-face", None, 0, 2, embedded=False),), has_layout=False)
+
+
+# #114: reuse stable, linked local-media fixtures for independent breadcrumb
+# metadata states. These entry points add no records and preserve review edits.
+BREADCRUMB_PAGES = {
+    "named": "page-gallery-1",
+    "missing-number": "page-gallery-9",
+    "unnamed": "legacy-document-1",
+    "unregistered": "scan-only-1",
+    "long-name": "table-width-long-1",
+}
