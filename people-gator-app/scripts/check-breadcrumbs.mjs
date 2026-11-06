@@ -120,11 +120,35 @@ try {
     )
     await page.goBack()
     await crumbs.nth(3).filter({ hasText: 'Page 1' }).waitFor()
+
+    // A person profile names its last crumb, and a real rename updates it.
+    assert.ok(routes.person, 'seed scenario exists: person')
+    await page.goto(origin + routes.person)
+    const personCrumb = crumbs.nth(2)
+    await personCrumb.filter({ hasText: 'Ada Novak' }).waitFor()
+    assert.equal(await personCrumb.getAttribute('title'), 'Ada Novak')
+    assert.equal(await personCrumb.getAttribute('href'), routes.person)
+    assert.equal(await crumbs.nth(1).getAttribute('href'), '/people')
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    await page.waitForTimeout(400)
+    await page.screenshot({ path: output + '/' + label + '-person.png' })
+    async function rename(name) {
+      await page.getByRole('button', { name: 'Edit name', exact: true }).click()
+      const heading = page.locator('h1[contenteditable="plaintext-only"]')
+      await heading.focus()
+      await page.keyboard.press('ControlOrMeta+A')
+      await page.keyboard.type(name)
+      await page.getByRole('button', { name: 'Save name', exact: true }).click()
+      await personCrumb.filter({ hasText: name }).waitFor()
+    }
+    await page.getByRole('tab', { name: 'Details' }).click()
+    await rename('Ada Renamed')
+    await rename('Ada Novak')
     assert.deepEqual(errors, [])
     await context.close()
     console.log(
       label +
-        ': metadata, full titles, navigation, history, keyboard, number edits and overflow passed',
+        ': metadata, full titles, navigation, history, keyboard, number edits, person names and overflow passed',
     )
   }
 } finally {

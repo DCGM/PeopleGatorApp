@@ -12,6 +12,7 @@ successful real seed CLI runs. All records and scans are synthetic.
 | Unregistered parent | ![Unregistered parent UUID with Page 1](desktop-unregistered.png) | ![Unregistered parent UUID with Page 1](mobile-unregistered.png) |
 | Long title, keyboard focus | ![Long document name with keyboard focus](desktop-long-name.png) | ![Long document name with keyboard focus](mobile-long-name.png) |
 | Long title, dark mode | ![Long document name in dark mode](desktop-long-name-dark.png) | ![Long document name in dark mode](mobile-long-name-dark.png) |
+| Person profile | ![People and Ada Novak](desktop-person.png) | ![People and Ada Novak without the home crumb](mobile-person.png) |
 
 The missing-number scenario reuses the gallery's deliberately missing scan.
 Its media error is expected and independent of breadcrumb metadata.
@@ -30,8 +31,12 @@ It checks both viewport sizes, independent metadata fallbacks and full title
 attributes, canonical URLs and scoped document links, keyboard activation and
 focus, Back/Forward, actual gallery page switching, no viewport overflow, visible
 navigation controls, and a real page-number edit from 1 to 42 and back to 1.
-Run it only on disposable data: it writes the named fixture's page number.
+On `breadcrumb-person` it checks the person's name, title and links, then renames
+Ada Novak through the profile and back, waiting for the breadcrumb each time.
+Run it only on disposable data: it writes the named fixture's page number and
+the person's name.
 No uncaught browser errors occurred. Numbered page labels fit without truncation.
 Long names retain their full accessible text and title; visible labels truncate.
-The phone header uses the logo as its home link and omits the duplicate home crumb.
+On pages and person profiles the phone header uses the logo as its home link and
+omits the duplicate home crumb.
 Screenshots supplement these executed checks; they do not prove accessibility.
