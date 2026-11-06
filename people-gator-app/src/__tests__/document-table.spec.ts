@@ -88,6 +88,7 @@ describe('document table', () => {
     expect(wrapper.findAll('th').map((h) => h.text())).toEqual([
       'First page',
       'Document name',
+      'NDK',
       'Library',
       'Pages',
       'Linked entities',
@@ -101,7 +102,7 @@ describe('document table', () => {
         .findAll('tbody td')
         .slice(1)
         .map((c) => c.text()),
-    ).toEqual(['Document archive-id', 'Archive', '2', '1', '6', '4', '2', ''])
+    ).toEqual(['Document archive-id', 'NDK', 'Archive', '2', '1', '6', '4', '2', ''])
     expect(wrapper.get('td[data-column="first_page"] a').attributes('href')).toBe(
       '/pages/first-page-source',
     )
@@ -234,7 +235,9 @@ describe('document table', () => {
     // Shown fields are not offered again.
     expect(names).not.toContain('Document name')
     expect(names).not.toContain('Faces: All')
-    expect(names).toContain('NDK')
+    // NDK is a default column now; other document fields remain available.
+    expect(names).not.toContain('NDK')
+    expect(names).toContain('Document ID')
     expect(names).toContain('Faces: Manual')
     items.find((item) => item.getAttribute('aria-label') === 'Faces: Manual')!.click()
     await flushPromises()
@@ -285,12 +288,12 @@ describe('document table', () => {
     ])
     expect(items()[2]!.dataset.variant).toBe('destructive')
     await choose('Move left')
-    expect(headers().slice(0, 3)).toEqual(['first_page', 'library', 'name'])
-    expect(wrapper.get('p.sr-only[role="status"]').text()).toBe('Library moved to position 2 of 8')
+    expect(headers().slice(0, 4)).toEqual(['first_page', 'name', 'library', 'ndk'])
+    expect(wrapper.get('p.sr-only[role="status"]').text()).toBe('Library moved to position 3 of 9')
     await open('first_page')
     expect(items()[0]!.hasAttribute('data-disabled')).toBe(true)
     await choose('Move right')
-    expect(headers().slice(0, 2)).toEqual(['library', 'first_page'])
+    expect(headers().slice(0, 2)).toEqual(['name', 'first_page'])
     await open('mentions_total')
     expect(items()[1]!.hasAttribute('data-disabled')).toBe(true)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -312,16 +315,16 @@ describe('document table', () => {
     expect(handle('name').attributes('aria-label')).toBe('Move Document name column')
     await handle('name').trigger('keydown', { key: 'ArrowRight' })
     await flushPromises()
-    expect(headers().slice(0, 3)).toEqual(['first_page', 'library', 'name'])
+    expect(headers().slice(0, 3)).toEqual(['first_page', 'ndk', 'name'])
     expect(document.activeElement).toBe(handle('name').element)
     expect(wrapper.get('p.sr-only[role="status"]').text()).toBe(
-      'Document name moved to position 3 of 8',
+      'Document name moved to position 3 of 9',
     )
     await handle('first_page').trigger('keydown', { key: 'ArrowLeft' })
     expect(headers()[0]).toBe('first_page')
     // Hidden fields between visible neighbours do not absorb a move.
     await handle('linked_entity_count').trigger('keydown', { key: 'ArrowRight' })
-    expect(headers().slice(4, 6)).toEqual(['total', 'linked_entity_count'])
+    expect(headers().slice(5, 7)).toEqual(['total', 'linked_entity_count'])
 
     // Pointer: drop Mentions on the left half of First page.
     const box = (left: number) =>

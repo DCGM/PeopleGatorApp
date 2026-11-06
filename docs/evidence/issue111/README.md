@@ -29,7 +29,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 
 - No footer, page title or Load more button; the Documents index label remains. The desktop table fills the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills the viewport below the top bar, with its header uncovered.
 - Both standard shadcn scrollbars are present.
-- Exact eight-column defaults, header/body/colgroup alignment, stable pixel
+- Exact nine-column defaults (NDK after Document name), header/body/colgroup alignment, stable pixel
   widths and no document-level horizontal overflow.
 - Wheel and focused-region keyboard scrolling; sticky header visibility;
   one real opaque cursor request at left, middle and right positions, with all
@@ -48,7 +48,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 - Dragging a header's top handle (mouse on desktop, Chromium touch events on mobile) shows a drop indicator and moves the column without scrolling the table; the order survives reload. ←/→ on the handle moves it one position and announces the new position.
 - Each column name shows a chevron and opens its menu: **Move left**, **Move right** (disabled at the ends) and a red **Remove column** item. Titles stay on one line. Escape closes the menu without removing; choosing the item removes the column.
 - Session column choices and order survive reload and navigation away/back; Restore default columns
-  restores the eight fields and default order. Unit tests separately cover invalid/obsolete stored
+  restores the nine fields and default order. Unit tests separately cover invalid/obsolete stored
   IDs and blocked storage reads/writes.
 - Document/library/first-page links (document links and thumbnails open the first-page viewer/editor), canonical full-document totals, empty pages,
   missing media, and light/dark rendering without browser page errors.

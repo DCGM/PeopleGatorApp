@@ -26,13 +26,13 @@ export function annotationColumnId(scope: AnnotationScope, state: AnnotationStat
 export const DOCUMENT_COLUMN_IDS = [
   'first_page',
   'name',
+  'ndk',
   'library',
   'registered_page_count',
   'linked_entity_count',
   ...DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
     DOCUMENT_ANNOTATION_STATES.map((state) => annotationColumnId(group.scope, state.id)),
   ),
-  'ndk',
   'document_id',
   'last_modified',
   'modified_by',
@@ -41,6 +41,7 @@ export const DOCUMENT_COLUMN_IDS = [
 const DEFAULT_COLUMNS = new Set([
   'first_page',
   'name',
+  'ndk',
   'library',
   'registered_page_count',
   'linked_entity_count',

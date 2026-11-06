@@ -842,7 +842,7 @@ stable identity. Multiple unknown names tie-break by source UUID ascending.
 
 
 Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
-still works). **NDK** is hidden by default and can be added from **Add column**: a compact
+still works). **NDK** is a default column after Document name (re-add it from **Add column** after removing it): a compact
 source link with an external-link icon. Hover or keyboard-focus it for
 **Národní digitální knihovna**; it opens the stored source URL in a new tab. It is
 independent of the First page thumbnail, which links to the first scan. The
@@ -1252,7 +1252,7 @@ Open `document-table-navigation`. It combines the existing table ledger (2 pages
 registered page without stored image media; its first-page link still opens the
 scan result. No existing fixture, assignment, timestamp or checkpoint is reset.
 
-A fresh tab shows First page, Document name, Library, Pages, Linked entities,
+A fresh tab shows First page, Document name, NDK, Library, Pages, Linked entities,
 Annotations, Faces and Mentions in that order. The Library link opens Documents
 filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. The last column is **Add column**:
 it fills the remaining table width (at least 160px), its sticky header stays readable while rows
@@ -1262,7 +1262,7 @@ and closes the menu. Drag a header's centered top handle to reorder columns (tou
 on the focused handle moves one position. Clicking a header's chevron-marked name opens a menu
 with **Move left**, **Move right** and **Remove column**; Escape closes it without removing. The document-link fallback that
 replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
-including reload/navigation back. **Restore default columns** restores the eight fields and order; unavailable/invalid storage recovers
+including reload/navigation back. **Restore default columns** restores the nine fields and order; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 120px, Linked entities 144px, All annotations columns 168px, Mentions columns 144px, Faces columns 128px and
 optional NDK 80px. Each header has a full-height sort strip on its left with a centered

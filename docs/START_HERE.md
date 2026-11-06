@@ -24,7 +24,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    including Annotations, Faces and Mentions counts by mode (All, Automatic, Manual, Verified, Unassigned). Drag a header's
    centered top handle (or use ←/→ on it) to reorder columns; click a header label
    (marked by a chevron) to move it left or right or choose **Remove column**. Defaults show First page, Document
-   name, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
+   name, NDK, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
    choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky
    header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo

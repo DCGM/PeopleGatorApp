@@ -167,7 +167,7 @@ describe('document table results', () => {
     await scrollToEnd()
     const loading = wrapper.get('[data-slot="document-loading-row"]')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
-    expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(8)
+    expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(9)
     expect(loading.attributes('aria-hidden')).toBe('true')
     expect(wrapper.text()).toContain('Album')
     expect(wrapper.get('[data-slot="document-list-status"] p.sr-only').text()).toBe(

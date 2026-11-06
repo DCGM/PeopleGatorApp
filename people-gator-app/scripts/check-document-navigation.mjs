@@ -121,6 +121,7 @@ try {
     assert.deepEqual(await page.locator('th').allTextContents(), [
       'First page',
       'Document name',
+      'NDK',
       'Library',
       'Pages',
       'Linked entities',
@@ -359,18 +360,18 @@ try {
       await page.locator('th[data-column="first_page"].before\\:bg-primary').waitFor()
       await capture('reorder')
     })
-    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'library'])
+    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'ndk'])
     assert.equal(await region.evaluate((e) => e.scrollTop), 0, 'dragging does not scroll')
     await page.reload()
     await rows.first().waitFor()
     await settled()
-    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'library'])
+    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'ndk'])
     await grip('name').focus()
     await page.keyboard.press('ArrowRight')
-    assert.deepEqual((await headerIds()).slice(0, 3), ['first_page', 'name', 'library'])
+    assert.deepEqual((await headerIds()).slice(0, 3), ['first_page', 'name', 'ndk'])
     await page
       .getByRole('status')
-      .filter({ hasText: 'Document name moved to position 2 of 8' })
+      .filter({ hasText: 'Document name moved to position 2 of 9' })
       .waitFor()
 
     // Removal is behind the label menu; Escape closes it without removing.
@@ -387,21 +388,21 @@ try {
     // The same menu moves a column one step.
     await page.locator('[data-column-menu="library"]').click()
     await page.getByRole('menuitem', { name: 'Move right', exact: true }).click()
-    assert.deepEqual((await headerIds()).slice(1, 4), ['name', 'registered_page_count', 'library'])
+    assert.deepEqual((await headerIds()).slice(2, 5), ['ndk', 'registered_page_count', 'library'])
     await page.locator('[data-column-menu="library"]').click()
     await page.getByRole('menuitem', { name: 'Move left', exact: true }).click()
-    assert.deepEqual((await headerIds()).slice(1, 4), ['name', 'library', 'registered_page_count'])
+    assert.deepEqual((await headerIds()).slice(2, 5), ['ndk', 'library', 'registered_page_count'])
     await removeColumn('library')
     assert.ok(!(await headerIds()).includes('library'))
     await chooseColumn('Library')
     assert.equal((await headerIds()).at(-1), 'library', 'added column appears last')
     await page.getByRole('button', { name: 'Add column', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Restore default columns', exact: true }).click()
-    assert.equal((await headerIds()).length, 8)
+    assert.equal((await headerIds()).length, 9)
     await region.evaluate((e) => {
       e.scrollLeft = 0
     })
-    for (const name of ['NDK', 'Document ID', 'Last modified']) await chooseColumn(name)
+    for (const name of ['Document ID', 'Last modified', 'Modified by']) await chooseColumn(name)
     const expanded = await widths()
     await page.reload()
     await rows.first().waitFor()
@@ -548,7 +549,7 @@ try {
       await ledger
         .locator('td')
         .allTextContents()
-        .then((a) => a.slice(3, 8)),
+        .then((a) => a.slice(4, 9)),
       ['2', '2', '9', '4', '5'],
     )
     const missing = rows.filter({ hasText: 'Navigation: missing preview' })
