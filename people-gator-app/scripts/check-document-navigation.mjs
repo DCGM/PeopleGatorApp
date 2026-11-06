@@ -124,9 +124,9 @@ try {
       'Library',
       'Pages',
       'Linked entities',
-      'Annotations',
-      'Faces',
-      'Mentions',
+      'Annotations: All',
+      'Faces: All',
+      'Mentions: All',
       'Add column',
     ])
     assert.equal(
@@ -197,16 +197,16 @@ try {
       await removeColumn('mentions_total')
       assert.ok((await fill()) > 160, 'add column fills the remaining desktop width')
       await capture('add-fill')
-      await chooseColumn('Text mentions: Total')
+      await chooseColumn('Mentions: All')
     }
     await page.locator('tbody td[data-add-column]').nth(1).click()
     const menu = page.getByRole('menu')
     await menu.waitFor()
     assert.deepEqual(await menu.locator('[data-slot="dropdown-menu-label"]').allTextContents(), [
       'Document fields',
-      'All annotations',
+      'Annotations',
       'Faces',
-      'Text mentions',
+      'Mentions',
     ])
     assert.equal(
       await menu.getByRole('menuitem', { name: 'Document name', exact: true }).count(),

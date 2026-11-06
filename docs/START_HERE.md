@@ -21,7 +21,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    documents in the table across libraries. Compare document-wide page/evidence
    totals and last-change metadata. Use
    the last **Add column** column (or click any of its cells) to add a hidden field,
-   including All annotations, Faces and Text mentions count groups. Drag a header's
+   including Annotations, Faces and Mentions counts by mode (All, Automatic, Manual, Verified, Unassigned). Drag a header's
    centered top handle (or use ←/→ on it) to reorder columns; click a header label
    and choose **Remove column** to remove one. Defaults show First page, Document
    name, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column

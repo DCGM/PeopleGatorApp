@@ -91,9 +91,9 @@ describe('document table', () => {
       'Library',
       'Pages',
       'Linked entities',
-      'Annotations',
-      'Faces',
-      'Mentions',
+      'Annotations: All',
+      'Faces: All',
+      'Mentions: All',
       'Add column',
     ])
     expect(
@@ -167,9 +167,9 @@ describe('document table', () => {
     for (const [label, field] of [
       ['Document name', 'name'],
       ['Pages', 'page_count'],
-      ['Annotations', 'annotations_total_count'],
-      ['Faces', 'faces_total_count'],
-      ['Mentions', 'mentions_total_count'],
+      ['Annotations: All', 'annotations_total_count'],
+      ['Faces: All', 'faces_total_count'],
+      ['Mentions: All', 'mentions_total_count'],
     ]) {
       const button = wrapper.get(`button[aria-label="Sort by ${label}: sort ascending"]`)
       expect(button.text()).toBe('')
@@ -225,12 +225,12 @@ describe('document table', () => {
     const menu = document.querySelector('[role="menu"]')!
     expect(
       [...menu.querySelectorAll('[data-slot="dropdown-menu-label"]')].map((l) => l.textContent),
-    ).toEqual(['Document fields', 'All annotations', 'Faces', 'Text mentions'])
+    ).toEqual(['Document fields', 'Annotations', 'Faces', 'Mentions'])
     const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')]
     const names = items.map((item) => item.getAttribute('aria-label') ?? item.textContent)
     // Shown fields are not offered again.
     expect(names).not.toContain('Document name')
-    expect(names).not.toContain('Faces: Total')
+    expect(names).not.toContain('Faces: All')
     expect(names).toContain('NDK')
     expect(names).toContain('Faces: Manual')
     items.find((item) => item.getAttribute('aria-label') === 'Faces: Manual')!.click()
@@ -310,6 +310,15 @@ describe('document table', () => {
     await flushPromises()
     expect(headers()[0]).toBe('mentions_total')
     expect(order.value.indexOf('mentions_total')).toBeLessThan(order.value.indexOf('first_page'))
+  })
+  it('shows count headers as a title with the mode in small text below', async () => {
+    const { wrapper } = await render()
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), faces_manual: true } })
+    const header = wrapper.get('th[data-column="faces_manual"] [data-column-menu]')
+    expect(header.text()).toBe('Faces: Manual')
+    expect(header.get('small').text()).toBe('Manual')
+    expect(wrapper.get('th[data-column="total"] small').text()).toBe('All')
+    expect(wrapper.find('th[data-column="registered_page_count"] small').exists()).toBe(false)
   })
   it('reuses first-page thumbnails across toggles and handles no pages and missing media', async () => {
     const { wrapper } = await render()

@@ -851,9 +851,10 @@ source and optional image belong to the same archive document, and reruns retain
 existing identities and edits.
 
 Open `document-table-annotation-groups` for the ledger and its empty same-ID
-mirror in another library. The **Add column** menu groups counts under **All annotations**,
-**Faces** and **Text mentions**, each with Total, Automatic, Manual, Verified and
-Unassigned. The default columns show the three totals as Annotations, Faces and Mentions; choose additional state fields to compare them. Each header names its count independently.
+mirror in another library. The **Add column** menu groups counts under **Annotations**,
+**Faces** and **Mentions**, each with All, Automatic, Manual, Verified and
+Unassigned. Each count header shows its title with the mode in small text below,
+for example **Faces** / *Manual*. The default columns show the three totals as Annotations / All, Faces / All and Mentions / All; choose additional state fields to compare them. Each header names its count independently.
 The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
@@ -1255,7 +1256,7 @@ Annotations, Faces and Mentions in that order. The Library link opens Documents
 filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. The last column is **Add column**:
 it fills the remaining table width (at least 160px), its sticky header stays readable while rows
 scroll, and clicking any of its cells opens the header menu of hidden fields, grouped by Document
-fields, All annotations, Faces and Text mentions. Choosing a field appends that one column last
+fields, Annotations, Faces and Mentions. Choosing a field appends that one column last
 and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
 on the focused handle moves one position. Clicking a header label opens a menu
 with **Remove column**; Escape closes it without removing. The document-link fallback that

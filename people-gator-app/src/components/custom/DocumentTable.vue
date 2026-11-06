@@ -47,8 +47,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-const annotationStateLabel = (id: string) =>
-  DOCUMENT_ANNOTATION_STATES.find((state) => id === state.id || id.endsWith(`_${state.id}`))?.label
+const ANNOTATION_TITLES = { all: 'Annotations', faces: 'Faces', mentions: 'Mentions' } as const
+// Count columns read as a title with a mode: Faces, then All/Automatic/Manual/...
+const annotationModeLabel = (id: string) => {
+  const state = DOCUMENT_ANNOTATION_STATES.find((s) => id === s.id || id.endsWith(`_${s.id}`))
+  return state?.id === 'total' ? 'All' : state?.label
+}
 
 const tableId = useId()
 const columnHeaderId = (id: string) => `${tableId}-${id}`
@@ -178,10 +182,7 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     DOCUMENT_ANNOTATION_STATES.map((state) => ({
       id: annotationColumnId(group.scope, state.id),
       ...documentColumnSizing(annotationColumnId(group.scope, state.id)),
-      header:
-        state.id === 'total'
-          ? { all: 'Annotations', faces: 'Faces', mentions: 'Mentions' }[group.scope]
-          : `${group.label}: ${state.label}`,
+      header: `${ANNOTATION_TITLES[group.scope]}: ${annotationModeLabel(state.id)}`,
       accessorFn: (d: DocumentResponse) => annotationCount(d, state.id, group.scope),
       cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
     })),
@@ -242,6 +243,20 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
   table.setColumnSizing((current) => ({ ...current, [header.column.id]: width }))
 }
 
+// Annotation headers show their mode in small text on a second line.
+function HeaderLabel({ id }: { id: string }) {
+  const group = annotationGroupOf(id)
+  if (!group) return columnLabel(id)
+  return [
+    ANNOTATION_TITLES[group.scope],
+    h('span', { class: 'sr-only' }, ': '),
+    h(
+      'small',
+      { class: 'block text-xs font-normal text-muted-foreground' },
+      annotationModeLabel(id),
+    ),
+  ]
+}
 const columnLabel = (id: string) =>
   String(columns.find((c) => (c.id ?? ('accessorKey' in c ? c.accessorKey : '')) === id)?.header)
 const visibleIds = () => table.getVisibleLeafColumns().map((c) => orderId(c.id))
@@ -262,13 +277,13 @@ const addGroups = computed(() => {
     },
     ...DOCUMENT_ANNOTATION_GROUPS.map((group) => ({
       id: group.id,
-      label: group.label,
+      label: ANNOTATION_TITLES[group.scope],
       items: hidden
         .filter((id) => annotationGroupOf(id) === group)
         .map((id) => ({
           id,
-          label: annotationStateLabel(id) ?? id,
-          name: `${group.label}: ${annotationStateLabel(id)}`,
+          label: annotationModeLabel(id) ?? id,
+          name: columnLabel(id),
         })),
     })),
   ].filter((group) => group.items.length)
@@ -432,7 +447,7 @@ function startMove(event: PointerEvent, id: string) {
                   variant="ghost"
                   size="icon"
                   class="size-8 shrink-0"
-                  :aria-label="sortLabel(header.column.id, header.column.columnDef.header)"
+                  :aria-label="sortLabel(header.column.id, columnLabel(header.column.id))"
                   @click="toggleSort(header.column.id)"
                 >
                   <ArrowUp
@@ -455,9 +470,7 @@ function startMove(event: PointerEvent, id: string) {
                       class="h-auto min-h-8 min-w-0 justify-start px-1 text-left whitespace-normal"
                       :data-column-menu="header.column.id"
                       ><span class="min-w-0 [overflow-wrap:anywhere]"
-                        ><FlexRender
-                          :render="header.column.columnDef.header"
-                          :props="header.getContext()" /></span
+                        ><HeaderLabel :id="header.column.id" /></span
                     ></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
@@ -470,9 +483,7 @@ function startMove(event: PointerEvent, id: string) {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <span v-else class="min-w-0 [overflow-wrap:anywhere]"
-                  ><FlexRender
-                    :render="header.column.columnDef.header"
-                    :props="header.getContext()"
+                  ><HeaderLabel :id="header.column.id"
                 /></span>
               </div>
               <Button
