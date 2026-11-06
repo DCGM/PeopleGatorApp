@@ -104,8 +104,11 @@ results and applicable desktop/mobile screenshot evidence. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.
 
-Documents and Scan search also offer **Minimum annotations**: choose All
-annotations, Faces or Text mentions, then a state and inclusive minimum.
+Scan search offers **Minimum annotations**: choose All annotations, Faces or
+Text mentions, then a state and inclusive minimum. Documents keeps only search
+and sort above its table; its filter sidebar (a drawer from the sliders button
+below 1024px) holds Libraries, Modified by/via key/from/to and **All
+annotations**, **Faces**, **Text mentions** and **People** ranges (State, Min, Max).
 Use several minima together, remove their tags individually, and sort by the
 same counts. Document count headers offer the same ordering as the selector.
 See [count rules and URL fields](SEARCH_FILTERS.md#annotation-count-ordering-and-minima-78)

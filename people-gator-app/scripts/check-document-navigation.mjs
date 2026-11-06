@@ -180,6 +180,67 @@ try {
       assert.ok(header.y >= bar - 1, 'top bar does not cover the table header')
     }
     await capture('defaults')
+    // Filters: a sidebar on desktop, a drawer from the sliders button below 1024px. Only
+    // search and sort sit above the table.
+    const filterNames = [
+      'Libraries',
+      'Modified by',
+      'Modified via key',
+      'Modified from',
+      'Modified to',
+      'All annotations',
+      'Faces',
+      'Text mentions',
+      'People',
+    ]
+    const search = page.getByRole('search', { name: 'Search documents panel' })
+    assert.equal(await search.getByRole('combobox', { name: 'Sort by' }).count(), 1)
+    const results = async () =>
+      Number((await search.getByRole('status').textContent()).replace(/\D/g, ''))
+    const before = await results()
+    for (const name of ['Unassigned faces', 'Minimum annotations'])
+      assert.equal(await page.getByRole('button', { name, exact: true }).count(), 0, name)
+    let filters
+    if (label === 'desktop') {
+      filters = page.getByRole('complementary', { name: 'Document filters' })
+      const aside = await filters.boundingBox()
+      const table = await region.boundingBox()
+      assert.ok(aside.x + aside.width <= table.x, 'sidebar sits left of the table')
+    } else {
+      assert.equal(await page.getByRole('complementary').count(), 0)
+      const toggle = search.getByRole('button', { name: 'Show filters', exact: true })
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false')
+      await toggle.click()
+      filters = page.getByRole('dialog', { name: 'Filters' })
+      await filters.waitFor()
+    }
+    assert.deepEqual(
+      await filters
+        .getByRole('group', { name: 'Filters' })
+        .locator(':scope > button, :scope > div > button')
+        .evaluateAll((b) => b.map((e) => e.getAttribute('aria-label') || e.textContent.trim())),
+      filterNames,
+    )
+    await filters.getByRole('button', { name: 'People', exact: true }).click()
+    const peopleForm = page.getByRole('form', { name: 'People count range' })
+    await peopleForm.getByLabel('People minimum').fill('1')
+    await page.waitForTimeout(400) // Let the open transition finish.
+    await capture('filters')
+    await peopleForm.getByRole('button', { name: 'Apply', exact: true }).click()
+    await page.waitForURL(/min_linked_entity_count=1/)
+    await peopleForm.waitFor({ state: 'detached' })
+    if (label === 'mobile') {
+      // Selections persist in the drawer; closing it keeps the applied filter.
+      await page.keyboard.press('Escape')
+      await filters.waitFor({ state: 'detached' })
+    }
+    await settled()
+    const tag = page.getByRole('button', { name: 'Remove People ≥ 1', exact: true })
+    await tag.waitFor()
+    assert.ok((await results()) < before, 'people range narrows the documents')
+    await tag.click()
+    await settled()
+    assert.equal(new URL(page.url()).searchParams.get('min_linked_entity_count'), null)
     // Header cells: full-height sort strip with a centered icon; the move handle and a
     // content-width name are centered in the remaining width; the resize grip is full height.
     const cells = await page.locator('thead th[data-column]').evaluateAll((ths) =>
@@ -232,10 +293,11 @@ try {
     await fill()
     if (label === 'desktop') {
       // With fewer columns the add column fills the remaining width.
-      await removeColumn('mentions_total')
+      for (const id of ['library', 'faces_total', 'mentions_total']) await removeColumn(id)
       assert.ok((await fill()) > 160, 'add column fills the remaining desktop width')
       await capture('add-fill')
-      await chooseColumn('Mentions: All')
+      await page.getByRole('button', { name: 'Add column', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'Restore default columns', exact: true }).click()
     }
     await page.locator('tbody td[data-add-column]').nth(1).click()
     const menu = page.getByRole('menu')
@@ -414,14 +476,10 @@ try {
     await page.goForward()
     await settled()
     assert.equal(await page.locator('th[aria-sort]').count(), 0)
-    if (label === 'mobile')
-      await page.getByRole('button', { name: 'Show filters', exact: true }).click()
     await page.getByRole('combobox', { name: 'Sort by', exact: true }).click()
     await page.getByRole('option', { name: 'Pages · Highest first', exact: true }).click()
     await settled()
     assert.equal(await page.locator('th[aria-sort="descending"]').innerText(), 'Pages')
-    if (label === 'mobile')
-      await page.getByRole('button', { name: 'Hide filters', exact: true }).click()
     await visit(scenario + '&q=Pagination')
     assert.equal(await page.locator('th[aria-sort]').count(), 0)
     for (let i = 0; i < 3; i++) {
