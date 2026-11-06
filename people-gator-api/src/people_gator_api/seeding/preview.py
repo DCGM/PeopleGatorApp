@@ -42,7 +42,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import BREADCRUMB_PAGES, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -889,6 +889,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 for page in PAGES if page.key == page_key
                 for document in DOCUMENTS if document.key == page.document
             },
+            "breadcrumb-person": f"/people/{manifest.entities[BREADCRUMB_PERSON]}",
             "document-search": "/documents?q=pribehy",
             "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
             "compact-document-filters": "/documents?" + urlencode({
