@@ -170,7 +170,9 @@ describe('document table results', () => {
     expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(8)
     expect(loading.attributes('aria-hidden')).toBe('true')
     expect(wrapper.text()).toContain('Album')
-    expect(wrapper.get('p.sr-only[role="status"]').text()).toBe('Loading more documents…')
+    expect(wrapper.get('[data-slot="document-list-status"] p.sr-only').text()).toBe(
+      'Loading more documents…',
+    )
     complete(response([doc('b')], 2))
     await flushPromises()
     expect(wrapper.find('[data-slot="document-loading-row"]').exists()).toBe(false)

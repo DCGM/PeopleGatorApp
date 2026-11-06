@@ -5,7 +5,7 @@ import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
-import { useDocumentColumns } from '@/viewmodels/document-table'
+import { useDocumentColumnOrder, useDocumentColumns } from '@/viewmodels/document-table'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
@@ -20,6 +20,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const visibility = useDocumentColumns()
+const columnOrder = useDocumentColumnOrder()
 const shared = useSharedFilters()
 const counts = useAnnotationCounts()
 const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
@@ -99,6 +100,7 @@ useAutomaticPagination({
     </div>
     <DocumentTable
       v-model:visibility="visibility"
+      v-model:order="columnOrder"
       v-model:sort="explicitSort"
       :documents="documents"
       :loading-more="isFetchingNextPage"

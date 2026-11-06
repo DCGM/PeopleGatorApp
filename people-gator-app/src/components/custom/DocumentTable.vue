@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, h, ref, useId } from 'vue'
+import { computed, h, nextTick, ref, useId } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   columnVisibilityFeature,
+  columnOrderingFeature,
   columnSizingFeature,
   columnResizingFeature,
   tableFeatures,
@@ -13,7 +14,7 @@ import {
   type ColumnSizingState,
   type Header,
 } from '@tanstack/vue-table'
-import { ArrowUp, ArrowDown, ArrowUpDown, Settings2, GripVertical } from '@lucide/vue'
+import { ArrowUp, ArrowDown, ArrowUpDown, GripHorizontal, GripVertical, Plus, X } from '@lucide/vue'
 import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
@@ -26,13 +27,24 @@ import {
   DOCUMENT_ANNOTATION_GROUPS,
   DOCUMENT_ANNOTATION_STATES,
   defaultDocumentColumns,
+  defaultDocumentColumnOrder,
+  appendDocumentColumn,
+  moveDocumentColumn,
+  stepDocumentColumn,
   DOCUMENT_COLUMN_SORTS,
 } from '@/viewmodels/document-table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const annotationStateLabel = (id: string) =>
@@ -43,6 +55,7 @@ const columnHeaderId = (id: string) => `${tableId}-${id}`
 
 const props = defineProps<{ documents: DocumentResponse[]; loadingMore?: boolean }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
+const order = defineModel<string[]>('order', { required: true })
 const sort = defineModel<SortState<DocumentSortField> | undefined>('sort')
 function toggleSort(columnId: string) {
   const field = DOCUMENT_COLUMN_SORTS[columnId]
@@ -67,6 +80,7 @@ function sortLabel(columnId: string, label: unknown) {
 }
 const features = tableFeatures({
   columnVisibilityFeature,
+  columnOrderingFeature,
   columnSizingFeature,
   columnResizingFeature,
 })
@@ -173,24 +187,14 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     })),
   ),
 ]
-// Keep the eight default fields first, retaining stable IDs for saved selections.
-const leading = [
-  'first_page',
-  'name',
-  'library',
-  'registered_page_count',
-  'linked_entity_count',
-  'total',
-  'faces_total',
-  'mentions_total',
-]
-columns.sort((a, b) => {
-  const rank = (c: typeof a) => {
-    const i = leading.indexOf(c.id ?? ('accessorKey' in c ? String(c.accessorKey) : ''))
-    return i < 0 ? leading.length : i
-  }
-  return rank(a) - rank(b)
+// The document link fallback replaces the name, so it always takes the name's place.
+const columnOrder = computed(() => {
+  const ids = order.value.filter((id) => id !== 'identity')
+  ids.splice(Math.max(0, ids.indexOf('name')), 0, 'identity')
+  return ids
 })
+const ADD_COLUMN_MIN_WIDTH = 160
+const orderId = (id: string) => (id === 'identity' ? 'name' : id)
 
 const table = useTable({
   features,
@@ -199,6 +203,7 @@ const table = useTable({
   data: computed(() => props.documents),
   getRowId: (row: DocumentResponse) => row.source_id,
   state: computed(() => ({
+    columnOrder: columnOrder.value,
     columnSizing: sizing.value,
     columnVisibility: {
       ...visibility.value,
@@ -236,80 +241,135 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
   event.stopPropagation()
   table.setColumnSizing((current) => ({ ...current, [header.column.id]: width }))
 }
+
+const columnLabel = (id: string) =>
+  String(columns.find((c) => (c.id ?? ('accessorKey' in c ? c.accessorKey : '')) === id)?.header)
+const visibleIds = () => table.getVisibleLeafColumns().map((c) => orderId(c.id))
+const annotationGroupOf = (id: string) =>
+  DOCUMENT_ANNOTATION_GROUPS.find((g) =>
+    DOCUMENT_ANNOTATION_STATES.some((s) => annotationColumnId(g.scope, s.id) === id),
+  )
+// Only hidden fields can be added; each group keeps the default field order.
+const addGroups = computed(() => {
+  const hidden = defaultDocumentColumnOrder().filter((id) => visibility.value[id] === false)
+  return [
+    {
+      id: 'document',
+      label: 'Document fields',
+      items: hidden
+        .filter((id) => !annotationGroupOf(id))
+        .map((id) => ({ id, label: columnLabel(id), name: columnLabel(id) })),
+    },
+    ...DOCUMENT_ANNOTATION_GROUPS.map((group) => ({
+      id: group.id,
+      label: group.label,
+      items: hidden
+        .filter((id) => annotationGroupOf(id) === group)
+        .map((id) => ({
+          id,
+          label: annotationStateLabel(id) ?? id,
+          name: `${group.label}: ${annotationStateLabel(id)}`,
+        })),
+    })),
+  ].filter((group) => group.items.length)
+})
+const addOpen = ref(false)
+const addTrigger = ref<InstanceType<typeof Button> | null>(null)
+function openAddMenu() {
+  ;(addTrigger.value?.$el as HTMLElement | undefined)?.focus()
+  addOpen.value = true
+}
+function addColumn(id: string) {
+  order.value = appendDocumentColumn(order.value, visibleIds(), id)
+  visibility.value = { ...visibility.value, [id]: true }
+}
+function restoreDefaults() {
+  visibility.value = defaultDocumentColumns()
+  order.value = defaultDocumentColumnOrder()
+}
+
+// Removal needs a second, confirming activation of the same button.
+const armed = ref<string | null>(null)
+function removeColumn(id: string) {
+  if (armed.value !== id) {
+    armed.value = id
+    return
+  }
+  armed.value = null
+  visibility.value = { ...visibility.value, [id]: false }
+}
+
+const moveStatus = ref('')
+const tableElement = ref<HTMLTableElement | null>(null)
+async function focusMoveHandle(id: string) {
+  await nextTick()
+  tableElement.value?.querySelector<HTMLElement>(`[data-move-column="${id}"]`)?.focus()
+}
+function announceMove(id: string) {
+  const visible = visibleIds()
+  moveStatus.value = `${columnLabel(id)} moved to position ${visible.indexOf(orderId(id)) + 1} of ${visible.length}`
+}
+function moveKey(event: KeyboardEvent, id: string) {
+  const step = ({ ArrowLeft: -1, ArrowRight: 1 } as const)[event.key as 'ArrowLeft' | 'ArrowRight']
+  if (!step) return
+  event.preventDefault()
+  order.value = stepDocumentColumn(order.value, visibleIds(), orderId(id), step)
+  void focusMoveHandle(id).then(() => announceMove(id))
+}
+
+type Drop = { target: string; after: boolean }
+const dragging = ref<{ id: string; drop?: Drop } | null>(null)
+function dropAt(x: number, id: string): Drop | undefined {
+  const cells = [
+    ...(tableElement.value?.querySelectorAll<HTMLElement>('thead th[data-column]') ?? []),
+  ]
+  const cell = cells.find((c) => x < c.getBoundingClientRect().right) ?? cells[cells.length - 1]
+  const target = cell?.dataset.column
+  if (!cell || !target || target === id) return undefined
+  const bounds = cell.getBoundingClientRect()
+  return { target, after: x > bounds.left + bounds.width / 2 }
+}
+function startMove(event: PointerEvent, id: string) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  const handle = event.currentTarget as HTMLElement
+  const viewport = handle.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  handle.setPointerCapture?.(event.pointerId)
+  dragging.value = { id }
+  const move = (e: PointerEvent) => {
+    // Scroll near the region edges so off-screen columns can be reached.
+    const bounds = viewport?.getBoundingClientRect()
+    if (viewport && bounds) {
+      if (e.clientX < bounds.left + 48) viewport.scrollLeft -= 24
+      else if (e.clientX > bounds.right - 48) viewport.scrollLeft += 24
+    }
+    dragging.value = { id, drop: dropAt(e.clientX, id) }
+  }
+  const end = (e: PointerEvent) => {
+    handle.removeEventListener('pointermove', move)
+    handle.removeEventListener('pointerup', end)
+    handle.removeEventListener('pointercancel', end)
+    const drop = dragging.value?.drop
+    dragging.value = null
+    if (e.type !== 'pointerup' || !drop) return
+    order.value = moveDocumentColumn(order.value, orderId(id), orderId(drop.target), drop.after)
+    announceMove(id)
+  }
+  handle.addEventListener('pointermove', move)
+  handle.addEventListener('pointerup', end)
+  handle.addEventListener('pointercancel', end)
+}
 </script>
 
 <template>
-  <div class="flex h-dvh min-w-0 flex-col gap-3 lg:h-auto lg:min-h-0">
-    <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
-      <Popover>
-        <PopoverTrigger as-child
-          ><Button variant="outline"
-            ><Settings2 aria-hidden="true" />Columns</Button
-          ></PopoverTrigger
-        >
-        <PopoverContent
-          align="start"
-          class="max-h-[min(70dvh,var(--reka-popover-content-available-height))] overflow-y-auto"
-        >
-          <div class="flex flex-col gap-3" aria-label="Shown document fields">
-            <label
-              v-for="column in table
-                .getAllLeafColumns()
-                .filter(
-                  (c) =>
-                    c.getCanHide() &&
-                    !DOCUMENT_ANNOTATION_GROUPS.some((g) =>
-                      DOCUMENT_ANNOTATION_STATES.some(
-                        (s) => annotationColumnId(g.scope, s.id) === c.id,
-                      ),
-                    ),
-                )"
-              :key="column.id"
-              class="flex items-center gap-2"
-            >
-              <Checkbox
-                :model-value="column.getIsVisible()"
-                @update:model-value="column.toggleVisibility($event === true)"
-              />
-              {{ column.columnDef.header }}
-            </label>
-            <fieldset
-              v-for="group in DOCUMENT_ANNOTATION_GROUPS"
-              :key="group.id"
-              class="flex flex-col gap-3"
-            >
-              <legend class="mb-3">{{ group.label }}</legend>
-              <label
-                v-for="column in table
-                  .getAllLeafColumns()
-                  .filter((c) =>
-                    DOCUMENT_ANNOTATION_STATES.some(
-                      (s) => annotationColumnId(group.scope, s.id) === c.id,
-                    ),
-                  )"
-                :key="column.id"
-                class="flex items-center gap-2"
-              >
-                <Checkbox
-                  :aria-label="`${group.label}: ${annotationStateLabel(column.id)}`"
-                  :model-value="column.getIsVisible()"
-                  @update:model-value="column.toggleVisibility($event === true)"
-                />
-                {{ annotationStateLabel(column.id) }}
-              </label>
-            </fieldset>
-            <Button variant="outline" @click="visibility = defaultDocumentColumns()"
-              >Restore defaults</Button
-            >
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+  <!-- On mobile, fill the viewport below the sticky h-13 top bar so it never covers the header. -->
+  <div class="flex h-[calc(100dvh-3.25rem)] min-w-0 flex-col lg:h-auto lg:min-h-0">
     <p :id="`${tableId}-counts`" class="sr-only">
       Counts cover the entire registered document. All annotations combines faces and text mentions;
       each group includes total, automatic, manual, verified and unassigned counts. Pages counts
       registered pages only. Unknown means no recorded value.
     </p>
+    <p class="sr-only" role="status">{{ moveStatus }}</p>
     <ScrollArea
       class="relative min-h-0 flex-1 w-full min-w-0 max-w-full overflow-hidden rounded-md border"
       orientation="both"
@@ -321,9 +381,10 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
       }"
     >
       <table
+        ref="tableElement"
         :aria-describedby="`${tableId}-counts`"
-        class="table-fixed caption-bottom text-sm"
-        :style="{ width: `${table.getTotalSize()}px` }"
+        class="min-w-full table-fixed caption-bottom text-sm"
+        :style="{ width: `${table.getTotalSize() + ADD_COLUMN_MIN_WIDTH}px` }"
       >
         <colgroup>
           <col
@@ -332,6 +393,8 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
             :data-column="column.id"
             :style="{ width: `${column.getSize()}px` }"
           />
+          <!-- Without a width, the add column takes the remaining table width. -->
+          <col data-add-column />
         </colgroup>
         <TableHeader class="sticky top-0 z-10 bg-background">
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
@@ -339,14 +402,57 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               v-for="header in group.headers.filter((h) => group.depth === 0 || h.column.parent)"
               :key="header.id"
               :id="columnHeaderId(header.column.id)"
+              :data-column="header.column.columns.length ? undefined : header.column.id"
               :colspan="header.colSpan"
               :rowspan="header.isPlaceholder ? table.getHeaderGroups().length : undefined"
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
               :style="{ width: `${header.getSize()}px` }"
-              class="relative border-r pr-4 last:border-r-0"
+              class="relative border-r pr-4 align-top last:border-r-0"
+              :class="{
+                'opacity-50': dragging?.id === header.column.id,
+                'before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary':
+                  dragging?.drop?.target === header.column.id && !dragging.drop.after,
+                'after:absolute after:inset-y-0 after:right-0 after:w-0.5 after:bg-primary':
+                  dragging?.drop?.target === header.column.id && dragging.drop.after,
+              }"
             >
-              <div class="flex items-center gap-1 py-2 whitespace-normal">
+              <div
+                v-if="!header.column.columns.length"
+                class="flex items-center justify-between gap-1 pt-1"
+              >
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  class="cursor-grab touch-none active:cursor-grabbing"
+                  :data-move-column="header.column.id"
+                  :aria-label="`Move ${columnLabel(header.column.id)} column`"
+                  aria-keyshortcuts="ArrowLeft ArrowRight"
+                  title="Drag to move; arrow keys move"
+                  @pointerdown="startMove($event, header.column.id)"
+                  @keydown="moveKey($event, header.column.id)"
+                >
+                  <GripHorizontal aria-hidden="true" />
+                </Button>
+                <Button
+                  v-if="header.column.getCanHide()"
+                  :data-remove-column="header.column.id"
+                  :variant="armed === header.column.id ? 'destructive' : 'ghost'"
+                  :size="armed === header.column.id ? 'xs' : 'icon-xs'"
+                  :aria-label="
+                    armed === header.column.id
+                      ? `Confirm removing ${columnLabel(header.column.id)} column`
+                      : `Remove ${columnLabel(header.column.id)} column`
+                  "
+                  :title="armed === header.column.id ? undefined : 'Remove column'"
+                  @click="removeColumn(header.column.id)"
+                  @blur="armed === header.column.id && (armed = null)"
+                  @keydown.escape="armed = null"
+                >
+                  <X aria-hidden="true" /><span v-if="armed === header.column.id">Remove</span>
+                </Button>
+              </div>
+              <div class="flex items-center gap-1 pb-2 whitespace-normal">
                 <Button
                   v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
                   variant="ghost"
@@ -395,6 +501,47 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
                 <GripVertical class="size-3" aria-hidden="true" />
               </Button>
             </TableHead>
+            <TableHead
+              :id="columnHeaderId('add')"
+              data-add-column
+              scope="col"
+              class="relative p-0"
+              :rowspan="table.getHeaderGroups().length"
+            >
+              <DropdownMenu v-model:open="addOpen">
+                <DropdownMenuTrigger as-child>
+                  <Button
+                    ref="addTrigger"
+                    variant="ghost"
+                    class="absolute inset-0 h-full w-full justify-start rounded-none"
+                  >
+                    <Plus aria-hidden="true" /><span>Add column</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <template v-for="(group, index) in addGroups" :key="group.id">
+                    <DropdownMenuSeparator v-if="index" />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{{ group.label }}</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        v-for="item in group.items"
+                        :key="item.id"
+                        :aria-label="item.name"
+                        @select="addColumn(item.id)"
+                        >{{ item.label }}</DropdownMenuItem
+                      >
+                    </DropdownMenuGroup>
+                  </template>
+                  <DropdownMenuItem v-if="!addGroups.length" disabled
+                    >All columns shown</DropdownMenuItem
+                  >
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem @select="restoreDefaults"
+                    >Restore default columns</DropdownMenuItem
+                  >
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -403,7 +550,7 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               v-for="cell in row.getVisibleCells()"
               :key="cell.id"
               :data-column="cell.column.id"
-              class="border-r whitespace-normal last:border-r-0 [overflow-wrap:anywhere]"
+              class="border-r whitespace-normal [overflow-wrap:anywhere]"
               :style="{ width: `${cell.column.getSize()}px` }"
               :headers="
                 cell.column.parent
@@ -413,17 +560,25 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
             >
               <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
             </TableCell>
+            <!-- Pointer shortcut only: the header holds the accessible control. -->
+            <TableCell
+              data-add-column
+              :headers="columnHeaderId('add')"
+              class="cursor-pointer"
+              @click="openAddMenu"
+            />
           </TableRow>
           <TableRow v-if="loadingMore" data-slot="document-loading-row" aria-hidden="true">
             <TableCell
               v-for="column in table.getVisibleLeafColumns()"
               :key="column.id"
               :data-column="column.id"
-              class="border-r last:border-r-0"
+              class="border-r"
               :style="{ width: `${column.getSize()}px` }"
             >
               <Skeleton :class="column.id === 'first_page' ? 'h-28 w-20' : 'h-4 w-2/3'" />
             </TableCell>
+            <TableCell data-add-column />
           </TableRow>
         </TableBody>
       </table>
