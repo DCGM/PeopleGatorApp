@@ -801,7 +801,7 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Columns can hide each data field, including Document name, and restore defaults. Document
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be removed from its header (× then a confirming **Remove**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
 name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
@@ -842,7 +842,7 @@ stable identity. Multiple unknown names tie-break by source UUID ascending.
 
 
 Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
-still works). **NDK** is configurable through Columns and hidden by default: a compact
+still works). **NDK** is hidden by default and can be added from **Add column**: a compact
 source link with an external-link icon. Hover or keyboard-focus it for
 **Národní digitální knihovna**; it opens the stored source URL in a new tab. It is
 independent of the First page thumbnail, which links to the first scan. The
@@ -851,7 +851,7 @@ source and optional image belong to the same archive document, and reruns retain
 existing identities and edits.
 
 Open `document-table-annotation-groups` for the ledger and its empty same-ID
-mirror in another library. Columns groups counts under **All annotations**,
+mirror in another library. The **Add column** menu groups counts under **All annotations**,
 **Faces** and **Text mentions**, each with Total, Automatic, Manual, Verified and
 Unassigned. The default columns show the three totals as Annotations, Faces and Mentions; choose additional state fields to compare them. Each header names its count independently.
 The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
@@ -1252,14 +1252,20 @@ scan result. No existing fixture, assignment, timestamp or checkpoint is reset.
 
 A fresh tab shows First page, Document name, Library, Pages, Linked entities,
 Annotations, Faces and Mentions in that order. The Library link opens Documents
-filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. Columns has a settings
-icon and saves visible fields in sessionStorage, including reload/navigation back.
-Restore defaults restores the eight fields; unavailable/invalid storage recovers
+filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. The last column is **Add column**:
+it fills the remaining table width (at least 160px), its sticky header stays readable while rows
+scroll, and clicking any of its cells opens the header menu of hidden fields, grouped by Document
+fields, All annotations, Faces and Text mentions. Choosing a field appends that one column last
+and closes the menu. Drag a header's top handle to reorder columns (touch works on mobile); ←/→
+on the focused handle moves one position. A header's × arms removal and a second click on
+**Remove** confirms it; Escape or leaving the button cancels. The document-link fallback that
+replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
+including reload/navigation back. **Restore default columns** restores the eight fields and order; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 104px, Linked entities 144px, Annotations 144px, Faces/Mentions 128px and
 optional NDK 80px. Header text wraps independently of sort icons.
 
-The Documents view uses the available content width. It has no footer, page title or subtitle; only the small **Documents index** label precedes the search panel. On desktop (1024px and wider), the table fills the entire remaining viewport height below the filters. On mobile, the table section, including Columns, occupies one viewport height, with the label and filters reachable by page scrolling. There is no Load more button: reaching the last row loads the next batch. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
+The Documents view uses the available content width. It has no footer, page title or subtitle; only the small **Documents index** label precedes the search panel. On desktop (1024px and wider), the table fills the entire remaining viewport height below the filters. On mobile, the table section occupies the viewport below the sticky top bar, so the bar never covers the table header; the label and filters are reachable by page scrolling. There is no Load more button: reaching the last row loads the next batch. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
 Choose extra fields and scroll vertically at left, middle and right positions;
 the loading sentinel remains visible across the horizontal content. Counts retain
 full-document semantics, including unassigned and direct document evidence.

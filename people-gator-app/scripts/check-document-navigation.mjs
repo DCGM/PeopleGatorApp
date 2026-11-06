@@ -28,7 +28,9 @@ try {
     })
     const rows = page.locator('tbody tr')
     const settled = async () => {
-      await page.waitForFunction(() => !document.querySelector('main p[role="status"]'))
+      await page.waitForFunction(
+        () => !document.querySelector('[data-slot="document-list-status"] p[role="status"]'),
+      )
       await page.waitForTimeout(150)
     }
     const visit = async (query = scenario) => {
@@ -41,7 +43,9 @@ try {
       page
         .locator('col')
         .evaluateAll((cols) =>
-          Object.fromEntries(cols.map((c) => [c.dataset.column, c.getBoundingClientRect().width])),
+          Object.fromEntries(
+            cols.map((c) => [c.dataset.column ?? 'add', c.getBoundingClientRect().width]),
+          ),
         )
     async function geometry() {
       const sizes = Object.values(await widths())
@@ -74,10 +78,38 @@ try {
         1,
       )
     }
-    async function toggleColumn(name) {
-      await page.getByRole('button', { name: 'Columns', exact: true }).click()
-      await page.getByRole('checkbox', { name, exact: true }).click()
-      await page.keyboard.press('Escape')
+    async function chooseColumn(name) {
+      await page.getByRole('button', { name: 'Add column', exact: true }).click()
+      await page.getByRole('menuitem', { name, exact: true }).click()
+      await page.getByRole('menu').waitFor({ state: 'detached' })
+    }
+    const headerIds = () =>
+      page.locator('thead th[data-column]').evaluateAll((c) => c.map((e) => e.dataset.column))
+    const grip = (id) => page.locator(`[data-move-column="${id}"]`)
+    // Mouse on desktop; real touch events on mobile, where the handle must not scroll.
+    async function drag(id, x, y, before) {
+      const from = await grip(id).boundingBox()
+      const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
+      if (label === 'desktop') {
+        await page.mouse.move(start.x, start.y)
+        await page.mouse.down()
+        await page.mouse.move(x, y, { steps: 8 })
+        await before()
+        await page.mouse.up()
+        return
+      }
+      const cdp = await context.newCDPSession(page)
+      const touch = (type, point) =>
+        cdp.send('Input.dispatchTouchEvent', { type, touchPoints: point ? [point] : [] })
+      await touch('touchStart', start)
+      for (let step = 1; step <= 8; step++)
+        await touch('touchMove', {
+          x: start.x + ((x - start.x) * step) / 8,
+          y: start.y + ((y - start.y) * step) / 8,
+        })
+      await before()
+      await touch('touchEnd')
+      await cdp.detach()
     }
     await visit()
     assert.equal(await rows.count(), 12)
@@ -90,6 +122,7 @@ try {
       'Annotations',
       'Faces',
       'Mentions',
+      'Add column',
     ])
     assert.equal(
       await page.getByRole('button', { name: 'Restore column widths', exact: true }).count(),
@@ -130,16 +163,103 @@ try {
       await page.setViewportSize({ width, height })
       await page.waitForTimeout(150)
     } else {
+      const bar = await page
+        .locator('nav')
+        .first()
+        .evaluate((e) => e.getBoundingClientRect().height)
       assert.ok(
-        Math.abs(layout.sectionHeight - height) <= 1,
-        'mobile table section fills viewport height',
+        Math.abs(layout.sectionHeight + bar - height) <= 1,
+        'mobile table section fills the viewport below the top bar',
       )
+      const header = await page.locator('thead').boundingBox()
+      assert.ok(header.y >= bar - 1, 'top bar does not cover the table header')
     }
     await capture('defaults')
-    await page.getByRole('button', { name: 'Columns', exact: true }).click()
+    assert.equal(await page.getByRole('button', { name: 'Columns', exact: true }).count(), 0)
+    // The add column takes the remaining width; any of its cells opens the header menu.
+    assert.ok((await widths()).add >= 160, 'add column keeps its minimum width')
+    // It takes the rest of a wider region, otherwise its 160px minimum.
+    const fill = async () => {
+      const { add, ...fixed } = await widths()
+      const fixedWidth = Object.values(fixed).reduce((a, b) => a + b, 0)
+      const area = await region.evaluate((e) => e.clientWidth)
+      assert.ok(Math.abs(fixedWidth + add - Math.max(area, fixedWidth + 160)) <= 1, 'add fill')
+      return add
+    }
+    await fill()
+    if (label === 'desktop') {
+      // With fewer columns the add column fills the remaining width.
+      await page.locator('[data-remove-column="mentions_total"]').click()
+      await page.locator('[data-remove-column="mentions_total"]').click()
+      assert.ok((await fill()) > 160, 'add column fills the remaining desktop width')
+      await capture('add-fill')
+      await chooseColumn('Text mentions: Total')
+    }
+    await page.locator('tbody td[data-add-column]').nth(1).click()
+    const menu = page.getByRole('menu')
+    await menu.waitFor()
+    assert.deepEqual(await menu.locator('[data-slot="dropdown-menu-label"]').allTextContents(), [
+      'Document fields',
+      'All annotations',
+      'Faces',
+      'Text mentions',
+    ])
+    assert.equal(
+      await menu.getByRole('menuitem', { name: 'Document name', exact: true }).count(),
+      0,
+    )
+    assert.equal(
+      await menu.getByRole('menuitem', { name: 'Faces: Manual', exact: true }).count(),
+      1,
+    )
+    await page.waitForTimeout(400) // Let the open/colour transition finish.
     await capture('columns')
     await page.keyboard.press('Escape')
-    for (const name of ['NDK', 'Document ID', 'Last modified']) await toggleColumn(name)
+    await region.evaluate((e) => {
+      e.scrollLeft = 0
+      e.scrollTop = 0
+    })
+
+    // Drag Document name before First page, then move it back with the keyboard.
+    const firstPage = await page.locator('th[data-column="first_page"]').boundingBox()
+    await drag('name', firstPage.x + 12, firstPage.y + firstPage.height / 2, async () => {
+      await page.locator('th[data-column="first_page"].before\\:bg-primary').waitFor()
+      await capture('reorder')
+    })
+    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'library'])
+    assert.equal(await region.evaluate((e) => e.scrollTop), 0, 'dragging does not scroll')
+    await page.reload()
+    await rows.first().waitFor()
+    await settled()
+    assert.deepEqual((await headerIds()).slice(0, 3), ['name', 'first_page', 'library'])
+    await grip('name').focus()
+    await page.keyboard.press('ArrowRight')
+    assert.deepEqual((await headerIds()).slice(0, 3), ['first_page', 'name', 'library'])
+    await page
+      .getByRole('status')
+      .filter({ hasText: 'Document name moved to position 2 of 8' })
+      .waitFor()
+
+    // Removal needs a confirming second click; Escape cancels it.
+    const removeLibrary = page.locator('[data-remove-column="library"]')
+    await removeLibrary.click()
+    assert.equal(await removeLibrary.getAttribute('aria-label'), 'Confirm removing Library column')
+    await page.waitForTimeout(400) // Let the open/colour transition finish.
+    await capture('remove-confirm')
+    await page.keyboard.press('Escape')
+    assert.equal(await removeLibrary.getAttribute('aria-label'), 'Remove Library column')
+    await removeLibrary.click()
+    await removeLibrary.click()
+    assert.ok(!(await headerIds()).includes('library'))
+    await chooseColumn('Library')
+    assert.equal((await headerIds()).at(-1), 'library', 'added column appears last')
+    await page.getByRole('button', { name: 'Add column', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Restore default columns', exact: true }).click()
+    assert.equal((await headerIds()).length, 8)
+    await region.evaluate((e) => {
+      e.scrollLeft = 0
+    })
+    for (const name of ['NDK', 'Document ID', 'Last modified']) await chooseColumn(name)
     const expanded = await widths()
     await page.reload()
     await rows.first().waitFor()
@@ -283,15 +403,14 @@ try {
     await settled()
     assert.deepEqual(new URL(page.url()).searchParams.getAll('library'), [libraryName])
     await visit()
-    await page.getByRole('button', { name: 'Columns', exact: true }).click()
-    await page.getByRole('button', { name: 'Restore defaults', exact: true }).click()
-    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Add column', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Restore default columns', exact: true }).click()
     const ledger = rows.filter({ hasText: 'Document table ledger' })
     assert.deepEqual(
       await ledger
         .locator('td')
         .allTextContents()
-        .then((a) => a.slice(3)),
+        .then((a) => a.slice(3, 8)),
       ['2', '2', '9', '4', '5'],
     )
     const missing = rows.filter({ hasText: 'Navigation: missing preview' })
@@ -341,7 +460,7 @@ try {
     await geometry()
     assert.deepEqual(errors, [])
     console.log(
-      `${label} ${width}x${height}: geometry, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
+      `${label} ${width}x${height}: geometry, add-column menu, drag/keyboard reordering, confirmed removal, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
     )
     await context.close()
   }

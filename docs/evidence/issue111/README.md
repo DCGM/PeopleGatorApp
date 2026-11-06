@@ -6,7 +6,7 @@ local storage, and Chromium 156.0.8078.4. Desktop is 1440 × 900 and mobile is
 
 ## Reproduction on main f06c3f6
 
-Open `/documents?library=preview-pagination`, enable First page in Columns,
+Open `/documents?library=preview-pagination`, enable First page,
 and scroll vertically by 600px with a browser wheel event. With the first 12
 rows, the unbounded table region measured 1916px high. Its horizontal scrollbar
 was at y=2327.5 on desktop and y=2239.5 on mobile, below either viewport.
@@ -20,14 +20,14 @@ precise stuck-scroll interaction.
 
 ## Result and browser validation
 
-The Documents view uses available content width. The page has no footer, title or subtitle, only the small Documents index label. On desktop, the table fills the entire remaining viewport below the filters, and scrolling to its last row loads the next batch (there is no Load more button). On mobile, the table section including Columns fills one viewport height. The standard shadcn-vue ScrollArea supplies both scrollbars; the header stays at its viewport top while rows scroll. The loading sentinel is inside it and sticks to its left edge, so
+The Documents view uses available content width. The page has no footer, title or subtitle, only the small Documents index label. On desktop, the table fills the entire remaining viewport below the filters, and scrolling to its last row loads the next batch (there is no Load more button). On mobile, the table section fills the viewport below the sticky top bar, which therefore never covers the table header. The standard shadcn-vue ScrollArea supplies both scrollbars; the header stays at its viewport top while rows scroll. The loading sentinel is inside it and sticks to its left edge, so
 horizontal position cannot hide the cursor-loading trigger. The normal page can
 still scroll to reach the table below expanded filters or many active tags.
 
 `people-gator-app/scripts/check-document-navigation.mjs` ran successfully at both
 viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 
-- No footer, page title or Load more button; the Documents index label remains. The desktop table fills the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills one viewport.
+- No footer, page title or Load more button; the Documents index label remains. The desktop table fills the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills the viewport below the top bar, with its header uncovered.
 - Both standard shadcn scrollbars are present.
 - Exact eight-column defaults, header/body/colgroup alignment, stable pixel
   widths and no document-level horizontal overflow.
@@ -42,11 +42,14 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 - Header keyboard sorting through ascending, descending and clearing; shared
   selector, URL, Back/Forward, and real server requests stay synchronized.
   Clearing restores name ascending for browse or relevance for search.
-- Session column choices survive reload and navigation away/back; Restore defaults
-  restores the eight fields. Unit tests separately cover invalid/obsolete stored
+- No Columns button. The last **Add column** column fills the remaining width (desktop, after removing a column) or keeps 160px. Clicking a body cell in it opens the header menu, which lists only hidden fields grouped as Document fields, All annotations, Faces and Text mentions. Choosing one appends that column last and closes the menu.
+- Dragging a header's top handle (mouse on desktop, Chromium touch events on mobile) shows a drop indicator and moves the column without scrolling the table; the order survives reload. ←/→ on the handle moves it one position and announces the new position.
+- The header × only arms removal (a red **Remove** confirmation); Escape or blur cancels, and a second click removes the column.
+- Session column choices and order survive reload and navigation away/back; Restore default columns
+  restores the eight fields and default order. Unit tests separately cover invalid/obsolete stored
   IDs and blocked storage reads/writes.
 - Document/library/first-page links (document links and thumbnails open the first-page viewer/editor), canonical full-document totals, empty pages,
   missing media, and light/dark rendering without browser page errors.
 
-The after images show defaults, Columns settings, a vertically/horizontally
+The after images show defaults, the Add column menu, a drag in progress, removal confirmation, a vertically/horizontally
 scrolled table, ascending/descending sort controls and dark mode. The mobile default capture scrolls the normal page to show its full-height table section below the filters. First-page editor captures show the destination of document and thumbnail links.

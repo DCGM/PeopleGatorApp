@@ -262,7 +262,7 @@ prerequisites or CI execution change.
 
 `people-gator-app/scripts/check-document-navigation.mjs` checks actual Chromium
 layout against a running, migrated, twice-seeded synthetic instance. It verifies
-header/body geometry, desktop remaining-height layout without footer, title or Load more, mobile viewport-height layout, shadcn ScrollArea wheel/keyboard scrolling and sticky headers,
+header/body geometry, desktop remaining-height layout without footer, title or Load more, Add column menu, drag/keyboard column reordering, confirmed column removal, mobile viewport-height layout, shadcn ScrollArea wheel/keyboard scrolling and sticky headers,
 opaque cursor loading at left/middle/right, a held next-page request with one skeleton row, keyboard sizing, tri-state header
 sorting and shared sort/history/search defaults, session reload/navigation,
 document/library links and first-page viewer/editor navigation, canonical counts, missing media and

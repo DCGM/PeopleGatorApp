@@ -20,12 +20,14 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 4. Open the application root to land on **Documents** and explore registered
    documents in the table across libraries. Compare document-wide page/evidence
    totals and last-change metadata. Use
-   **Columns** to choose fields, including All annotations, Faces and Text mentions
-   count groups. Defaults show First page, Document name, Library, Pages, Linked
-   entities, Annotations, Faces and Mentions. Column selections persist for the
-   browser tab. Use a header’s separate sort icon to cycle ascending, descending
+   the last **Add column** column (or click any of its cells) to add a hidden field,
+   including All annotations, Faces and Text mentions count groups. Drag a header's
+   top handle (or use ←/→ on it) to reorder columns; remove one with its header ×,
+   which asks for a second confirming click. Defaults show First page, Document
+   name, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
+   choices and order persist for the browser tab. Use a header’s separate sort icon to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky
-   header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills one viewport. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
+   header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
    and first breadcrumb return here. Open **Scan search** for pages and evidence;
    follow a result into its page workspace and inspect the OCR/face overlays. Use the
    **Document pages** strip below the scan to open other pages of that document.
