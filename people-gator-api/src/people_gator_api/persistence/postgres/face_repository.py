@@ -65,6 +65,7 @@ from people_gator_api.persistence.postgres.utils import (
 from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
 from .sorting import (
     Builders,
+    person_keys,
     SortKey,
     SortSpec,
     after_predicate,
@@ -104,6 +105,7 @@ class PostgresFaceRepository(FaceRepository):
         builders: Builders = {
             **annotation_builders(Face),
             "confidence": lambda desc: [SortKey(Face.confidence, "number", desc)],
+            "person": person_keys(Face),
         }
         return build_spec(field, direction, Face.id, builders, "detection_id")
 

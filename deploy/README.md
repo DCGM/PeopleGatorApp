@@ -18,6 +18,7 @@ Compose Watch or native API/Vite development.
 | [`../compose.dev.yaml`](../compose.dev.yaml) | Local Traefik, PostgreSQL, API and frontend with reload |
 | [`../compose.live-preview.yaml`](../compose.live-preview.yaml) | Existing shared development preview; external Traefik/S3 dependencies |
 | [`install.py`](install.py) | Canonical installer for user or system scope, CI bootstrap and upgrades |
+| [`runner/job-started.sh`](runner/job-started.sh) | Self-hosted runner hook that refuses all but reviewed lifecycle workflows |
 | [`people-gator-deploy/`](people-gator-deploy/README.md) | Package, CLI, lifecycle operations, descriptors and recovery |
 | [`people-gator-deploy/HOSTS.md`](people-gator-deploy/HOSTS.md) | DNS, proxy, runners, tokens, buckets and accounts to prepare |
 | [`people-gator-deploy/examples/`](people-gator-deploy/examples/) | Placeholder descriptors for `pr`, `staging` and `release` |

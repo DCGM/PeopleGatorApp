@@ -5,6 +5,7 @@ export type SimilarPersonMatchSource =
   | { type: 'face-match'; distance: number }
   | { type: 'scan-text' }
   | { type: 'scan-face' }
+  | { type: 'in-document' }
 
 export type SimilarPersonCandidate = {
   id: string
@@ -14,6 +15,8 @@ export type SimilarPersonCandidate = {
   score?: number
   nerMentions: number
   detections: number
+  /** Faces linked to the person anywhere; their gallery shows only when some exist. */
+  linkedFaces?: number
   closestMentionDistancePx?: number
   source: SimilarPersonSource
   matchSources?: SimilarPersonMatchSource[]

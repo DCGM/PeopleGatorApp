@@ -42,7 +42,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .fixtures import BREADCRUMB_PAGES, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -561,6 +561,31 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{teleprompter_document.library}/documents/"
                 f"{teleprompter_document.document_id}/pages/{wrapped.page_id}"
             )
+    # Issue #103: People order, Faces/Mentions scopes and views, face Search and Info.
+    sidebar_document = next((item for item in DOCUMENTS if item.key == "scan-sidebar"), None)
+    sidebar_page = next((item for item in PAGES if item.key == "scan-sidebar-1"), None)
+    sidebar_examples: dict[str, str] = {}
+    if sidebar_document and sidebar_page:
+        sidebar_path = (
+            f"/libraries/{sidebar_document.library}/documents/{sidebar_document.document_id}"
+            f"/pages/{sidebar_page.page_id}"
+        )
+        sidebar_face = str(active_faces.get("sidebar-hana-left", ""))
+        sidebar_examples = {
+            "scan-sidebar-people": sidebar_path,
+            "scan-sidebar-card": sidebar_path + "?" + urlencode({"person": sidebar_face}),
+            "scan-sidebar-face-search": sidebar_path + "?" + urlencode({
+                "person": sidebar_face, "candidate_face": sidebar_face,
+                "candidate_sort": "relevance",
+            }),
+            "scan-sidebar-faces": sidebar_path + "?" + urlencode({
+                "panel": "faces", "face_scope": "document", "face_view": "person",
+            }),
+            "scan-sidebar-mentions": sidebar_path + "?" + urlencode({
+                "panel": "mentions", "mention_scope": "document",
+            }),
+            "scan-sidebar-info": sidebar_path + "?" + urlencode({"panel": "info"}),
+        }
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
@@ -801,6 +826,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 + urlencode({"selectedPerson": manifest.entities["link-ada"]})
             ),
             **teleprompter_examples,
+            **sidebar_examples,
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. List order follows internal source keys, so
             # any page may need a further batch; the gallery loads until found.
@@ -855,6 +881,14 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     "tab": "discover", "similar_sort": "confidence",
                 }),
             } if sorting_person else {}),
+            **{
+                "breadcrumb-" + state: (
+                    f"/libraries/{document.library}/documents/{document.document_id}/pages/{page.page_id}"
+                )
+                for state, page_key in BREADCRUMB_PAGES.items()
+                for page in PAGES if page.key == page_key
+                for document in DOCUMENTS if document.key == page.document
+            },
             "document-search": "/documents?q=pribehy",
             "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
             "compact-document-filters": "/documents?" + urlencode({

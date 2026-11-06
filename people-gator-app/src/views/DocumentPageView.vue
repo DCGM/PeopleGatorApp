@@ -1,22 +1,21 @@
 <script setup lang="ts">
-import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import { SCAN_ZOOM_STEP, useScanViewport } from '@/composables/scan-viewport'
 import { useWorkspaceSplit, type WorkspacePanel } from '@/composables/workspace-split'
-import { useDebounce, useMediaQuery } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useMediaQuery } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
 import { BadgeCheck } from '@lucide/vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
-import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
-import { useDeleteFaceMutation } from '@/query/faces'
+import { useDeleteFaceMutation, useFaceQuery } from '@/query/faces'
+import { useTextMentionQuery } from '@/query/text-mentions'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -27,41 +26,37 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import type { Face } from '@/viewmodels/document-workspace.types'
-import PageStatisticsPanel from '@/components/custom/PageStatisticsPanel.vue'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
-import CurrentFacePanel from '@/components/custom/CurrentFacePanel.vue'
-import FaceGallery from '@/components/custom/FaceGallery.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import SimilarPeopleResults from '@/components/custom/SimilarPeopleResults.vue'
-import SimilarPeopleSearch from '@/components/custom/SimilarPeopleSearch.vue'
+import ScanFacesPanel from '@/components/custom/ScanFacesPanel.vue'
+import ScanInfoPanel from '@/components/custom/ScanInfoPanel.vue'
+import ScanMentionsPanel from '@/components/custom/ScanMentionsPanel.vue'
+import ScanPeoplePanel from '@/components/custom/ScanPeoplePanel.vue'
+import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import type {
   PageViewportBounds,
   TranscriptionEntitySpan,
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
-import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 import PagePosition from '@/components/custom/PagePosition.vue'
 import { useRouteSort } from '@/lib/sorting'
+import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
-  CANDIDATE_SORT_KEYS,
-  FACE_DEFAULT,
-  FACE_SORT_KEYS,
-  GALLERY_DEFAULT,
-  GALLERY_SORT_KEYS,
-  GALLERY_SORTS,
-  PEOPLE_BROWSE_DEFAULT,
-  PEOPLE_SORTS,
-  RELEVANCE,
-  WORKSPACE_FACE_SORTS,
-  scoredOptions,
-} from '@/viewmodels/sort-options'
+  effectivePeopleOrder,
+  resolveSearchModel,
+  SCAN_SELECTED_MENTION,
+  useScanSidebarState,
+  type ScanSidebarState,
+} from '@/viewmodels/scan-sidebar'
+import { useScanPeople } from '@/viewmodels/scan-people'
+import { useScanFaces } from '@/viewmodels/scan-faces'
 import {
   PAGE_GALLERY_BATCH_SIZE,
   useDocumentPageGallery,
@@ -87,7 +82,8 @@ const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
 const splitDirection = computed(() => (isWideWorkspace.value ? 'horizontal' : 'vertical'))
 const transcriptionPanel = ref<WorkspacePanel | null>(null)
 const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel)
-const router = useRouter()
+const sidebar = useScanSidebarState()
+const sidebarState = sidebar.state
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
@@ -99,24 +95,29 @@ const selectedFaceId = ref<string | null>(
 const selectedPersonId = ref<string | null>(
   typeof route.query.selectedPerson === 'string' ? route.query.selectedPerson : null,
 )
-const candidateTerm = ref(
-  typeof route.query.candidate_text === 'string' ? route.query.candidate_text : '',
-)
-const candidateBrowseMode = ref<CandidateBrowseMode>(
-  route.query.candidate_mode === 'face' ? 'face' : 'page',
-)
-const candidateSearchResetKey = ref(0)
-const debouncedCandidateTerm = useDebounce(candidateTerm, 250)
-// Faces, gallery pages and candidates keep independent, shareable orders.
-const faceSort = useRouteSort(FACE_SORT_KEYS, WORKSPACE_FACE_SORTS, FACE_DEFAULT)
+// Sidebar settings live in the URL; each change is a history entry.
+function setting<Key extends keyof ScanSidebarState>(key: Key) {
+  return computed({
+    get: () => sidebarState.value[key],
+    set: (value: ScanSidebarState[Key]) => sidebar.update({ [key]: value }),
+  })
+}
+// Typed name text replaces the current history entry instead of adding one per pause.
+const peopleText = computed({
+  get: () => sidebarState.value.peopleText,
+  set: (value: string) => sidebar.update({ peopleText: value }, 'replace'),
+})
+const faceScope = setting('faceScope')
+const faceView = setting('faceView')
+const mentionScope = setting('mentionScope')
+const mentionView = setting('mentionView')
+const mentionSort = setting('mentionSort')
+const mentionGroupSort = setting('mentionGroupSort')
+const activityDirection = setting('activityDirection')
+const peopleScope = setting('peopleScope')
+// The scan's faces follow the Faces tab's flat order for navigation.
+const faceSort = setting('faceSort')
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
-const candidateScored = computed(
-  () => Boolean(debouncedCandidateTerm.value.trim()) || candidateBrowseMode.value === 'face',
-)
-const candidateSortOptions = computed(() => scoredOptions(PEOPLE_SORTS, candidateScored.value))
-const candidateSort = useRouteSort(CANDIDATE_SORT_KEYS, candidateSortOptions, () =>
-  candidateScored.value ? RELEVANCE : PEOPLE_BROWSE_DEFAULT,
-)
 const {
   page,
   annotationsLoading,
@@ -128,32 +129,17 @@ const {
   createAndAssign,
   error,
   faces,
-  hasNextPage,
-  isFetchingNextPage,
   isLoading,
-  loadMore,
   pageDimensions,
   pageImageLoading,
   pageImageError,
   pageImageLoaded,
   pageImageReady,
   pageImageUrl,
-  similarPeople,
-  similarPeopleLoading,
   transcription,
   entityNames,
   unassignFace,
-} = useDocumentWorkspace(
-  libraryId,
-  documentId,
-  pageId,
-  selectedFaceId,
-  debouncedCandidateTerm,
-  candidateBrowseMode,
-  linkStates,
-  faceSort,
-  candidateSort,
-)
+} = useDocumentWorkspace(libraryId, documentId, pageId, selectedFaceId, linkStates, faceSort)
 
 const gallery = useDocumentPageGallery(
   libraryId,
@@ -179,11 +165,17 @@ const viewerElement = ref<HTMLElement | null>(null)
 const zoomElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
 const pageBounds = ref<PageViewportBounds | null>(null)
-const similarPeopleSearch = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
+const peoplePanel = ref<InstanceType<typeof ScanPeoplePanel> | null>(null)
 const teleprompter = ref<InstanceType<typeof DocumentTeleprompter> | null>(null)
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
 const scanViewport = useScanViewport(
-  viewerElement, zoomElement, pageElement, focusPageKey, pageBounds, zoomPercent, scheduleFocus,
+  viewerElement,
+  zoomElement,
+  pageElement,
+  focusPageKey,
+  pageBounds,
+  zoomPercent,
+  scheduleFocus,
 )
 const lineVisibility = ref<LineVisibility>(parseLineVisibility(route.query.lines))
 const annotationHighlight = ref(parseHighlightStates(route.query.highlight))
@@ -307,6 +299,98 @@ watch([pageImageReady, faces, transcription, annotationsLoading], () => {
 const selectedFace = computed(
   () => faces.value.find((face) => face.id === selectedFaceId.value) ?? referenceFace.value,
 )
+// A selected face hidden by evidence filters still anchors its card on this scan.
+const overlayFaces = computed(() =>
+  referenceFace.value && !faces.value.some((face) => face.id === referenceFace.value?.id)
+    ? [...faces.value, referenceFace.value]
+    : faces.value,
+)
+const sources = computed(() => {
+  const document = documentQuery.data.value
+  return page.value && document
+    ? { page: page.value.source_id, document: document.source_id }
+    : null
+})
+
+// People search may carry one attached reference face, independent of selection.
+const searchFaceId = computed(() => sidebarState.value.searchFaceId)
+const searchFaceQuery = useFaceQuery(() => searchFaceId.value ?? '')
+// Models the attached face has embeddings for; the chosen one, else its first.
+const searchFaceModels = computed(() => {
+  const record = searchFaceQuery.data.value
+  return record?.detection_id === searchFaceId.value ? (record.embeddings ?? []) : []
+})
+const searchModel = computed(() =>
+  resolveSearchModel(sidebarState.value.searchModel, searchFaceModels.value),
+)
+const searchFace = computed(() =>
+  searchFaceId.value && searchModel.value
+    ? { id: searchFaceId.value, embeddingModel: searchModel.value }
+    : null,
+)
+// A deleted face, or one without an embedding, cannot score People; drop it.
+watch(
+  () => [searchFaceId.value, searchFaceQuery.data.value, searchFaceQuery.isError.value] as const,
+  ([id, record, failed]) => {
+    if (id && (failed || (record?.detection_id === id && !record.embeddings?.[0])))
+      sidebar.update({ searchFaceId: null }, 'replace')
+  },
+)
+const peopleScored = computed(
+  () => Boolean(sidebarState.value.peopleText.trim()) || Boolean(searchFaceId.value),
+)
+const peopleOrder = computed({
+  get: () => effectivePeopleOrder(sidebarState.value.peopleOrder, peopleScored.value),
+  set: (value) => sidebar.update({ peopleOrder: value }),
+})
+const people = reactive(
+  useScanPeople({
+    sources,
+    scope: () => sidebarState.value.peopleScope,
+    order: peopleOrder,
+    search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
+    searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,
+    enabled: () => sidebarState.value.tab === 'people',
+    pageFaces: faces,
+    transcription,
+    pageSourceId: () => page.value?.source_id ?? '',
+  }),
+)
+const scanFaces = reactive(
+  useScanFaces({
+    sources,
+    scope: faceScope,
+    view: faceView,
+    sort: faceSort,
+    linkStates,
+    enabled: () => sidebarState.value.tab === 'faces',
+  }),
+)
+function removeSearchFace() {
+  // Typed name text stays; Similarity needs a name or face to score.
+  sidebar.update({
+    searchFaceId: null,
+    searchModel: null,
+    ...(!sidebarState.value.peopleText.trim() && { peopleOrder: 'context' as const }),
+  })
+}
+const focusPeopleRequested = ref(false)
+function applyPeopleFocus() {
+  if (!focusPeopleRequested.value || sidebarState.value.tab !== 'people' || !peoplePanel.value)
+    return
+  focusPeopleRequested.value = false
+  peoplePanel.value.focus()
+}
+watch([peoplePanel, () => sidebarState.value.tab], applyPeopleFocus, { flush: 'post' })
+function focusPeopleSearch() {
+  focusPeopleRequested.value = true
+  if (sidebarState.value.tab === 'people') void nextTick(applyPeopleFocus)
+  else sidebar.update({ tab: 'people' })
+}
+// Face Search opens People with the results; focus stays on the scan card.
+function searchByFace(face: Face) {
+  sidebar.searchByFace(face.id)
+}
 const canAnnotate = useCanAnnotate()
 const canDelete = useCanDeleteDetection()
 const verifyMutation = useVerifyLinkMutation()
@@ -327,10 +411,6 @@ const actionError = computed(() =>
     : assignmentError.value
       ? 'Could not update link.'
       : '',
-)
-// Only a face drawn on this scan can be deleted from here, not an off-page reference.
-const selectedFaceOnPage = computed(() =>
-  faces.value.some((face) => face.id === selectedFace.value?.id),
 )
 watch(selectedFaceId, () => {
   if (!verifyMutation.isPending.value) verifyMutation.reset()
@@ -363,7 +443,7 @@ async function deleteDetection() {
 }
 
 const selectedPersonCandidate = computed(() =>
-  similarPeople.value.find((person) => person.id === selectedPersonId.value),
+  people.people.find((person) => person.id === selectedPersonId.value),
 )
 const selectedFaceIndex = computed(() =>
   faces.value.findIndex((face) => face.id === selectedFaceId.value),
@@ -391,45 +471,21 @@ function routeLineIndex(value: unknown) {
 
 function syncRoute() {
   const line = transcription.value[selectedLineIndex.value]
-  void router.replace({
-    hash: route.hash,
-    query: {
-      ...route.query,
-      candidate_text: candidateTerm.value || undefined,
-      candidate_mode: candidateBrowseMode.value,
-      person: selectedFaceId.value ?? undefined,
-      selectedPerson: selectedPersonId.value ?? undefined,
-      line: line?.id,
-      // A Custom line set is not shareable; links keep the mode it came from.
-      lines: routeLineMode.value === 'all' ? undefined : routeLineMode.value,
-      highlight: annotationHighlight.value.length ? annotationHighlight.value : undefined,
-      translate: isTranslationOpen.value ? 'on' : 'off',
-    },
+  sidebar.patch({
+    person: selectedFaceId.value ?? undefined,
+    selectedPerson: selectedPersonId.value ?? undefined,
+    line: line?.id,
+    // A Custom line set is not shareable; links keep the mode it came from.
+    lines: routeLineMode.value === 'all' ? undefined : routeLineMode.value,
+    highlight: annotationHighlight.value.length ? annotationHighlight.value : undefined,
+    translate: isTranslationOpen.value ? 'on' : 'off',
   })
-}
-
-watch(
-  () => [route.query.candidate_text, route.query.candidate_mode],
-  () => {
-    candidateTerm.value =
-      typeof route.query.candidate_text === 'string' ? route.query.candidate_text : ''
-    candidateBrowseMode.value = route.query.candidate_mode === 'face' ? 'face' : 'page'
-  },
-)
-
-watch([candidateTerm, candidateBrowseMode], syncRoute)
-
-function showOnPageEntities() {
-  candidateTerm.value = ''
-  candidateBrowseMode.value = 'page'
-  candidateSearchResetKey.value += 1
 }
 
 function selectFace(faceId: string) {
   requestFocus({ kind: 'face', id: faceId })
   selectedFaceId.value = faceId
   selectedPersonId.value = faces.value.find((face) => face.id === faceId)?.personId ?? null
-  if (selectedPersonId.value) showOnPageEntities()
   syncRoute()
 }
 
@@ -461,7 +517,6 @@ function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedEntityKey.value = transcriptionEntityKey(entity)
   requestFocus({ kind: 'line', id: entity.line_id, entityKey: transcriptionEntityKey(entity) })
   selectedPersonId.value = entity.entity_id ?? null
-  if (selectedPersonId.value) showOnPageEntities()
   syncRoute()
 }
 
@@ -537,12 +592,6 @@ async function createSimilarPerson(person: { name: string; shortDescription?: st
   }
 }
 
-async function focusSimilarPeopleSearch() {
-  await router.replace({ query: { ...route.query, panel: undefined }, hash: '' })
-  await nextTick()
-  similarPeopleSearch.value?.focus()
-}
-
 function setZoom(direction: 'in' | 'out') {
   const panzoom = scanViewport.current()
   if (!panzoom) return
@@ -565,8 +614,8 @@ function handleNavigationKeydown(event: KeyboardEvent) {
       (event.target.closest(
         'input, select, textarea, button, a, [role=tablist], [role=dialog], [role=alertdialog]',
       ) &&
-        // Detection boxes and their action panel keep face and line navigation.
-        !event.target.closest('[data-region-type="face"], [data-detection-actions]')))
+        // Detection boxes and their card keep face and line navigation.
+        !event.target.closest('[data-region-type="face"], [data-detection-card]')))
   )
     return
   const navigate = {
@@ -643,6 +692,99 @@ watch([faces, referenceFace, transcription, annotationsLoading], () => {
   if (changed) syncRoute()
 })
 
+// A Mentions-tab link selects its mention here like a click in the transcription.
+// Spans match recorded text, so the mention's own context picks its line; an
+// unlinked mention has no span and selects that line instead.
+const requestedMention = computed(() =>
+  typeof route.query.mention === 'string' ? route.query.mention : '',
+)
+const requestedMentionQuery = useTextMentionQuery(requestedMention)
+const selectedUnlinkedMention = ref<string | null>(null)
+watch([selectedLineIndex, selectedEntityKey], () => (selectedUnlinkedMention.value = null), {
+  flush: 'sync',
+})
+watch(
+  [requestedMention, transcription, isLoading, () => requestedMentionQuery.data.value],
+  ([id]) => {
+    if (!id || isLoading.value) return
+    const record = requestedMentionQuery.data.value
+    if (record?.mention_id !== id && !requestedMentionQuery.isError.value) return
+    const lines = transcription.value
+    const context = (record?.context ?? '').trim()
+    const own = (index: number) => {
+      const text = lines[index]!.text.trim()
+      return Boolean(text) && context.includes(text)
+    }
+    const spanLines = lines.flatMap((line, index) =>
+      line.entities?.some((span) => span.mention_id === id) ? [index] : [],
+    )
+    const index = spanLines.find(own) ?? spanLines[0]
+    if (index !== undefined) {
+      const spans = lines[index]!.entities!.filter((span) => span.mention_id === id)
+      const span = spans.find((item) => item.firstFragment !== false) ?? spans[0]!
+      if (!includedLines.value[index]) teleprompterLines.reveal([index])
+      selectEntity(index, span)
+    } else {
+      const fallback = context ? lines.findIndex((_line, line) => own(line)) : -1
+      if (fallback >= 0) {
+        selectLine(fallback)
+        selectedUnlinkedMention.value = id
+      }
+    }
+    sidebar.patch({ mention: undefined })
+  },
+  { immediate: true },
+)
+// The mention selected on the scan, shown in the Mentions list too.
+provide(
+  SCAN_SELECTED_MENTION,
+  computed(() => {
+    const key = selectedEntityKey.value
+    if (!key) return selectedUnlinkedMention.value
+    for (const line of transcription.value)
+      for (const span of line.entities ?? [])
+        if (transcriptionEntityKey(span) === key) return span.mention_id ?? null
+    return null
+  }),
+)
+
+// Narrow screens scroll the sidebar with the page. A tab switch keeps the tab
+// bar where it was; when scrolled past it, the new tab starts at its top.
+const sidebarTabs = ref<{ $el: HTMLElement } | null>(null)
+let tabBarTop: number | null = null
+function tabBar() {
+  return sidebarTabs.value?.$el?.querySelector<HTMLElement>('[role="tablist"]') ?? null
+}
+function appBarHeight() {
+  return 3.25 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16')
+}
+watch(
+  () => sidebarState.value.tab,
+  () => {
+    tabBarTop = isWideWorkspace.value ? null : (tabBar()?.getBoundingClientRect().top ?? null)
+  },
+  { flush: 'pre' },
+)
+watch(
+  () => sidebarState.value.tab,
+  () => {
+    const before = tabBarTop
+    tabBarTop = null
+    if (before === null) return
+    const target = Math.max(before, appBarHeight())
+    // Once the new tab has laid out, return the tab bar to its place.
+    const place = () => {
+      const bar = tabBar()
+      if (bar) window.scrollBy({ top: bar.getBoundingClientRect().top - target })
+    }
+    requestAnimationFrame(() => {
+      place()
+      requestAnimationFrame(place)
+    })
+  },
+  { flush: 'post' },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', handleNavigationKeydown)
   if (selectedFaceId.value) requestFocus({ kind: 'face', id: selectedFaceId.value })
@@ -659,12 +801,14 @@ onBeforeUnmount(() => {
   <main class="workspace-grid">
     <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
     <div class="workspace-split">
-      <ResizablePanelGroup
-        :direction="splitDirection"
-        @layout="workspaceSplit.layoutChanged"
-      >
+      <ResizablePanelGroup :direction="splitDirection" @layout="workspaceSplit.layoutChanged">
         <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
-        <ResizablePanel ref="transcriptionPanel" :default-size="workspaceSplit.defaultSize" :min-size="15" :max-size="70">
+        <ResizablePanel
+          ref="transcriptionPanel"
+          :default-size="workspaceSplit.defaultSize"
+          :min-size="15"
+          :max-size="70"
+        >
           <section
             class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
             aria-labelledby="page-transcription-title"
@@ -766,9 +910,9 @@ onBeforeUnmount(() => {
             <DocumentPageOverlay
               :page-bounds="pageBounds"
               :viewer="viewerElement"
-              :actions-enabled="(canAnnotate || canDelete) && !deletionTarget"
+              :actions-enabled="!deletionTarget"
               :transcription="transcription"
-              :faces="faces"
+              :faces="overlayFaces"
               :selected-line-index="selectedLineIndex"
               :selected-face-id="selectedFace?.id ?? null"
               :selected-person-id="selectedPersonId"
@@ -778,20 +922,36 @@ onBeforeUnmount(() => {
               @select-face="selectFace"
               @clear-face="clearFace"
             >
-              <template #actions="{ face }">
-                <FaceActionButtons
+              <template #card="{ face }">
+                <SelectedFaceItem
                   :face="face"
+                  :assignment-pending="actionBusy"
                   :can-annotate="canAnnotate"
                   :can-delete="canDelete"
-                  :busy="actionBusy"
-                  @find-profile="focusSimilarPeopleSearch"
+                  :action-error="actionError"
+                  @find-profile="focusPeopleSearch"
+                  @search-face="searchByFace(face)"
+                  @create-profile="createSimilarPerson"
                   @unassign="unassignSelectedFace"
-                  @verify="verifyFace(face)"
                   @delete="requestDeletion(face)"
-                />
-                <p v-if="actionError" role="alert" class="text-xs text-destructive">
-                  {{ actionError }}
-                </p>
+                >
+                  <template #actions>
+                    <UiTooltip
+                      v-if="face.personId && face.linkState !== 'verified'"
+                      text="Verify this link"
+                    >
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+                        :disabled="actionBusy"
+                        aria-label="Verify this link"
+                        @click="verifyFace(face)"
+                        ><BadgeCheck aria-hidden="true"
+                      /></Button>
+                    </UiTooltip>
+                  </template>
+                </SelectedFaceItem>
               </template>
             </DocumentPageOverlay>
           </section>
@@ -816,107 +976,80 @@ onBeforeUnmount(() => {
     </div>
 
     <Tabs
+      ref="sidebarTabs"
       class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
-      :model-value="
-        route.query.panel === 'activity' || route.query.panel === 'statistics'
-          ? route.query.panel
-          : route.hash === '#link-statistics'
-            ? 'statistics'
-            : 'face'
-      "
-      @update:model-value="
-        (value) =>
-          router.push({
-            query: { ...route.query, panel: value === 'face' ? undefined : value },
-            hash: '',
-          })
-      "
+      :model-value="sidebarState.tab"
+      @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
     >
       <div class="shrink-0 border-b p-3">
         <TabsList aria-label="Page sidebar" class="w-full">
-          <TabsTrigger value="face">Faces</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="statistics">Statistics</TabsTrigger>
+          <TabsTrigger value="people">People</TabsTrigger>
+          <TabsTrigger value="faces">Faces</TabsTrigger>
+          <TabsTrigger value="mentions">Mentions</TabsTrigger>
+          <TabsTrigger value="info">Info</TabsTrigger>
         </TabsList>
       </div>
-      <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
-        <FaceGallery
-          class="shrink-0 border-l-0"
-          v-model:sort="faceSort"
-          :sort-options="WORKSPACE_FACE_SORTS"
-          :faces="faces"
-          :selected-face-id="selectedFace?.id ?? null"
-          :loading="isLoading"
-          @reset-filters="linkStates = []"
-          @select="selectFace"
-        />
-
-        <CurrentFacePanel
-          class="p-5"
-          :face="selectedFace ?? null"
-          :assignment-pending="actionBusy"
-          :can-delete="canDelete && selectedFaceOnPage"
-          :action-error="actionError"
-          @delete="requestDeletion(selectedFace ?? null)"
-          @find-profile="focusSimilarPeopleSearch"
-          @create="createSimilarPerson"
-          @unassign="unassignSelectedFace"
-        >
-          <UiTooltip
-            v-if="selectedFace?.personId && selectedFace.linkState !== 'verified' && canAnnotate"
-            text="Verify this link"
-          >
-            <Button
-              variant="outline"
-              size="icon-xs"
-              class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
-              :disabled="actionBusy"
-              aria-label="Verify this link"
-              @click="verifyFace(selectedFace)"
-              ><BadgeCheck aria-hidden="true"
-            /></Button>
-          </UiTooltip>
-        </CurrentFacePanel>
-        <SimilarPeopleSearch
-          :key="candidateSearchResetKey"
-          ref="similarPeopleSearch"
-          v-model="candidateTerm"
-          v-model:result-mode="candidateBrowseMode"
-          v-model:sort="candidateSort"
-          :sort-options="candidateSortOptions"
-          class="shrink-0 px-5 pb-5"
-          :selected-face="selectedFace ?? null"
-        />
-        <SimilarPeopleResults
-          class="min-h-80 shrink-0 px-5 pb-5 lg:min-h-64 lg:flex-1"
-          :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []"
-          :loading="
-            isLoading ||
-            similarPeopleLoading ||
-            candidateTerm.trim() !== debouncedCandidateTerm.trim()
-          "
-          :has-next-page="hasNextPage"
-          :is-fetching-next-page="isFetchingNextPage"
+      <TabsContent value="people" class="mt-0 flex min-h-0 flex-1 flex-col">
+        <ScanPeoplePanel
+          ref="peoplePanel"
+          v-model:text="peopleText"
+          v-model:scope="peopleScope"
+          v-model:order="peopleOrder"
+          :people="people.people"
+          :scored="peopleScored"
+          :loading="people.loading"
+          :total-count="people.totalCount"
+          :has-next-page="people.hasNextPage"
+          :is-fetching="people.isFetching"
+          :error="people.error"
+          :search-face-id="searchFaceId"
+          :face-models="searchFaceModels"
+          :face-model="searchModel"
+          @update:face-model="(model) => sidebar.update({ searchModel: model })"
           :selected-face="selectedFace ?? null"
           :viewed-person-id="selectedPersonId"
           :assignment-pending="actionBusy"
-          :search-term="`${candidateBrowseMode}:${candidateTerm}`"
-          @load-more="loadMore()"
+          :load-more="people.loadMore"
+          :retry="people.retry"
+          @remove-face="removeSearchFace"
+          @attach-selected-face="selectedFace && searchByFace(selectedFace)"
           @preview="previewSimilarPerson"
           @assign="assignSimilarPerson"
         />
       </TabsContent>
-      <TabsContent value="activity" class="mt-0 min-h-0 overflow-y-auto">
-        <PageActivityPanel v-if="page" :source-id="page.source_id" :workspace-filters="false" />
-      </TabsContent>
-      <TabsContent value="statistics" class="mt-0 min-h-0 overflow-y-auto">
-        <PageStatisticsPanel
-          :page="page"
-          :document="documentQuery.data.value"
-          :loading="documentQuery.isPending.value"
-          :error="Boolean(documentQuery.error.value)"
-          @retry="documentQuery.refetch()"
+      <TabsContent value="faces" class="mt-0 flex min-h-0 flex-1 flex-col">
+        <ScanFacesPanel
+          v-model:scope="faceScope"
+          v-model:view="faceView"
+          v-model:sort="faceSort"
+          :items="scanFaces.items"
+          :groups="scanFaces.groups"
+          :loading="scanFaces.loading"
+          :has-next-page="scanFaces.hasNextPage"
+          :is-fetching="scanFaces.isFetching"
+          :error="scanFaces.error"
+          :total-count="scanFaces.totalCount"
+          :selected-face-id="selectedFace?.id ?? null"
+          :filtered="linkStates.length > 0"
+          :load-more="scanFaces.loadMore"
+          :retry="scanFaces.retry"
+          @select="selectFace"
+          @reset-filters="linkStates = []"
         />
+      </TabsContent>
+      <TabsContent value="mentions" class="mt-0 flex min-h-0 flex-1 flex-col">
+        <ScanMentionsPanel
+          v-model:scope="mentionScope"
+          v-model:view="mentionView"
+          v-model:sort="mentionSort"
+          v-model:group-sort="mentionGroupSort"
+          :sources="sources"
+          :link-states="linkStates"
+          @reset-filters="linkStates = []"
+        />
+      </TabsContent>
+      <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">
+        <ScanInfoPanel v-model:direction="activityDirection" :page="page" />
       </TabsContent>
     </Tabs>
     <AlertDialog :open="Boolean(deletionTarget)" @update:open="closeDeletion">
@@ -953,9 +1086,16 @@ onBeforeUnmount(() => {
   height: max(34rem, calc(100dvh - 3.25rem));
 }
 
+/* Narrow screens: the sidebar sits below the workspace and grows with its
+   content, so its lists scroll with the page instead of an inner container. */
 .workspace-sidebar {
-  height: 85dvh;
-  min-height: 36rem;
+  height: auto;
+  overflow: visible;
+  /* At least one screen tall, so a shorter tab never pulls the page (and the
+     tab bar) up when switching tabs, and the tab bar can rest under the app bar. */
+  min-height: 100dvh;
+  /* The tab switch places the page itself; browser anchoring would undo it. */
+  overflow-anchor: none;
 }
 
 .bg-viewer {
@@ -991,6 +1131,7 @@ onBeforeUnmount(() => {
   .workspace-sidebar {
     height: auto;
     min-height: 0;
+    overflow: hidden;
     border-left-width: 1px;
     border-top-width: 0;
   }

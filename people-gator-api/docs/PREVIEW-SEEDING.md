@@ -1241,7 +1241,6 @@ keeps it selected; only its checkbox removes it. Shift-click either control to a
 a range, and Clear restores card navigation. Existing linked fixtures demonstrate
 these interactions without a fixture or persistence upgrade.
 
-
 ### Documents navigation and column defaults (#111)
 
 Open `document-table-navigation`. It combines the existing table ledger (2 pages,
@@ -1283,3 +1282,58 @@ While the next document batch is loading, a standard shadcn Skeleton row appears
 after the loaded rows, aligned with the visible columns. Existing rows remain
 usable; the skeleton disappears after success or failure, and the existing retry
 control handles failed requests. Desktop loading keeps the footer height stable.
+
+### Top-bar document and page breadcrumbs (#114)
+
+The seed result and CLI provide five direct page links: `breadcrumb-named`
+(Page gallery navigation, Page 1), `breadcrumb-missing-number` (the same named
+document with an unknown page number and a deliberately missing scan), `breadcrumb-unnamed` (document UUID,
+Page 1), `breadcrumb-unregistered` (unregistered parent UUID, Page 1), and
+`breadcrumb-long-name` (the long synthetic catalogue title, Page 1).
+These reuse stable linked fixtures and local page images; no records are reset.
+
+Open each link to inspect the persistent top bar. Available names and numbers
+replace their UUID labels and tooltips independently. Follow the document
+breadcrumb to its scoped scan list, switch pages and use Back/Forward.
+On disposable data, edit a page number and verify that its breadcrumb updates.
+At narrow widths the full document name remains available through the link's
+accessible text and title while the visible label truncates. The seed integration
+test resolves every link through repositories, checks metadata and local media,
+checks the intentional missing-scan response, then reruns the seed and verifies preservation of an edited number and timestamp.
+
+## Scan sidebar practice (#103)
+
+The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
+has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
+unassigned face, Hana's repeated phrase (automatic, verified and one unlinked
+occurrence) and a text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
+faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
+21 further Hana occurrences, so document scope exceeds the 30-face and
+20-occurrence sidebar batches.
+
+- Open `scan-sidebar-people`. People lists Hana and Tomas (this page), then
+  Karel and Rosa (this document), then everyone else. Change the scope in the
+  search group to **This page** or **This document**; type a name and press
+  Enter or the Search button to refine.
+- Open `scan-sidebar-card` to see Hana's tag expanded into the details card.
+  Choose **Search** (magnifier): the face is attached to People search, Similarity
+  sorting is selected and the scope is kept. Remove the face with its ×.
+  `scan-sidebar-face-search` opens that state directly.
+- Open `scan-sidebar-faces` for document faces grouped by person, with
+  **Unassigned** last. Scroll to load the next batch; faces on other pages open
+  their page with the face selected.
+- Open `scan-sidebar-mentions` for document mentions grouped by phrase. Hana's
+  group lists 24 occurrences, including the unlinked one, and loads further
+  occurrences while scrolling. Switch **View** to **Group by person** for Hana, Tomas and
+  **Unlinked**, or to **Flat** for one list.
+  Select a mention's text to select it in the transcription and on the scan;
+  one on another page opens there. The unlinked caption selects its line.
+- Open `scan-sidebar-info` for this page's statistics, last change and the
+  latest recorded change of each face and mention.
+
+New stable keys add the four people, document, pages, faces and mentions to
+retained previews. Reruns keep reviewer reassignments and timestamps.
+Integration tests check page/document membership through faces or mentions,
+person-grouped face batches, phrase groups with unlinked occurrences, face and
+combined name/face search within the document, local media and aligned crops,
+additive upgrade with an interrupted checkpoint, and review preservation.

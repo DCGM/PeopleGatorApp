@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import PersonNameTitle from './PersonNameTitle.vue'
 import { computed, ref, watch } from 'vue'
 import { Minus, Check, BadgeCheck, Unlink } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCanAnnotate } from '@/composables/can-annotate'
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { useReviewMentionsMutation } from '@/query/mention-review'
 import { useRoute } from 'vue-router'
 import type {
@@ -25,12 +27,20 @@ const props = withDefaults(
     filters: TextMentionListParams
     groupSort: SortState<TextMentionGroupSortField>
     occurrenceSort: SortState<TextMentionSortField>
-    personId: string
+    personId?: string
     linkStates: EntityLinkState[]
     enabled?: boolean
     compact?: boolean
+    /** Show occurrences under each group in their compact form. */
+    compactOccurrences?: boolean
+    /** Show phrase headings in the person-card name style (the scan sidebar). */
+    cardTitles?: boolean
+    /** Load further groups when the list end scrolls into view. */
+    automatic?: boolean
+    /** Offer selection and the selected-mention review actions. */
+    selectable?: boolean
   }>(),
-  { enabled: true, mode: 'mention' },
+  { enabled: true, mode: 'mention', selectable: true },
 )
 const emit = defineEmits<{ broaden: [] }>()
 const query = useTextMentionGroupsQuery(
@@ -44,8 +54,18 @@ const query = useTextMentionGroupsQuery(
   computed(() => props.enabled),
 )
 const groups = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.items))
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage: query.hasNextPage,
+  isFetching: query.isFetching,
+  error: query.error,
+  enabled: () => Boolean(props.automatic) && props.enabled,
+  loadMore: () => query.fetchNextPage(),
+})
 const total = computed(() => query.data.value?.pages[0]?.total_count ?? 0)
-const allowed = useCanAnnotate()
+const canAnnotate = useCanAnnotate()
+const allowed = computed(() => props.selectable && canAnnotate.value)
 const mutation = useReviewMentionsMutation()
 const route = useRoute()
 type Selection = { all: boolean; ids: string[] }
@@ -265,6 +285,9 @@ watch(groups, (items) => {
                 >{{ group.library }} · {{ group.name }} · {{ group.page_id }}</RouterLink
               ></span
             >
+            <div v-else-if="cardTitles && mode === 'mention'" class="min-w-0 flex-1">
+              <PersonNameTitle :name="group.name" />
+            </div>
             <span v-else class="min-w-0 flex-1 break-words font-sans"
               ><span :class="mode === 'mention' && 'font-serif'">{{ group.name }}</span>
               <small v-if="mode !== 'mention'" class="block text-muted-foreground wrap-anywhere"
@@ -281,7 +304,8 @@ watch(groups, (items) => {
         <div v-if="!compact" class="pl-7">
           <PersonMentionOccurrences
             :name="mode === 'mention' ? group.name : undefined"
-            :compact="compact"
+            :compact="compactOccurrences"
+            :selectable="selectable"
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
             @loaded="
@@ -299,6 +323,12 @@ watch(groups, (items) => {
         </div>
       </li>
     </ul>
+    <div
+      v-if="automatic && query.hasNextPage.value"
+      ref="listEnd"
+      class="h-px"
+      aria-hidden="true"
+    />
     <PersonMentionListSkeleton
       v-if="enabled && (query.isPending.value || query.isFetchingNextPage.value)"
       :mode="mode"

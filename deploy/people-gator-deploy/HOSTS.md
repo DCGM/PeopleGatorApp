@@ -22,24 +22,78 @@ External services the utility checks but never creates. Prepare them before
 
 ## GitHub runners and tokens
 
+`pr-ci.yml` runs on GitHub-hosted `ubuntu-24.04` runners, so no PR code runs on
+your hosts. Self-hosted runners serve only the lifecycle workflows:
+
 | Runner labels | Workflow | Account needs |
 | --- | --- | --- |
-| `self-hosted,linux,x64,people-gator-ci` | `pr-ci.yml` | Docker, Node.js 24, Python 3.14, `uv`; isolated from deployment accounts |
 | `self-hosted,linux,x64,people-gator-preview` | `pr-preview.yml` | Utility user install, `pr` descriptor |
 | `self-hosted,linux,x64,people-gator-staging` | `staging.yml` | Utility user install, `staging` descriptor |
 | `self-hosted,linux,x64,people-gator-release` | `release.yml` | Utility user install, `release` descriptor |
 
-Labels only select a runner. Protect and review `main`, and restrict deployment
-runner groups to the repository's deployment workflows where supported; never let
-PR CI or other untrusted workflows run on a deployment account. Preview containers
-still execute contributor images: use a dedicated preview host. Fork PRs are
-tested but never publish images or deploy.
+Labels only select a runner: in a public repository any workflow in a PR, branch
+or tag can request them. Install the job-started guard on every self-hosted
+runner. It refuses every job except these workflows from reviewed `main` and
+release tags whose commit is on `main`:
+
+```sh
+install -D -m 755 deploy/runner/job-started.sh ~/.local/libexec/people-gator/job-started.sh
+# In each runner directory; the script itself must live outside it:
+echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$HOME/.local/libexec/people-gator/job-started.sh" >> .env
+```
+
+Restart each runner service while idle so it reads `.env`, for example
+`sudo ./svc.sh stop && sudo ./svc.sh start`, or
+`systemctl --user restart github-runner@<runner>` for a user unit.
+
+Copy the script from reviewed `main`, and refresh the copy when it changes.
+Refused jobs fail in their `Set up runner` step. Also set **Settings → Actions →
+General → Fork pull request workflows** to require approval for all outside
+contributors, and protect release tags (`v*`) with a ruleset.
+
+Preview containers still execute contributor images. Run lifecycle runners and
+deployments under a dedicated account, not a personal one; see
+[Single-host isolation](#single-host-isolation). Fork PRs are tested but never
+publish images or deploy.
 
 Deployment jobs use only `GITHUB_TOKEN` (contents, actions, pull-requests and
 packages read; CI image publication needs packages write). For private GHCR
 packages, grant this repository Actions access to `peoplegatorapp-frontend` and
 `peoplegatorapp-backend`. No SSH key or database secret is stored in GitHub.
 Protect release tags (`v*`) with a ruleset so only maintainers can create them.
+
+## Single-host isolation
+
+When CI, previews and staging share one machine, give deployments their own
+account and Docker daemon. Your personal account then holds no deployment
+secrets, and deployment jobs cannot reach your files or containers.
+
+1. As an administrator, once:
+
+   ```sh
+   sudo useradd --create-home --shell /bin/bash gator-deploy
+   sudo usermod --add-subuids 231072-296607 --add-subgids 231072-296607 gator-deploy
+   sudo loginctl enable-linger gator-deploy
+   sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80  # persist in /etc/sysctl.d
+   ```
+
+   Never add `gator-deploy` to the `docker` group; that grants root.
+2. In a login session for the account (`sudo machinectl shell gator-deploy@`),
+   run `dockerd-rootless-setuptool.sh install` and use context `rootless`.
+3. Move the public Traefik (and its tunnel sidecar) and the OTLP backend to this
+   daemon. Containers on one daemon cannot join another daemon's networks. Keep
+   development proxies on your own daemon and ports.
+4. Register the lifecycle runners as `gator-deploy` with labels
+   `people-gator-preview,people-gator-staging,people-gator-release`, install them
+   with `sudo ./svc.sh install gator-deploy`, and add the job-started guard.
+   Several runners can run different environments at the same time; each
+   environment still deploys one job at a time.
+5. As `gator-deploy`, install the utility from reviewed `main`, configure the
+   descriptors with `docker_context: rootless`, then run `pr install`,
+   `staging install` and `staging snapshot-init`. Rerun the latest CI of open PRs
+   to redeploy their previews.
+6. Remove the old runners (`./config.sh remove`) and uninstall the old
+   environments and their containers, volumes and state from your account.
 
 ## PR previews
 
