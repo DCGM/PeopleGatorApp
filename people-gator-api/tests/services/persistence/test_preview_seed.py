@@ -5,6 +5,7 @@ import io
 import json
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -19,8 +20,8 @@ from people_gator_api.filesystem.contracts import Filesystem
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.media.aligned_face_crop import get_aligned_face_crop
-from people_gator_api.media.page_image import get_page_image
-from people_gator_api.media.page_layout import get_page_layout
+from people_gator_api.media.page_image import get_page_image, page_image_key
+from people_gator_api.media.page_layout import get_page_layout, page_layout_key
 from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.text_mention_spans import get_text_mention_spans
 from people_gator_api.persistence.contracts import Database
@@ -57,6 +58,7 @@ from people_gator_api.schemas.search import (
     SearchEntitiesRequest,
 )
 from people_gator_api.seeding import preview
+from people_gator_api.seeding.media import page_image, page_layout
 from people_gator_api.schemas.missing import MISSING
 from people_gator_api.seeding.fixtures import (
     BREADCRUMB_PAGES,
@@ -67,6 +69,9 @@ from people_gator_api.seeding.fixtures import (
     PAGE_GALLERY_PAGES,
     PAGES,
     SECOND_MODEL,
+    SIDEBAR_LEGACY_MENTIONS,
+    SIDEBAR_LONG_CONTEXT,
+    SIDEBAR_LONG_TOKEN,
     Person,
 )
 from people_gator_api.services import filesystem_service
@@ -109,7 +114,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (44, 162, 109)
     assert len(result.documents) == 57 and len(result.pages) == 117
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
@@ -393,7 +398,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (44, 162, 109)
 
 
 @pytest.mark.asyncio
@@ -413,7 +418,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (44, 162, 109)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -436,7 +441,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (45, 162, 108)
+    assert await counts(database) == (45, 162, 109)
 
 
 
@@ -462,7 +467,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
     assert len(result.entities) == 44 and len(result.faces) == 162
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (44, 162, 109)
 
 
 
@@ -483,7 +488,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (43, 161, 107)
+    assert await counts(database) == (43, 161, 108)
 
 
 
@@ -3574,7 +3579,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (44, 162, 108)
+    assert await counts(db) == (44, 162, 109)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4731,13 +4736,13 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
         limit=25, filter_=TextMentionListFilter(page_source_id=[page.source_id]),
     ))).items
     assert [(group.name, group.occurrence_count) for group in groups] == [
-        ("Hana Sidebar", 3), ("Tomas Lettered", 1)]
+        ("Hana Sidebar", 4), ("Tomas Lettered", 1)]
     hana_scope = TextMentionListFilter(document_source_id=[document], name=["Hana Sidebar"])
     occurrences = await _all_items(database.text_mentions.list, TextMentionListRequest, 20,
                                    filter_=hana_scope)
-    assert [len(batch) for batch in occurrences] == [20, 4]
+    assert [len(batch) for batch in occurrences] == [20, 5]
     flat = [item for batch in occurrences for item in batch]
-    assert len({item.mention_id for item in flat}) == 24
+    assert len({item.mention_id for item in flat}) == 25
     assert sum(item.entity_id is None for item in flat) == 1
 
     # Face Search, alone and refined by name, within the document scope.
@@ -4770,6 +4775,7 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
     # Spans match recorded text, so both linked lines resolve to Hana.
     assert {"sidebar-hana-opened", "sidebar-hana-signed"} <= by_entity[people["sidebar-hana"]]
     assert by_entity[people["sidebar-tomas"]] == {"sidebar-tomas"}
+    await _assert_long_sidebar_mention(database, seed, page)
     crowd = await database.sources.get_page(seed.pages["scan-sidebar-2"])
     crowd_faces = (await database.faces.list(FaceListRequest(
         limit=100, filter_=FaceListFilter(source_id=[crowd.source_id])))).items
@@ -4780,6 +4786,61 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
     crop = await get_aligned_face_crop(seed.users["reviewer"], crowd_faces[0], crowd, max_width=96)
     with Image.open(io.BytesIO(crop.content)) as aligned:
         assert aligned.size[0] > 0
+
+
+async def _assert_long_sidebar_mention(database, seed, page):
+    """Issue #121: a linked mention with four lines of context and an unbroken token."""
+    mention = await database.text_mentions.get(seed.mentions["sidebar-hana-long"])
+    assert mention.context == SIDEBAR_LONG_CONTEXT and SIDEBAR_LONG_TOKEN in mention.context
+    assert len(SIDEBAR_LONG_TOKEN) > 40 and SIDEBAR_LONG_TOKEN.isalnum()
+    assert mention.source_id == page.source_id
+    assert mention.entity_id == seed.entities["sidebar-hana"]
+    # Spans follow the recorded name, so Hana's highlight covers the first line.
+    by_entity, _ = await _page_mention_lines(database, page)
+    assert "sidebar-hana-long-0" in by_entity[seed.entities["sidebar-hana"]]
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    lines = {line.id: line for region in layout.regions for line in region.lines}
+    assert "\n".join(lines[f"sidebar-hana-long-{i}"].transcription for i in range(4)) == (
+        SIDEBAR_LONG_CONTEXT)
+    width, height = layout.page_size[1], layout.page_size[0]
+    for line in lines.values():
+        assert all(0 <= x <= width and 0 <= y <= height for x, y in line.polygon)
+
+
+@pytest.mark.asyncio
+async def test_scan_sidebar_long_mention_upgrades_only_legacy_media(seed_target, monkeypatch):
+    """A retained preview gains the #121 mention and its lines; replaced media stays."""
+    database, filesystem, _ = seed_target
+    current = next(item for item in PAGES if item.key == "scan-sidebar-1")
+    legacy_page = replace(current, mentions=current.mentions[:SIDEBAR_LEGACY_MENTIONS])
+    assert "sidebar-hana-long" not in {item.key for item in legacy_page.mentions}
+    with monkeypatch.context() as legacy:
+        legacy.setattr(preview, "PAGES", tuple(
+            legacy_page if item.key == current.key else item for item in PAGES))
+        old = await preview.seed_preview(database, filesystem)
+    assert "sidebar-hana-long" not in old.mentions
+    page = await database.sources.get_page(old.pages[current.key])
+    document = next(item for item in DOCUMENTS if item.key == current.document)
+    image_key = page_image_key(document.library, document.document_id, current.page_id)
+    layout_key = page_layout_key(document.library, document.document_id, current.page_id)
+    assert await filesystem.read_bytes(image_key) == page_image(legacy_page, document)
+
+    seed = await preview.seed_preview(database, filesystem)
+    for name in ("entities", "documents", "pages", "faces", "mentions"):
+        assert getattr(old, name).items() <= getattr(seed, name).items()
+    assert await filesystem.read_bytes(image_key) == page_image(current, document)
+    await _assert_long_sidebar_mention(database, seed, page)
+    before = await counts(database)
+    assert await preview.seed_preview(database, filesystem) == seed
+    assert await counts(database) == before
+
+    # Media replaced after seeding is never regenerated.
+    replaced = page_layout(legacy_page).model_copy(update={"id": "reviewed"})
+    await filesystem.write_bytes(layout_key, replaced.model_dump_json().encode())
+    await filesystem.write_bytes(image_key, b"reviewed image")
+    assert await preview.seed_preview(database, filesystem) == seed
+    assert await filesystem.read_bytes(layout_key) == replaced.model_dump_json().encode()
+    assert await filesystem.read_bytes(image_key) == b"reviewed image"
 
 
 @pytest.mark.asyncio

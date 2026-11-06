@@ -303,6 +303,15 @@ TELEPROMPTER_WRAPPED_LINES = (
 )
 
 SIDEBAR_CROWD_PAGES = 3
+SIDEBAR_LONG_TOKEN = "ParishLedgerBaptismMarginNoteGodparentsCeremony1888"
+SIDEBAR_LONG_CONTEXT = (
+    "Hana Sidebar signed the margin of the parish ledger next to the\n"
+    "baptism entry for her niece, adding a note about the godparents\n"
+    "and the date of the ceremony, filed under the reference\n"
+    + SIDEBAR_LONG_TOKEN
+)
+# Retained previews stored scan-sidebar-1's media before the long mention (#121).
+SIDEBAR_LEGACY_MENTIONS = 4
 SIDEBAR_CROWD_FACES = 12
 SIDEBAR_REPEATED_MENTIONS = 7
 
@@ -329,6 +338,8 @@ SIDEBAR_PAGES = (
         Mention("sidebar-hana-signed", "sidebar-hana", "Hana Sidebar signed the margin.", "verified"),
         Mention("sidebar-hana-unlinked", "sidebar-hana", "Hana Sidebar appears in a caption.", None),
         Mention("sidebar-tomas", "sidebar-tomas", "Tomas Lettered wrote the heading."),
+        # Issue #121: long context with an unbroken token wraps in the Mentions tab.
+        Mention("sidebar-hana-long", "sidebar-hana", SIDEBAR_LONG_CONTEXT),
     )),
     *(Page(f"scan-sidebar-{page}", "scan-sidebar", page,
            tuple(_sidebar_crowd_face(page, index) for index in range(SIDEBAR_CROWD_FACES)),
