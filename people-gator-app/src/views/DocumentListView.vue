@@ -98,13 +98,12 @@ useAutomaticPagination({
         class="w-60 shrink-0 overflow-y-auto pb-1"
         aria-label="Document filters"
       >
-        <DocumentFilters />
+        <DocumentFilters tags />
       </aside>
       <div class="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1">
         <div class="flex min-w-0 flex-col gap-2 lg:shrink-0">
           <DocumentListSearchBar
             v-model:search-term="searchTerm"
-            v-model:unassigned="unassigned"
             v-model:sort="sort"
             v-model:filters-open="filtersOpen"
             :sort-options="sortOptions"

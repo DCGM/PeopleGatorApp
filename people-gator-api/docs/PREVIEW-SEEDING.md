@@ -1299,7 +1299,9 @@ the table's scroll area.
 Documents shows only the **Documents index** label, search and Sort above the
 table. Filters are in a left sidebar from 1024px; below that, the sliders button
 beside search opens them in a left drawer (Escape or × closes it and keeps the
-selections). The filters are Libraries, Modified by, Modified via key, Modified
+selections). Applied-filter tags and **Clear all filters** follow the selectors in the
+sidebar; on mobile they stay under search so they remain visible with the drawer
+closed. The filters are Libraries, Modified by, Modified via key, Modified
 from/to, and **All annotations**, **Faces**, **Text mentions** and **People**.
 Each count button opens State (All, Automatic, Manual, Verified, Unassigned),
 Min, Max and Apply; People has Min and Max for distinct linked people. Links

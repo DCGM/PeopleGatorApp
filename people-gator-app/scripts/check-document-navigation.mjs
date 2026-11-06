@@ -237,6 +237,22 @@ try {
     await settled()
     const tag = page.getByRole('button', { name: 'Remove People ≥ 1', exact: true })
     await tag.waitFor()
+    // Applied filters: below the sidebar selectors on desktop; under search on mobile.
+    const tagPlace = await tag.evaluate((e) => ({
+      sidebar: !!e.closest('aside'),
+      table: e.closest('main').querySelector('[data-slot="scroll-area"]').getBoundingClientRect()
+        .top,
+      top: e.getBoundingClientRect().top,
+      groupBottom: document
+        .querySelector('[role="group"][aria-label="Filters"]')
+        ?.getBoundingClientRect().bottom,
+    }))
+    if (label === 'desktop') {
+      assert.ok(tagPlace.sidebar, 'desktop tags are in the sidebar')
+      assert.ok(tagPlace.top > tagPlace.groupBottom, 'desktop tags follow the selectors')
+    } else {
+      assert.ok(!tagPlace.sidebar && tagPlace.top < tagPlace.table, 'mobile tags precede the table')
+    }
     assert.ok((await results()) < before, 'people range narrows the documents')
     await tag.click()
     await settled()

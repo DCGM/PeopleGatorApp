@@ -297,7 +297,8 @@ describe('document table results', () => {
   it('shows only the Documents filter set, in a desktop sidebar beside search and sort', async () => {
     const { wrapper } = await render('/documents?unassigned=yes&link_state=verified')
     const sidebar = wrapper.get('aside[aria-label="Document filters"]')
-    const names = sidebar
+    const group = sidebar.get('[role="group"][aria-label="Filters"]')
+    const names = group
       .findAll('button')
       .map((button) => button.attributes('aria-label') || button.text().trim())
     expect(names).toEqual([
@@ -316,8 +317,15 @@ describe('document table results', () => {
     expect(search.find('input[aria-label="Search documents"]').exists()).toBe(true)
     expect(search.find('[aria-label="Sort by"]').exists()).toBe(true)
     expect(search.find('button[aria-haspopup="dialog"]').exists()).toBe(false)
+    // Applied filters sit in the sidebar below the selectors, not above the table.
+    const active = sidebar.get('.active-filters')
+    expect(
+      group.element.compareDocumentPosition(active.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(search.find('.active-filters').exists()).toBe(false)
+    expect(wrapper.findAll('.active-filters')).toHaveLength(1)
     // Hidden filters still apply from links and remain removable as tags.
-    const tags = wrapper.get('.active-filters').text()
+    const tags = active.text()
     expect(tags).toContain('Unassigned faces: Has unassigned faces')
     expect(tags).toMatch(/Verified/)
   })

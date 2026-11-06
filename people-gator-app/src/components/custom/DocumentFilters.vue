@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import SharedFilterControls from './SharedFilterControls.vue'
 import CountRangeControl from './CountRangeControl.vue'
+import DocumentFilterTags from './DocumentFilterTags.vue'
 import {
   DOCUMENT_COUNT_CATEGORIES,
   DOCUMENT_COUNT_STATES,
@@ -10,6 +11,8 @@ import {
 } from '@/viewmodels/document-counts'
 
 // The Documents filter set (#111), shown in the desktop sidebar or the mobile drawer.
+// The sidebar lists applied filters below the selectors; mobile shows them under search.
+defineProps<{ tags?: boolean }>()
 const counts = useDocumentCounts()
 const apply = (field: string, lower: string, upper: string) =>
   counts.set(field as DocumentCountField, lower, upper)
@@ -35,5 +38,8 @@ const apply = (field: string, lower: string, upper: string) =>
       trigger-class="w-full"
       @apply="apply"
     />
+  </div>
+  <div v-if="tags" class="flex min-w-0 flex-col gap-2 pt-2">
+    <DocumentFilterTags />
   </div>
 </template>

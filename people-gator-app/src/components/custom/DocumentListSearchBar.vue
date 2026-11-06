@@ -9,36 +9,18 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import { DOCUMENT_COUNT_KEYS, useDocumentCounts } from '@/viewmodels/document-counts'
-import SharedFilterTags from './SharedFilterTags.vue'
-import type { ActiveFilter } from './ActiveFilters.vue'
-import type { UnassignedFilter } from '@/viewmodels/document-filters'
+import DocumentFilterTags from './DocumentFilterTags.vue'
 import type { DocumentSortField } from '@/client'
 import SortControl from './SortControl.vue'
 import type { SortOption, SortState } from '@/lib/sorting'
 
 // Only search and sort sit above the Documents table; filters live in the sidebar or drawer.
-const counts = useDocumentCounts()
 const desktop = useMediaQuery('(min-width: 1024px)')
 
 defineProps<{ resultCount: number; sortOptions?: SortOption<DocumentSortField>[] }>()
 const sort = defineModel<SortState<DocumentSortField>>('sort')
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const filtersOpen = defineModel<boolean>('filtersOpen', { default: false })
-// Unassigned faces has no control here, but links can still carry it.
-const unassigned = defineModel<UnassignedFilter>('unassigned', { required: true })
-const labels = { yes: 'Has unassigned faces', no: 'No unassigned faces' }
-const specific = computed<ActiveFilter[]>(() =>
-  unassigned.value === 'all'
-    ? []
-    : [
-        {
-          key: 'unassigned',
-          value: unassigned.value,
-          label: `Unassigned faces: ${labels[unassigned.value]}`,
-        },
-      ],
-)
 </script>
 
 <template>
@@ -80,10 +62,6 @@ const specific = computed<ActiveFilter[]>(() =>
     </div>
     <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </div>
-  <p v-if="counts.error.value" role="alert">{{ counts.error.value }}</p>
-  <SharedFilterTags
-    :specific-filters="[...specific, ...counts.tags.value]"
-    :specific-keys="['unassigned', ...DOCUMENT_COUNT_KEYS]"
-    @remove-specific="$event.key === 'unassigned' ? (unassigned = 'all') : counts.remove($event)"
-  />
+  <!-- With the drawer closed, applied filters stay visible and removable under search. -->
+  <DocumentFilterTags v-if="!desktop" />
 </template>
