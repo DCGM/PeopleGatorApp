@@ -32,7 +32,7 @@ it('uses the shared last-change popover and orange underlined serif context', as
     },
   })
   expect(wrapper.classes()).toContain('font-sans')
-  expect(wrapper.get('p[title]').classes()).toContain('font-serif')
+  expect(wrapper.get('p').classes()).toContain('font-serif')
   expect(wrapper.get('mark').text()).toBe('Ada')
   expect(wrapper.get('mark').classes()).toEqual(
     expect.arrayContaining(['bg-transparent', 'text-secondary', 'underline']),
@@ -47,5 +47,41 @@ it('uses the shared last-change popover and orange underlined serif context', as
     userId: 'reviewer',
   })
   expect(wrapper.text()).not.toContain('Creation / import')
+  wrapper.unmount()
+})
+
+it('wraps long compact context, including unbroken tokens, instead of truncating it', async () => {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: { template: '<div />' } }],
+  })
+  await router.push('/')
+  const excerpt = `Ada signed the ledger ${'x'.repeat(80)} beside the baptism entry.`
+  const wrapper = mount(PersonMentionEntry, {
+    props: {
+      compact: true,
+      linkStates: [],
+      mention: {
+        id: 'm1',
+        excerpt,
+        matchedText: 'Ada',
+        library: 'NDK',
+        documentTitle: 'Letters',
+        documentId: 'doc',
+        pageId: 'p1',
+        pageLabel: 'p1',
+      } as PersonMention,
+    },
+    global: {
+      plugins: [router],
+      stubs: { RouterLink: RouterLinkStub, AnnotationLastChange: true },
+    },
+  })
+  const context = wrapper.get('p')
+  expect(context.text()).toBe(excerpt)
+  expect(context.classes()).toEqual(
+    expect.arrayContaining(['min-w-0', 'wrap-anywhere', 'sm:basis-48']),
+  )
+  expect(context.classes()).not.toContain('truncate')
   wrapper.unmount()
 })
