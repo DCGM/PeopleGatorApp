@@ -39,8 +39,9 @@ docker compose $f build && docker compose $f push      # build host
 docker compose $f pull && docker compose $f up -d --no-build --wait   # target host
 ```
 
-Startup order: `db` healthy → `storage-init` (sets `10001:10001` ownership of the
-`api-data` volume and installs `USERS_FILE` if set) → one-shot `migrate` → `backend`
+Startup order: `db` healthy → `storage-init` (gives `10001:10001` ownership of the
+`api-data` root and, if `USERS_FILE` is set, validates it and writes it to the
+configured storage, local or S3) → one-shot `migrate` → `backend`
 healthy → `frontend`. Re-running `up -d` reruns the idempotent migration and keeps
 the `postgres-data` and `api-data` volumes. A failed migration stops the rollout
 before the API starts.
@@ -53,9 +54,9 @@ before the API starts.
 | `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` | External Traefik network (`web`) and entrypoint (`websecure`) |
 | `TRAEFIK_TLS`, `TRAEFIK_CERTRESOLVER` | Router TLS (`true`) and resolver (`tlschallenge`); use `false` and empty for HTTP-only entrypoints |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_IMAGE` | Bundled database; password required |
-| `USERS_FILE` | Optional users file copied into API storage on every start; relative paths resolve from the repository root |
+| `USERS_FILE` | Optional users file written to the configured storage (local or S3) on every start; relative paths resolve from the repository root |
 | `API_STORAGE` | Storage JSON; defaults to local `/data` in the `api-data` volume, set an S3 object instead |
-| `API_ENV_FILE` | Optional file with other `PEOPLE_GATOR_API__*` settings (OpenRouter, OTEL, embeddings) |
+| `API_ENV_FILE` | Optional dotenv file with other `PEOPLE_GATOR_API__*` settings (OpenRouter, OTEL, embeddings); values cannot override the stack's fixed settings |
 | `API_LOG_LEVEL`, `BACKEND_MEMORY` | API log level (`info`) and memory limit (`4g`) |
 
 The database sits on an internal network reachable only by `migrate` and

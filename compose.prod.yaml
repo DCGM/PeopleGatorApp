@@ -27,16 +27,12 @@ x-hardening: &hardening
 x-backend: &backend
   <<: *hardening
   image: ${IMAGE_REGISTRY:-people-gator}/people-gator-api:${IMAGE_TAG:-latest}
-  build:
-    context: ./people-gator-api
-    dockerfile: Dockerfile
   logging: *logging
   user: '10001:10001'
   tmpfs: ['/tmp:size=256m,mode=1777']
   env_file:
     # Optional extra API settings (OpenRouter, OTEL, embedding service, ...).
     - path: ${API_ENV_FILE:-/dev/null}
-      format: raw
   environment: &backend-environment
     PEOPLE_GATOR_API__HOST: 0.0.0.0
     PEOPLE_GATOR_API__PORT: '8000'
@@ -83,26 +79,45 @@ services:
       start_period: 10s
     networks: [database]
 
-  # Gives the API user ownership of the storage volume and installs the
-  # operator-provided users file (USERS_FILE) when one is configured.
+  # Gives the API user ownership of the local storage root and, when USERS_FILE
+  # is set, validates it and installs it into the configured storage (local or S3).
   storage-init:
+    <<: *hardening
     image: ${IMAGE_REGISTRY:-people-gator}/people-gator-api:${IMAGE_TAG:-latest}
     logging: *logging
+    env_file:
+      - path: ${API_ENV_FILE:-/dev/null}
+    environment: *backend-environment
+    tmpfs: ['/tmp:size=64m,mode=1777']
     user: '0:0'
-    network_mode: none
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
     entrypoint: [sh, -c]
     command:
       - |
         set -eu
         mkdir -p /data/peoplegator_api
+        chown 10001:10001 /data /data/peoplegator_api
         if [ -s /run/users.json ]; then
-          cp /run/users.json /data/peoplegator_api/users.json
-          chmod 600 /data/peoplegator_api/users.json
+          python - <<'PY'
+        import asyncio
+        from people_gator_api.services.auth_service import _users_adapter
+        from people_gator_api.services.filesystem_service import get_filesystem
+        from people_gator_api.settings import settings
+        data = open("/run/users.json", "rb").read()
+        _users_adapter.validate_json(data)
+        asyncio.run(get_filesystem().write_bytes(settings.jwk.users_path, data))
+        print("Installed USERS_FILE into", settings.storage.backend, "storage")
+        PY
+          find /data/peoplegator_api -maxdepth 1 -user 0 -exec chown 10001:10001 {} +
         fi
-        chown -R 10001:10001 /data
     volumes:
       - api-data:/data
-      - ${USERS_FILE:-/dev/null}:/run/users.json:ro
+      - type: bind
+        source: ${USERS_FILE:-/dev/null}
+        target: /run/users.json
+        read_only: true
+    # Same egress path as the backend, for S3 storage.
+    networks: [traefik]
 
   # One-shot schema migration; the API starts only after it succeeds.
   migrate:
@@ -117,6 +132,9 @@ services:
 
   backend:
     <<: *backend
+    build:
+      context: ./people-gator-api
+      dockerfile: Dockerfile
     command: [api]
     restart: unless-stopped
     mem_limit: ${BACKEND_MEMORY:-4g}
