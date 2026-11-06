@@ -50,38 +50,50 @@ it('uses the shared last-change popover and orange underlined serif context', as
   wrapper.unmount()
 })
 
-it('wraps long compact context, including unbroken tokens, instead of truncating it', async () => {
+it('wraps long compact context on a scan, keeping one line in compact profile density', async () => {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: { template: '<div />' } }],
+    routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/scan', name: 'document-page', component: { template: '<div />' } },
+    ],
   })
-  await router.push('/')
   const excerpt = `Ada signed the ledger ${'x'.repeat(80)} beside the baptism entry.`
-  const wrapper = mount(PersonMentionEntry, {
-    props: {
-      compact: true,
-      linkStates: [],
-      mention: {
-        id: 'm1',
-        excerpt,
-        matchedText: 'Ada',
-        library: 'NDK',
-        documentTitle: 'Letters',
-        documentId: 'doc',
-        pageId: 'p1',
-        pageLabel: 'p1',
-      } as PersonMention,
-    },
-    global: {
-      plugins: [router],
-      stubs: { RouterLink: RouterLinkStub, AnnotationLastChange: true },
-    },
-  })
-  const context = wrapper.get('p')
+  const mountEntry = () =>
+    mount(PersonMentionEntry, {
+      props: {
+        compact: true,
+        linkStates: [],
+        mention: {
+          id: 'm1',
+          excerpt,
+          matchedText: 'Ada',
+          library: 'NDK',
+          documentTitle: 'Letters',
+          documentId: 'doc',
+          pageId: 'p1',
+          pageLabel: 'p1',
+        } as PersonMention,
+      },
+      global: {
+        plugins: [router],
+        stubs: { RouterLink: RouterLinkStub, AnnotationLastChange: true },
+      },
+    })
+  await router.push('/scan')
+  const scan = mountEntry()
+  const context = scan.get('[aria-label^="Select mention"]')
   expect(context.text()).toBe(excerpt)
   expect(context.classes()).toEqual(
     expect.arrayContaining(['min-w-0', 'wrap-anywhere', 'sm:basis-48']),
   )
   expect(context.classes()).not.toContain('truncate')
-  wrapper.unmount()
+  expect(context.attributes('title')).toBeUndefined()
+  scan.unmount()
+
+  await router.push('/')
+  const profile = mountEntry()
+  expect(profile.get('p').classes()).toContain('truncate')
+  expect(profile.get('p').attributes('title')).toBe(excerpt)
+  profile.unmount()
 })
