@@ -288,14 +288,8 @@ function restoreDefaults() {
   order.value = defaultDocumentColumnOrder()
 }
 
-// Removal needs a second, confirming activation of the same button.
-const armed = ref<string | null>(null)
+// Removal sits behind the label's menu, so one stray click cannot remove a column.
 function removeColumn(id: string) {
-  if (armed.value !== id) {
-    armed.value = id
-    return
-  }
-  armed.value = null
   visibility.value = { ...visibility.value, [id]: false }
 }
 
@@ -417,10 +411,7 @@ function startMove(event: PointerEvent, id: string) {
                   dragging?.drop?.target === header.column.id && dragging.drop.after,
               }"
             >
-              <div
-                v-if="!header.column.columns.length"
-                class="flex items-center justify-between gap-1 pt-1"
-              >
+              <div v-if="!header.column.columns.length" class="flex justify-center pt-1">
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -433,23 +424,6 @@ function startMove(event: PointerEvent, id: string) {
                   @keydown="moveKey($event, header.column.id)"
                 >
                   <GripHorizontal aria-hidden="true" />
-                </Button>
-                <Button
-                  v-if="header.column.getCanHide()"
-                  :data-remove-column="header.column.id"
-                  :variant="armed === header.column.id ? 'destructive' : 'ghost'"
-                  :size="armed === header.column.id ? 'xs' : 'icon-xs'"
-                  :aria-label="
-                    armed === header.column.id
-                      ? `Confirm removing ${columnLabel(header.column.id)} column`
-                      : `Remove ${columnLabel(header.column.id)} column`
-                  "
-                  :title="armed === header.column.id ? undefined : 'Remove column'"
-                  @click="removeColumn(header.column.id)"
-                  @blur="armed === header.column.id && (armed = null)"
-                  @keydown.escape="armed = null"
-                >
-                  <X aria-hidden="true" /><span v-if="armed === header.column.id">Remove</span>
                 </Button>
               </div>
               <div class="flex items-center gap-1 pb-2 whitespace-normal">
@@ -473,7 +447,29 @@ function startMove(event: PointerEvent, id: string) {
                   />
                   <ArrowUpDown v-else class="size-4" aria-hidden="true" />
                 </Button>
-                <span class="min-w-0 [overflow-wrap:anywhere]"
+                <DropdownMenu v-if="header.column.getCanHide()">
+                  <DropdownMenuTrigger as-child>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="h-auto min-h-8 min-w-0 justify-start px-1 text-left whitespace-normal"
+                      :data-column-menu="header.column.id"
+                      ><span class="min-w-0 [overflow-wrap:anywhere]"
+                        ><FlexRender
+                          :render="header.column.columnDef.header"
+                          :props="header.getContext()" /></span
+                    ></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem
+                      variant="destructive"
+                      @select="removeColumn(header.column.id)"
+                    >
+                      <X aria-hidden="true" />Remove column
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <span v-else class="min-w-0 [overflow-wrap:anywhere]"
                   ><FlexRender
                     :render="header.column.columnDef.header"
                     :props="header.getContext()"

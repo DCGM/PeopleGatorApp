@@ -83,6 +83,11 @@ try {
       await page.getByRole('menuitem', { name, exact: true }).click()
       await page.getByRole('menu').waitFor({ state: 'detached' })
     }
+    async function removeColumn(id) {
+      await page.locator(`[data-column-menu="${id}"]`).click()
+      await page.getByRole('menuitem', { name: 'Remove column', exact: true }).click()
+      await page.getByRole('menu').waitFor({ state: 'detached' })
+    }
     const headerIds = () =>
       page.locator('thead th[data-column]').evaluateAll((c) => c.map((e) => e.dataset.column))
     const grip = (id) => page.locator(`[data-move-column="${id}"]`)
@@ -189,8 +194,7 @@ try {
     await fill()
     if (label === 'desktop') {
       // With fewer columns the add column fills the remaining width.
-      await page.locator('[data-remove-column="mentions_total"]').click()
-      await page.locator('[data-remove-column="mentions_total"]').click()
+      await removeColumn('mentions_total')
       assert.ok((await fill()) > 160, 'add column fills the remaining desktop width')
       await capture('add-fill')
       await chooseColumn('Text mentions: Total')
@@ -240,16 +244,14 @@ try {
       .filter({ hasText: 'Document name moved to position 2 of 8' })
       .waitFor()
 
-    // Removal needs a confirming second click; Escape cancels it.
-    const removeLibrary = page.locator('[data-remove-column="library"]')
-    await removeLibrary.click()
-    assert.equal(await removeLibrary.getAttribute('aria-label'), 'Confirm removing Library column')
-    await page.waitForTimeout(400) // Let the open/colour transition finish.
-    await capture('remove-confirm')
+    // Removal is behind the label menu; Escape closes it without removing.
+    await page.locator('[data-column-menu="library"]').click()
+    await page.getByRole('menuitem', { name: 'Remove column', exact: true }).waitFor()
+    await page.waitForTimeout(400) // Let the open transition finish.
+    await capture('remove-menu')
     await page.keyboard.press('Escape')
-    assert.equal(await removeLibrary.getAttribute('aria-label'), 'Remove Library column')
-    await removeLibrary.click()
-    await removeLibrary.click()
+    assert.ok((await headerIds()).includes('library'))
+    await removeColumn('library')
     assert.ok(!(await headerIds()).includes('library'))
     await chooseColumn('Library')
     assert.equal((await headerIds()).at(-1), 'library', 'added column appears last')
@@ -460,7 +462,7 @@ try {
     await geometry()
     assert.deepEqual(errors, [])
     console.log(
-      `${label} ${width}x${height}: geometry, add-column menu, drag/keyboard reordering, confirmed removal, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
+      `${label} ${width}x${height}: geometry, add-column menu, drag/keyboard reordering, label-menu removal, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
     )
     await context.close()
   }

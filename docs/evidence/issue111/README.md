@@ -44,7 +44,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
   Clearing restores name ascending for browse or relevance for search.
 - No Columns button. The last **Add column** column fills the remaining width (desktop, after removing a column) or keeps 160px. Clicking a body cell in it opens the header menu, which lists only hidden fields grouped as Document fields, All annotations, Faces and Text mentions. Choosing one appends that column last and closes the menu.
 - Dragging a header's top handle (mouse on desktop, Chromium touch events on mobile) shows a drop indicator and moves the column without scrolling the table; the order survives reload. ←/→ on the handle moves it one position and announces the new position.
-- The header × only arms removal (a red **Remove** confirmation); Escape or blur cancels, and a second click removes the column.
+- Removal sits behind the header label: clicking it opens a menu with a red **Remove column** item. Escape closes the menu without removing; choosing the item removes the column.
 - Session column choices and order survive reload and navigation away/back; Restore default columns
   restores the eight fields and default order. Unit tests separately cover invalid/obsolete stored
   IDs and blocked storage reads/writes.

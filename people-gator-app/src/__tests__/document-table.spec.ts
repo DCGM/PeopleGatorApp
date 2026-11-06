@@ -173,7 +173,7 @@ describe('document table', () => {
     ]) {
       const button = wrapper.get(`button[aria-label="Sort by ${label}: sort ascending"]`)
       expect(button.text()).toBe('')
-      expect(button.element.nextSibling?.textContent).toBe(label)
+      expect(button.element.nextElementSibling?.textContent).toBe(label)
       await button.trigger('click')
       expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([{ field, direction: 'asc' }])
       expect(button.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
@@ -254,23 +254,26 @@ describe('document table', () => {
     expect(visibility.value).toEqual(defaultDocumentColumns())
     expect(order.value).toEqual(defaultDocumentColumnOrder())
   })
-  it('removes a column only after a confirming second activation', async () => {
+  it('removes a column only through its label menu', async () => {
     const { wrapper, visibility } = await render()
-    const remove = () => wrapper.find('[data-remove-column="library"]')
-    expect(remove().attributes('aria-label')).toBe('Remove Library column')
-    await remove().trigger('click')
+    const label = wrapper.get('[data-column-menu="library"]')
+    expect(label.text()).toBe('Library')
+    // Opening the menu alone removes nothing.
+    await label.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
     expect(visibility.value.library).toBe(true)
-    expect(remove().attributes('aria-label')).toBe('Confirm removing Library column')
-    expect(remove().text()).toBe('Remove')
-    await remove().trigger('blur')
-    expect(remove().attributes('aria-label')).toBe('Remove Library column')
-    await remove().trigger('click')
-    await remove().trigger('click')
+    const remove = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(remove.map((item) => item.textContent?.trim())).toEqual(['Remove column'])
+    expect(remove[0]!.dataset.variant).toBe('destructive')
+    remove[0]!.click()
+    await flushPromises()
     expect(visibility.value.library).toBe(false)
     expect(wrapper.find('th[data-column="library"]').exists()).toBe(false)
+    expect(wrapper.find('[data-remove-column]').exists()).toBe(false)
     // The fallback link column replaces the name and cannot be removed.
     await wrapper.setProps({ visibility: { ...visibility.value, name: false } })
-    expect(wrapper.find('[data-remove-column="identity"]').exists()).toBe(false)
+    expect(wrapper.find('th[data-column="identity"]').exists()).toBe(true)
+    expect(wrapper.find('[data-column-menu="identity"]').exists()).toBe(false)
   })
   it('reorders visible columns from the header handle by keyboard and pointer', async () => {
     const { wrapper, order } = await render()

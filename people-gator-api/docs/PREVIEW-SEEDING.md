@@ -801,7 +801,7 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Each data field, including Document name, can be removed from its header (× then a confirming **Remove**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be removed from its header (click the label, then **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
 name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
@@ -1256,9 +1256,9 @@ filtered to that library; the document name opens its first page; First page and
 it fills the remaining table width (at least 160px), its sticky header stays readable while rows
 scroll, and clicking any of its cells opens the header menu of hidden fields, grouped by Document
 fields, All annotations, Faces and Text mentions. Choosing a field appends that one column last
-and closes the menu. Drag a header's top handle to reorder columns (touch works on mobile); ←/→
-on the focused handle moves one position. A header's × arms removal and a second click on
-**Remove** confirms it; Escape or leaving the button cancels. The document-link fallback that
+and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
+on the focused handle moves one position. Clicking a header label opens a menu
+with **Remove column**; Escape closes it without removing. The document-link fallback that
 replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
 including reload/navigation back. **Restore default columns** restores the eight fields and order; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
