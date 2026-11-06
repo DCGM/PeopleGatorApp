@@ -141,7 +141,10 @@ describe('document table', () => {
     )
     expect(wrapper.get('col[data-add-column]').attributes('style')).toBeUndefined()
     expect(documentColumnSizing('ndk').size).toBe(80)
-    expect(documentColumnSizing('total').size).toBe(144)
+    expect(documentColumnSizing('total').size).toBe(168)
+    expect(documentColumnSizing('mentions_total').size).toBe(144)
+    expect(documentColumnSizing('faces_total').size).toBe(128)
+    expect(documentColumnSizing('registered_page_count').size).toBe(120)
   })
   it('resizes through keyboard headers without sorting and preserves widths when columns hide', async () => {
     const { wrapper } = await render()
@@ -254,26 +257,52 @@ describe('document table', () => {
     expect(visibility.value).toEqual(defaultDocumentColumns())
     expect(order.value).toEqual(defaultDocumentColumnOrder())
   })
-  it('removes a column only through its label menu', async () => {
+  it('opens each column menu from its chevron-marked name to move or remove the column', async () => {
     const { wrapper, visibility } = await render()
-    const label = wrapper.get('[data-column-menu="library"]')
-    expect(label.text()).toBe('Library')
-    // Opening the menu alone removes nothing.
-    await label.trigger('keydown', { key: 'Enter' })
-    await flushPromises()
+    const headers = () =>
+      wrapper.findAll('thead th[data-column]').map((h) => h.attributes('data-column'))
+    const label = (id: string) => wrapper.get(`[data-column-menu="${id}"]`)
+    const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    const open = async (id: string) => {
+      await label(id).trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+    }
+    const choose = async (text: string) => {
+      items()
+        .find((item) => item.textContent?.trim() === text)!
+        .click()
+      await flushPromises()
+    }
+    expect(label('library').text()).toBe('Library')
+    expect(label('library').find('svg').exists()).toBe(true)
+    // Opening the menu alone changes nothing.
+    await open('library')
     expect(visibility.value.library).toBe(true)
-    const remove = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(remove.map((item) => item.textContent?.trim())).toEqual(['Remove column'])
-    expect(remove[0]!.dataset.variant).toBe('destructive')
-    remove[0]!.click()
+    expect(items().map((item) => item.textContent?.trim())).toEqual([
+      'Move left',
+      'Move right',
+      'Remove column',
+    ])
+    expect(items()[2]!.dataset.variant).toBe('destructive')
+    await choose('Move left')
+    expect(headers().slice(0, 3)).toEqual(['first_page', 'library', 'name'])
+    expect(wrapper.get('p.sr-only[role="status"]').text()).toBe('Library moved to position 2 of 8')
+    await open('first_page')
+    expect(items()[0]!.hasAttribute('data-disabled')).toBe(true)
+    await choose('Move right')
+    expect(headers().slice(0, 2)).toEqual(['library', 'first_page'])
+    await open('mentions_total')
+    expect(items()[1]!.hasAttribute('data-disabled')).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
+    await open('library')
+    await choose('Remove column')
     expect(visibility.value.library).toBe(false)
     expect(wrapper.find('th[data-column="library"]').exists()).toBe(false)
-    expect(wrapper.find('[data-remove-column]').exists()).toBe(false)
-    // The fallback link column replaces the name and cannot be removed.
+    // The fallback link column replaces the name: it can move but not be removed.
     await wrapper.setProps({ visibility: { ...visibility.value, name: false } })
-    expect(wrapper.find('th[data-column="identity"]').exists()).toBe(true)
-    expect(wrapper.find('[data-column-menu="identity"]').exists()).toBe(false)
+    await open('identity')
+    expect(items().map((item) => item.textContent?.trim())).toEqual(['Move left', 'Move right'])
   })
   it('reorders visible columns from the header handle by keyboard and pointer', async () => {
     const { wrapper, order } = await render()

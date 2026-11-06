@@ -188,14 +188,16 @@ export function documentColumnSizing(id: string) {
     first_page: 120,
     library: 200,
     document_id: 320,
-    registered_page_count: 104,
-    total: 144,
+    registered_page_count: 120,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
     linked_entity_count: 144,
   }
-  const size = widths[id] ?? 128 // Count labels can wrap without changing the width model.
+  // Count headers fit their title, menu chevron and sort strip on one line:
+  // Annotations needs the most room, then Mentions; Faces keeps the 128px default.
+  const annotation = DOCUMENT_ANNOTATION_STATES.some((s) => s.id === id)
+  const size = widths[id] ?? (annotation ? 168 : id.startsWith('mentions_') ? 144 : 128)
   const minSize = id === 'name' || id === 'identity' || id === 'document_id' ? 200 : size
   const maxSize =
     id === 'name' || id === 'identity' || id === 'document_id' ? 720 : Math.max(size * 2, 240)

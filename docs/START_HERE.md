@@ -23,7 +23,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    the last **Add column** column (or click any of its cells) to add a hidden field,
    including Annotations, Faces and Mentions counts by mode (All, Automatic, Manual, Verified, Unassigned). Drag a header's
    centered top handle (or use ←/→ on it) to reorder columns; click a header label
-   and choose **Remove column** to remove one. Defaults show First page, Document
+   (marked by a chevron) to move it left or right or choose **Remove column**. Defaults show First page, Document
    name, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
    choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky

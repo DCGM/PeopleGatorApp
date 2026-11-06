@@ -46,7 +46,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 - Filters: only search and sort above the table. Desktop shows Libraries, Modified by/via key/from/to and All annotations, Faces, Text mentions and People range buttons in a left sidebar; mobile opens the same set in a left drawer from the sliders button. Applying People ≥ 1 narrows the results and adds a removable tag; Escape closes the drawer and keeps it.
 - Header layout: a full-height sort strip with a centered icon on the left; the move handle centered at the top of the remaining width, the content-width name centered below it, and a full-height resize grip on the right.
 - Dragging a header's top handle (mouse on desktop, Chromium touch events on mobile) shows a drop indicator and moves the column without scrolling the table; the order survives reload. ←/→ on the handle moves it one position and announces the new position.
-- Removal sits behind the header label: clicking it opens a menu with a red **Remove column** item. Escape closes the menu without removing; choosing the item removes the column.
+- Each column name shows a chevron and opens its menu: **Move left**, **Move right** (disabled at the ends) and a red **Remove column** item. Titles stay on one line. Escape closes the menu without removing; choosing the item removes the column.
 - Session column choices and order survive reload and navigation away/back; Restore default columns
   restores the eight fields and default order. Unit tests separately cover invalid/obsolete stored
   IDs and blocked storage reads/writes.

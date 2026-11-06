@@ -254,6 +254,17 @@ try {
           icon: box(sort?.querySelector('svg')),
           move: box(th.querySelector('[data-move-column]')),
           name: box(th.querySelector('[data-column-menu]')),
+          // Distinct line tops of the title text: a word must never break mid-way.
+          titleLines: (() => {
+            const span = th.querySelector('[data-column-menu] span')
+            const text = [...span.childNodes].find(
+              (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim(),
+            )
+            const range = document.createRange()
+            range.selectNodeContents(text)
+            return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size
+          })(),
+          chevron: !!th.querySelector('[data-column-menu] svg'),
           resize: box(th.querySelector('[role="separator"]')),
         }
       }),
@@ -278,6 +289,8 @@ try {
       assert.ok(c.move.top < c.name.top, `${c.id}: move handle above the name`)
       near(mid(c.name), mid(rest), 'name centered')
       assert.ok(c.name.width < rest.right - rest.left - 4, `${c.id}: name fits its content`)
+      assert.ok(c.chevron, `${c.id}: name shows its menu chevron`)
+      assert.equal(c.titleLines, 1, `${c.id}: title on one line`)
     }
     assert.equal(await page.getByRole('button', { name: 'Columns', exact: true }).count(), 0)
     // The add column takes the remaining width; any of its cells opens the header menu.
@@ -347,10 +360,21 @@ try {
     // Removal is behind the label menu; Escape closes it without removing.
     await page.locator('[data-column-menu="library"]').click()
     await page.getByRole('menuitem', { name: 'Remove column', exact: true }).waitFor()
+    assert.deepEqual(
+      (await page.getByRole('menuitem').allTextContents()).map((t) => t.trim()),
+      ['Move left', 'Move right', 'Remove column'],
+    )
     await page.waitForTimeout(400) // Let the open transition finish.
     await capture('remove-menu')
     await page.keyboard.press('Escape')
     assert.ok((await headerIds()).includes('library'))
+    // The same menu moves a column one step.
+    await page.locator('[data-column-menu="library"]').click()
+    await page.getByRole('menuitem', { name: 'Move right', exact: true }).click()
+    assert.deepEqual((await headerIds()).slice(1, 4), ['name', 'registered_page_count', 'library'])
+    await page.locator('[data-column-menu="library"]').click()
+    await page.getByRole('menuitem', { name: 'Move left', exact: true }).click()
+    assert.deepEqual((await headerIds()).slice(1, 4), ['name', 'library', 'registered_page_count'])
     await removeColumn('library')
     assert.ok(!(await headerIds()).includes('library'))
     await chooseColumn('Library')
@@ -558,7 +582,7 @@ try {
     await geometry()
     assert.deepEqual(errors, [])
     console.log(
-      `${label} ${width}x${height}: geometry, add-column menu, drag/keyboard reordering, label-menu removal, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
+      `${label} ${width}x${height}: geometry, add-column menu, drag/keyboard reordering, label-menu move/removal, bounded wheel/keyboard scrolling, sticky header, cursor at left/middle/right, sizing, tri-state keyboard sorting, shared sort/history/search default, session reload/navigation, links, counts, missing media and dark theme passed`,
     )
     await context.close()
   }

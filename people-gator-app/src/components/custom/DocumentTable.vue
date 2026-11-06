@@ -14,7 +14,18 @@ import {
   type ColumnSizingState,
   type Header,
 } from '@tanstack/vue-table'
-import { ArrowUp, ArrowDown, ArrowUpDown, GripHorizontal, GripVertical, Plus, X } from '@lucide/vue'
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  GripHorizontal,
+  GripVertical,
+  Plus,
+  X,
+} from '@lucide/vue'
 import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
@@ -318,6 +329,14 @@ function announceMove(id: string) {
   const visible = visibleIds()
   moveStatus.value = `${columnLabel(id)} moved to position ${visible.indexOf(orderId(id)) + 1} of ${visible.length}`
 }
+const canMove = (id: string, step: -1 | 1) => {
+  const visible = visibleIds()
+  return visible[visible.indexOf(orderId(id)) + step] !== undefined
+}
+function moveColumn(id: string, step: -1 | 1) {
+  order.value = stepDocumentColumn(order.value, visibleIds(), orderId(id), step)
+  void nextTick().then(() => announceMove(id))
+}
 function moveKey(event: KeyboardEvent, id: string) {
   const step = ({ ArrowLeft: -1, ArrowRight: 1 } as const)[event.key as 'ArrowLeft' | 'ArrowRight']
   if (!step) return
@@ -466,29 +485,45 @@ function startMove(event: PointerEvent, id: string) {
                   <div
                     class="flex max-w-full flex-1 items-center justify-center pb-1 text-center whitespace-normal"
                   >
-                    <DropdownMenu v-if="header.column.getCanHide()">
+                    <!-- Every column has a menu; the chevron marks where its options are. -->
+                    <DropdownMenu>
                       <DropdownMenuTrigger as-child>
                         <Button
                           variant="ghost"
                           size="sm"
-                          class="h-auto min-h-8 max-w-full min-w-0 px-1 whitespace-normal"
+                          class="h-auto min-h-8 max-w-full min-w-0 gap-1 px-1 whitespace-normal has-[>svg]:px-1"
                           :data-column-menu="header.column.id"
                           ><span class="min-w-0 [overflow-wrap:anywhere]"
                             ><HeaderLabel :id="header.column.id" /></span
-                        ></Button>
+                          ><ChevronDown
+                            class="size-3 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                        /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="center">
                         <DropdownMenuItem
-                          variant="destructive"
-                          @select="removeColumn(header.column.id)"
+                          :disabled="!canMove(header.column.id, -1)"
+                          @select="moveColumn(header.column.id, -1)"
                         >
-                          <X aria-hidden="true" />Remove column
+                          <ArrowLeft aria-hidden="true" />Move left
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          :disabled="!canMove(header.column.id, 1)"
+                          @select="moveColumn(header.column.id, 1)"
+                        >
+                          <ArrowRight aria-hidden="true" />Move right
+                        </DropdownMenuItem>
+                        <template v-if="header.column.getCanHide()">
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            @select="removeColumn(header.column.id)"
+                          >
+                            <X aria-hidden="true" />Remove column
+                          </DropdownMenuItem>
+                        </template>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <span v-else class="min-w-0 px-1 [overflow-wrap:anywhere]"
-                      ><HeaderLabel :id="header.column.id"
-                    /></span>
                   </div>
                 </div>
               </div>
