@@ -5,7 +5,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+from people_gator_api.schemas.annotation_counts import (
+    ANNOTATION_COUNT_FIELDS,
+    DOCUMENT_RANGE_FIELDS,
+)
 from people_gator_api.schemas.sources import DocumentListFilter, PageListFilter
 from people_gator_api.schemas.search import SearchDocumentsRequest, SearchPagesRequest
 from people_gator_api.routes.v1.query_dependencies import (
@@ -68,3 +71,26 @@ def test_search_request_count_contract_and_default_direction(request_type, field
                 "filter_": {"min_" + field: 1.5},
             }
         )
+
+
+@pytest.mark.parametrize("name", [*("max_" + f for f in DOCUMENT_RANGE_FIELDS), "min_linked_entity_count"])
+def test_document_range_contract(client, name):
+    for value in (0, 3, 9_007_199_254_740_991):
+        assert getattr(DocumentListFilter(**{name: value}).to_generic(), name) == value
+        response = client.get("/documents", params={"filter." + name: str(value)})
+        assert response.status_code == 200, response.text
+        assert response.json()[name] == value
+    for value in ("-1", "1.5", "true", ""):
+        assert client.get("/documents", params={"filter." + name: value}).status_code == 422
+    # Pages offer no document-wide ranges.
+    assert name not in client.get("/pages", params={"filter." + name: "1"}).json()
+
+
+@pytest.mark.parametrize("field", DOCUMENT_RANGE_FIELDS)
+def test_document_range_rejects_reversed_bounds(client, field):
+    params = {f"filter.min_{field}": "4", f"filter.max_{field}": "3"}
+    assert client.get("/documents", params=params).status_code == 422
+    equal = {f"filter.min_{field}": "3", f"filter.max_{field}": "3"}
+    assert client.get("/documents", params=equal).json()[f"max_{field}"] == 3
+    with pytest.raises(ValidationError):
+        DocumentListFilter(**{f"min_{field}": 4, f"max_{field}": 3})

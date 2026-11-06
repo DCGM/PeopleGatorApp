@@ -868,13 +868,18 @@ def source_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = touch_conditions(Source, filter_values)
-    from .annotation_counts import minimum_count_predicate, count_minima, count_column
+    from .annotation_counts import (
+        count_column, count_maxima, count_minima, linked_entity_predicates,
+        maximum_count_predicate, minimum_count_predicate,
+    )
     if counts is not None:
         filters.extend(count_column(counts, field) >= value for field, value in count_minima(filter_values).items())
+        filters.extend(count_column(counts, field) <= value for field, value in count_maxima(filter_values).items())
     else:
-        minimum = minimum_count_predicate(filter_values)
-        if minimum is not None:
-            filters.append(minimum)
+        for predicate in (minimum_count_predicate(filter_values), maximum_count_predicate(filter_values)):
+            if predicate is not None:
+                filters.append(predicate)
+    filters.extend(linked_entity_predicates(filter_values))
     # A document scope includes its registered pages. A page scope matches
     # only those pages, without expanding to their containing documents.
     documents = missing_to_none(filter_values.document_source_id)

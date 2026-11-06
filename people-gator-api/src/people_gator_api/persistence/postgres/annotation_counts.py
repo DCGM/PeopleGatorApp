@@ -7,14 +7,15 @@ queries pay for it; no evidence filter can narrow the counted annotations.
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import BigInteger, ColumnElement, func, literal, select, union_all
+from sqlalchemy import BigInteger, ColumnElement, func, literal, or_, select, union_all
 from sqlalchemy.sql.selectable import CTE
 from people_gator_api.schemas.annotation_counts import (
     ANNOTATION_COUNT_FIELDS,
     AnnotationCountFilter,
 )
+from people_gator_api.schemas.missing import MISSING
 from people_gator_api.schemas.missing import missing_to_none
-from .entity_link_queries import source_scope
+from .entity_link_queries import linked_entity_counts, source_scope
 from .models import Source, ImageOccurrence, TextMention
 
 
@@ -84,3 +85,44 @@ def minimum_count_predicate(
             *(counts.c[field] >= value for field, value in minima.items())
         )
     )
+
+
+def count_maxima(values) -> dict[str, int]:
+    if values is None:
+        return {}
+    return {
+        field: value
+        for field in ANNOTATION_COUNT_FIELDS
+        if (value := missing_to_none(getattr(values, "max_" + field, MISSING))) is not None
+    }
+
+
+def maximum_count_predicate(values) -> ColumnElement[bool] | None:
+    maxima = count_maxima(values)
+    if not maxima:
+        return None
+    counts = annotation_counts()
+    # Exclude owners above a bound, so owners without evidence (zero) still match.
+    return Source.id.not_in(
+        select(counts.c.owner_id).where(
+            or_(*(counts.c[field] > value for field, value in maxima.items()))
+        )
+    )
+
+
+def linked_entity_predicates(values) -> list[ColumnElement[bool]]:
+    if values is None:
+        return []
+    lower = missing_to_none(getattr(values, "min_linked_entity_count", MISSING))
+    upper = missing_to_none(getattr(values, "max_linked_entity_count", MISSING))
+    linked = linked_entity_counts().subquery("linked_entity_counts")
+    predicates = []
+    if lower:
+        predicates.append(Source.id.in_(
+            select(linked.c.owner_id).where(linked.c.linked_entity_count >= lower)
+        ))
+    if upper is not None:
+        predicates.append(Source.id.not_in(
+            select(linked.c.owner_id).where(linked.c.linked_entity_count > upper)
+        ))
+    return predicates

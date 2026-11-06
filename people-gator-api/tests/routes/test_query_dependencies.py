@@ -5,7 +5,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+from people_gator_api.schemas.annotation_counts import (
+    ANNOTATION_COUNT_FIELDS,
+    DOCUMENT_RANGE_FIELDS,
+)
 from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from people_gator_api.routes.v1 import router
 from people_gator_api.routes.v1.query_dependencies import (
@@ -92,6 +95,9 @@ LIST_FILTERS = {
 LIST_FILTERS["/documents"].add("has_unassigned_faces")
 for path in ("/documents", "/pages"):
     LIST_FILTERS[path].update("min_" + field for field in ANNOTATION_COUNT_FIELDS)
+# #111: documents alone add count maxima and linked-people bounds.
+LIST_FILTERS["/documents"].update("max_" + field for field in DOCUMENT_RANGE_FIELDS)
+LIST_FILTERS["/documents"].add("min_linked_entity_count")
 
 # Every source, annotation and entity list shares one canonical scope and
 # latest-modification vocabulary (#52).

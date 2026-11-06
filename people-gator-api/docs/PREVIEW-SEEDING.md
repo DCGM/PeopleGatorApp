@@ -1063,7 +1063,8 @@ and total-mention minima and sort by verified All annotations. Open
 `annotation-count-pages` to select pages with an unassigned face and order total
 faces ascending. Inspect **Minimum annotations**, individual tags, document
 count-column headers and sort selectors. Try zero, multiple minima, clear search,
-clear all and Back/Forward; on mobile expand the filter toggle. Assignment,
+clear all and Back/Forward; on mobile expand the filter toggle (Documents opens
+its filter drawer). Assignment,
 verification, unassignment and deletion update counts and matching results.
 
 The count matrix integration test compares independent expected counts against
@@ -1292,6 +1293,26 @@ after the loaded rows, aligned with the visible columns. Existing rows remain
 usable; the skeleton disappears after success or failure, and the existing retry
 control handles failed requests. Loading, error and empty states appear inside
 the table's scroll area.
+
+### Documents filter sidebar and count ranges (#111)
+
+Documents shows only the **Documents index** label, search and Sort above the
+table. Filters are in a left sidebar from 1024px; below that, the sliders button
+beside search opens them in a left drawer (Escape or × closes it and keeps the
+selections). The filters are Libraries, Modified by, Modified via key, Modified
+from/to, and **All annotations**, **Faces**, **Text mentions** and **People**.
+Each count button opens State (All, Automatic, Manual, Verified, Unassigned),
+Min, Max and Apply; People has Min and Max for distinct linked people. Links
+that still carry Documents, Pages, link-state or Unassigned faces parameters
+apply them and show removable tags.
+
+Open `document-filter-ranges`: faces 1–4 and exactly two people leave only
+**Document table ledger** (4 faces, 2 linked people). Open
+`document-filter-no-people`: People ≤ 0 lists the mirror and both navigation
+documents, which have no evidence and therefore count as zero. The links reuse
+existing fixtures; no record is added or reset. The seed integration test checks
+both links through repository list and search queries, inclusive bounds and the
+count-sorted path.
 
 ### Top-bar document and page breadcrumbs (#114)
 

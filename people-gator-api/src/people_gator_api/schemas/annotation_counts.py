@@ -1,7 +1,7 @@
 """Resource-wide annotation count minima, independent of evidence filters."""
 
-from typing import Annotated, Any
-from pydantic import BaseModel, BeforeValidator, Field
+from typing import Annotated, Any, Self
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from people_gator_api.schemas.missing import MISSING, MissingType
 
 
@@ -108,3 +108,94 @@ ANNOTATION_COUNT_FIELDS = (
     "mentions_verified_count",
     "mentions_unassigned_count",
 )
+
+
+LINKED_ENTITY_COUNT_FIELD = "linked_entity_count"
+DOCUMENT_RANGE_FIELDS = (*ANNOTATION_COUNT_FIELDS, LINKED_ENTITY_COUNT_FIELD)
+
+
+class DocumentCountRangeFilter(BaseModel):
+    """Document-wide upper bounds and linked-people bounds, beside the shared minima."""
+
+    max_annotations_total_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum annotations total; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_annotations_automatic_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum annotations automatic; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_annotations_manual_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum annotations manual; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_annotations_verified_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum annotations verified; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_annotations_unassigned_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum annotations unassigned; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_faces_total_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum faces total; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_faces_automatic_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum faces automatic; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_faces_manual_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum faces manual; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_faces_verified_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum faces verified; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_faces_unassigned_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum faces unassigned; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_mentions_total_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum mentions total; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_mentions_automatic_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum mentions automatic; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_mentions_manual_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum mentions manual; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_mentions_verified_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum mentions verified; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    max_mentions_unassigned_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum mentions unassigned; documents without such annotations count as zero. Counts cover the complete resource scope.",
+    )
+    min_linked_entity_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive minimum number of distinct people linked anywhere in the document scope; zero imposes no restriction.",
+    )
+    max_linked_entity_count: MinimumCount | MissingType = Field(
+        default=MISSING,
+        description="Inclusive maximum number of distinct people linked anywhere in the document scope.",
+    )
+
+    @model_validator(mode="after")
+    def validate_count_ranges(self) -> Self:
+        for field in DOCUMENT_RANGE_FIELDS:
+            lower = getattr(self, f"min_{field}", MISSING)
+            upper = getattr(self, f"max_{field}")
+            if isinstance(lower, int) and isinstance(upper, int) and lower > upper:
+                raise ValueError(f"min_{field} must not exceed max_{field}")
+        return self
+
+    def range_values(self):
+        return {
+            name: getattr(self, name) for name in DocumentCountRangeFilter.model_fields
+        }

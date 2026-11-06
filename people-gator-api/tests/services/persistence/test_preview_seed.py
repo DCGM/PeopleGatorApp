@@ -57,6 +57,7 @@ from people_gator_api.schemas.search import (
     SearchEntitiesRequest,
 )
 from people_gator_api.seeding import preview
+from people_gator_api.schemas.missing import MISSING
 from people_gator_api.seeding.fixtures import (
     BREADCRUMB_PAGES,
     DOCUMENTS,
@@ -4570,6 +4571,53 @@ async def test_reset_navigation_scenario_has_results_outside_source_filters(seed
     with Image.open(io.BytesIO(image.content)) as stored:
         assert stored.width > 0 and stored.height > 0
     assert await preview.seed_preview(db, filesystem) == seed
+
+
+@pytest.mark.asyncio
+async def test_document_count_range_examples_filter_lists_and_search(seed_target):
+    """#111: document-wide maxima and linked-people bounds, with zero for no evidence."""
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+
+    def link_filter(key, **extra):
+        query = parse_qs(urlsplit(seeded.filter_examples[key]).query)
+        counts = {name: int(values[0]) for name, values in query.items() if name.startswith(("min_", "max_"))}
+        return DocumentListFilter(library=query["library"], **{**counts, **extra})
+
+    async def listed(filter_):
+        result = await database.sources.list_documents(
+            DocumentListRequest(limit=100, filter_=filter_, return_total_count=True))
+        assert result.total_count == len(result.items)
+        return {item.source_id for item in result.items}
+
+    ledger = seeded.documents["table-ledger"]
+    zero = {seeded.documents[key] for key in ("table-mirror", "table-nav-empty", "table-nav-missing")}
+    every = await listed(link_filter("document-filter-no-people").model_copy(update={"max_linked_entity_count": MISSING}))
+    assert every == {ledger, *zero}
+
+    # Faces 1-4 and exactly two linked people keep only the ledger (4 faces, 2 people).
+    assert await listed(link_filter("document-filter-ranges")) == {ledger}
+    ledger_row = await database.sources.get_document(ledger)
+    assert ledger_row.linked_entity_count == 2 and ledger_row.entity_link_stats.faces.total == 4
+    # Bounds are inclusive on both sides; one below excludes it.
+    assert await listed(link_filter("document-filter-ranges", max_faces_total_count=3)) == set()
+    assert await listed(link_filter("document-filter-ranges", min_linked_entity_count=3, max_linked_entity_count=3)) == set()
+    # Maxima keep documents without evidence: no linked people, or zero faces.
+    assert await listed(link_filter("document-filter-no-people")) == zero
+    assert await listed(link_filter("document-filter-no-people", max_linked_entity_count=MISSING, max_faces_total_count=0)) == zero
+    # Sorting by a count joins the counts directly; the same bounds still apply.
+    sorted_result = await database.sources.list_documents(DocumentListRequest(
+        limit=100, sort="faces_total_count", filter_=link_filter("document-filter-no-people")))
+    assert {item.source_id for item in sorted_result.items} == zero
+    # Search applies the same document filter.
+    found = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=["ledger"]), limit=100, filter_=link_filter("document-filter-ranges")))
+    assert [item.source_id for item in found.items] == [ledger]
+    excluded = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=["ledger"]), limit=100, filter_=link_filter("document-filter-no-people")))
+    assert ledger not in {item.source_id for item in excluded.items}
 
 
 @pytest.mark.asyncio
