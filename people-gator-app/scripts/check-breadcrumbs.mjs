@@ -142,8 +142,20 @@ try {
       await personCrumb.filter({ hasText: name }).waitFor()
     }
     await page.getByRole('tab', { name: 'Details' }).click()
-    await rename('Ada Renamed')
-    await rename('Ada Novak')
+    try {
+      await rename('Ada Renamed')
+      await rename('Ada Novak')
+    } finally {
+      // Restore the shared fixture's name even when a rename step fails.
+      try {
+        await page.goto(origin + routes.person)
+        await page.getByRole('tab', { name: 'Details' }).click()
+        await personCrumb.filter({ hasText: /\S/ }).waitFor()
+        if ((await personCrumb.textContent())?.trim() !== 'Ada Novak') await rename('Ada Novak')
+      } catch (error) {
+        console.error('Could not restore Ada Novak: ' + error.message)
+      }
+    }
     assert.deepEqual(errors, [])
     await context.close()
     console.log(

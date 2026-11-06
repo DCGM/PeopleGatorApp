@@ -144,7 +144,10 @@ it.each([
   expect(links[1]!.attributes('href')).toBe('/people')
   expect(links[2]!.attributes('href')).toBe('/people/p1?tab=faces')
   // Phones use the logo as the home link, leaving room for the name.
-  expect(links[0]!.element.closest('li')!.className).toContain('hidden sm:inline-flex')
+  const home = wrapper.findAll('[aria-label="Breadcrumb"] li')[0]!
+  expect(home.classes()).toEqual(expect.arrayContaining(['hidden', 'sm:inline-flex']))
+  const separator = wrapper.find('[data-slot="breadcrumb-separator"]')
+  expect(separator.classes()).toEqual(expect.arrayContaining(['hidden', 'sm:block']))
   expect(api.document).not.toHaveBeenCalled()
   expect(api.page).not.toHaveBeenCalled()
   dispose()

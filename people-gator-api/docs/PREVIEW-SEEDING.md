@@ -1255,14 +1255,15 @@ The seed result and CLI provide five direct page links: `breadcrumb-named`
 document with an unknown page number and a deliberately missing scan), `breadcrumb-unnamed` (document UUID,
 Page 1), `breadcrumb-unregistered` (unregistered parent UUID, Page 1), and
 `breadcrumb-long-name` (the long synthetic catalogue title, Page 1).
-`breadcrumb-person` opens Ada Novak's profile, whose last breadcrumb shows her
-name instead of the person UUID; rename her and the breadcrumb follows.
+`breadcrumb-person` also opens Ada Novak's profile, whose last breadcrumb shows
+her name instead of the person UUID.
 These reuse stable linked fixtures and local page images; no records are reset.
 
 Open each link to inspect the persistent top bar. Available names and numbers
 replace their UUID labels and tooltips independently. Follow the document
 breadcrumb to its scoped scan list, switch pages and use Back/Forward.
-On disposable data, edit a page number and verify that its breadcrumb updates.
+On disposable data, edit a page number or rename Ada and verify that the
+breadcrumb updates. Reseeding keeps such edits, and other scenarios use Ada.
 At narrow widths the full document name remains available through the link's
 accessible text and title while the visible label truncates. The seed integration
 test resolves every link through repositories, checks metadata and local media,
