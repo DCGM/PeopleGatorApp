@@ -68,6 +68,12 @@ describe('responsive workspace split', () => {
   })
 })
 
+// The sidebar restore waits for the splitter to measure the wide layout.
+async function settled() {
+  await nextTick()
+  for (let frame = 0; frame < 3; frame++) await new Promise(requestAnimationFrame)
+}
+
 describe('scan sidebar width (#121)', () => {
   it('saves wide widths only and restores them when the screen widens again', async () => {
     const wide = ref(true)
@@ -83,15 +89,13 @@ describe('scan sidebar width (#121)', () => {
     sidebar.layoutChanged([50, 0])
     sidebar.layoutChanged([50, 330])
     wide.value = true
-    await nextTick()
-    await nextTick()
+    await settled()
     expect(panel.value.resize).toHaveBeenLastCalledWith(520)
     sidebar.layoutChanged([70, 319.99])
     wide.value = false
     await nextTick()
     wide.value = true
-    await nextTick()
-    await nextTick()
+    await settled()
     expect(panel.value.resize).toHaveBeenLastCalledWith(320)
     sidebar.layoutChanged([60, 520])
     // Widths outside the limits are ignored.

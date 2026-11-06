@@ -104,7 +104,11 @@ export function useSidebarWidth(wide: Ref<boolean>, panel: Ref<WorkspacePanel | 
     onCleanup(() => {
       cancelled = true
     })
+    // A pixel size converts through the group width, which the splitter only
+    // measures after the wide layout has rendered.
     await nextTick()
+    for (let frame = 0; frame < 2; frame++)
+      await new Promise((resolve) => requestAnimationFrame(resolve))
     if (cancelled) return
     panel.value?.resize?.(width)
     restoring = false
