@@ -59,6 +59,7 @@ from people_gator_api.schemas.search import (
 from people_gator_api.seeding import preview
 from people_gator_api.seeding.fixtures import (
     BREADCRUMB_PAGES,
+    BREADCRUMB_PERSON,
     DOCUMENTS,
     MODEL,
     PAGE_GALLERY_MISSING_MEDIA,
@@ -4751,6 +4752,11 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
 
     database, filesystem, _ = seed_target
     first = await preview.seed_preview(database, filesystem)
+    # The person link opens a named profile; its name replaces the UUID crumb.
+    person_id = first.entities[BREADCRUMB_PERSON]
+    assert urlsplit(first.filter_examples["breadcrumb-person"]).path == f"/people/{person_id}"
+    person = await database.entities.get(person_id)
+    assert person.name == next(item.name for item in preview.PEOPLE if item.key == BREADCRUMB_PERSON)
     for state, page_key in BREADCRUMB_PAGES.items():
         fixture = next(item for item in PAGES if item.key == page_key)
         parent = next(item for item in DOCUMENTS if item.key == fixture.document)
@@ -4783,6 +4789,10 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
         first.pages["page-gallery-1"], PagePatchRequest(page_number=42),
         context=GenericActor(user_id=first.users["reviewer"]),
     )
+    await database.entities.patch(
+        person_id, EntityPatchRequest(name="Renamed Ada"),
+        GenericActor(user_id=first.users["reviewer"]),
+    )
     second = await preview.seed_preview(database, filesystem)
     assert {key: value for key, value in first.filter_examples.items() if key.startswith("breadcrumb-")} == {
         key: value for key, value in second.filter_examples.items() if key.startswith("breadcrumb-")
@@ -4790,3 +4800,4 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
     preserved = await database.sources.lookup(GenericSourceLookupRequest(source_id=first.pages["page-gallery-1"]))
     assert preserved.page_number == 42
     assert preserved.last_touched_at == edited.last_touched_at
+    assert (await database.entities.get(person_id)).name == "Renamed Ada"
