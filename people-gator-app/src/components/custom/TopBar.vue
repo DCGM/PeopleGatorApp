@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ArchiveLink from './ArchiveLink.vue'
+import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
@@ -27,6 +28,11 @@ const documentQuery = useDocumentLookupQuery(
   () => (route.name === 'document-page' ? String(route.params.documentId) : ''),
 )
 
+// Shares the profile's entity cache, so renames update the label.
+const personQuery = useEntityQuery(() =>
+  route.name === 'person-detail' ? String(route.params.personId) : '',
+)
+
 const breadcrumbs = computed(() => {
   const library = route.params.libraryId
   const document = route.params.documentId
@@ -42,7 +48,7 @@ const breadcrumbs = computed(() => {
       to: { name: 'people-search' },
     })
     items.push({
-      label: String(route.params.personId),
+      label: personQuery.data.value?.name?.trim() || String(route.params.personId),
       to: { path: route.path, query: route.query },
     })
     return items
@@ -76,20 +82,19 @@ const breadcrumbs = computed(() => {
     })
   } else if (route.name === 'document-search') {
     items.push({ label: 'Scans', to: { name: 'document-search' } })
-  } else if (route.name === 'people-search' || route.name === 'person-detail') {
+  } else if (route.name === 'people-search') {
     items.push({
       label: 'People',
       to: { name: 'people-search' },
     })
-    if (route.name === 'person-detail') {
-      items.push({
-        label: String(route.params.personId),
-        to: { path: route.path, query: route.query },
-      })
-    }
   }
   return items
 })
+
+// On phones the logo links home, leaving room for the record's own label.
+const hidesHomeCrumbOnPhone = computed(
+  () => route.name === 'document-page' || route.name === 'person-detail',
+)
 
 const isScanRoute = computed(
   () => route.name === 'document-search' || route.name === 'document-page',
@@ -124,12 +129,12 @@ const isPeopleRoute = computed(
             <BreadcrumbSeparator
               v-if="index"
               class="shrink-0"
-              :class="index === 1 && route.name === 'document-page' ? 'hidden sm:block' : undefined"
+              :class="index === 1 && hidesHomeCrumbOnPhone ? 'hidden sm:block' : undefined"
             />
             <BreadcrumbItem
               class="min-w-0"
               :class="[
-                index === 0 && route.name === 'document-page' ? 'hidden sm:inline-flex' : undefined,
+                index === 0 && hidesHomeCrumbOnPhone ? 'hidden sm:inline-flex' : undefined,
                 index === breadcrumbs.length - 1 && pageQuery.data.value?.page_number != null
                   ? 'shrink-0'
                   : index === breadcrumbs.length - 1

@@ -640,3 +640,5 @@ BREADCRUMB_PAGES = {
     "unregistered": "scan-only-1",
     "long-name": "table-width-long-1",
 }
+# A named person whose profile breadcrumb shows the name instead of the UUID.
+BREADCRUMB_PERSON = "ada"
