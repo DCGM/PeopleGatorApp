@@ -738,6 +738,33 @@ describe('resizable transcription panel (#36)', () => {
   )
 })
 
+describe('resizable scan sidebar (#121)', () => {
+  it.each([true, false])('offers a sidebar handle only when wide=%s', async (wide) => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: wide,
+      media: '(min-width: 1024px)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia
+    try {
+      const wrapper = await mountView()
+      const layout = wrapper.get('main > .workspace-layout')
+      const children = [...layout.element.children]
+      // The workspace comes first, then (when wide) the handle, then the sidebar.
+      expect(children[0]!.querySelector('.workspace-split')).not.toBeNull()
+      expect(children[children.length - 1]!.querySelector('.workspace-sidebar')).not.toBeNull()
+      const handle = layout.find('resizable-handle-stub[aria-label="Resize sidebar"]')
+      expect(handle.exists()).toBe(wide)
+      wrapper.unmount()
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
+})
+
 it('keeps the live scan and its actions through repeated responsive round trips', async () => {
   const original = window.matchMedia
   const module = await import('@panzoom/panzoom')

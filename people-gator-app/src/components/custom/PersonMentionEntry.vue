@@ -80,7 +80,12 @@ const parts = computed(() => {
     class="flex min-w-0 items-start gap-2 font-sans"
     :data-mention-selected="selected || undefined"
   >
-    <div class="min-w-0 flex-1" :class="compact && 'flex flex-wrap items-center gap-x-2 gap-y-1'">
+    <div
+      class="min-w-0 flex-1"
+      :class="
+        compact && ['flex flex-wrap gap-x-2 gap-y-1', onScan ? 'items-baseline' : 'items-center']
+      "
+    >
       <div class="flex min-w-0 items-center gap-2" :class="compact && 'max-w-full shrink-0'">
         <!-- On a scan only the mention text selects; its page is plain context. -->
         <span
@@ -106,17 +111,22 @@ const parts = computed(() => {
         }}</span>
         <EntityLinkStateBadge v-bind="mention" class="shrink-0" />
       </div>
+      <!-- Compact profile density keeps one line. On a scan the context wraps,
+           taking its own line when too narrow beside the page label (#121). -->
       <component
         :is="onScan && mention.pageId ? 'RouterLink' : 'p'"
         :to="onScan && mention.pageId ? target : undefined"
-        class="block min-w-0 break-words font-serif"
+        class="block min-w-0 font-serif wrap-anywhere"
         :class="[
-          compact && 'basis-full truncate sm:basis-0 sm:flex-1',
+          compact &&
+            (onScan
+              ? 'basis-full sm:basis-48 sm:grow'
+              : 'basis-full truncate sm:basis-0 sm:flex-1'),
           onScan &&
             'cursor-pointer rounded-sm px-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
           selected && 'bg-muted text-foreground',
         ]"
-        :title="mention.excerpt"
+        :title="compact && !onScan ? mention.excerpt : undefined"
         :aria-label="onScan ? `Select mention: ${mention.excerpt}` : undefined"
         :aria-current="selected ? 'true' : undefined"
       >

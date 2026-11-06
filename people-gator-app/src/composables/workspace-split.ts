@@ -59,3 +59,59 @@ export function useWorkspaceSplit(direction: Ref<Direction>, panel: Ref<Workspac
   })
   return { defaultSize, layoutChanged }
 }
+
+const SIDEBAR_STORAGE_KEY = 'document-sidebar-width-v1'
+export const SIDEBAR_WIDTH = { default: 400, min: 320, max: 800 }
+
+function validWidth(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= SIDEBAR_WIDTH.min &&
+    value <= SIDEBAR_WIDTH.max
+  )
+}
+
+/**
+ * The scan sidebar's width in pixels, resizable only on wide screens. Narrow
+ * layouts stack the sidebar, so their splitter sizes are neither saved nor kept.
+ */
+export function useSidebarWidth(wide: Ref<boolean>, panel: Ref<WorkspacePanel | null>) {
+  let width = SIDEBAR_WIDTH.default
+  try {
+    const stored = JSON.parse(localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? 'null')
+    if (validWidth(stored)) width = stored
+  } catch {
+    // Blocked storage and invalid settings must not prevent opening a scan.
+  }
+  const defaultSize = width
+  let restoring = false
+  function layoutChanged(layout: number[]) {
+    // Pixel sizes arrive converted from percentages, e.g. 319.99 at the minimum.
+    const next = Math.round(layout[1] ?? Number.NaN)
+    if (!wide.value || restoring || !validWidth(next)) return
+    width = next
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(width))
+    } catch {
+      // The layout still works when storage is unavailable.
+    }
+  }
+  watch(wide, async (value, _previous, onCleanup) => {
+    restoring = value
+    if (!value) return
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
+    // A pixel size converts through the group width, which the splitter only
+    // measures after the wide layout has rendered.
+    await nextTick()
+    for (let frame = 0; frame < 2; frame++)
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    if (cancelled) return
+    panel.value?.resize?.(width)
+    restoring = false
+  })
+  return { defaultSize, layoutChanged }
+}
