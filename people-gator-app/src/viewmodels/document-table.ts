@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import type { ColumnVisibilityState } from '@tanstack/vue-table'
 
@@ -71,26 +71,82 @@ export function readDocumentColumns(storage: Pick<Storage, 'getItem'>): ColumnVi
   }
 }
 
-export function useDocumentColumns() {
-  let initial = defaultDocumentColumns()
+export const DOCUMENT_COLUMN_ORDER_STORAGE_KEY = 'people-gator:document-column-order'
+
+export function defaultDocumentColumnOrder(): string[] {
+  return [...DOCUMENT_COLUMN_IDS]
+}
+
+/** Saved order with unknown IDs dropped and new fields appended in default order. */
+export function readDocumentColumnOrder(storage: Pick<Storage, 'getItem'>): string[] {
+  const fallback = defaultDocumentColumnOrder()
   try {
-    initial = readDocumentColumns(window.sessionStorage)
+    const saved: unknown = JSON.parse(storage.getItem(DOCUMENT_COLUMN_ORDER_STORAGE_KEY) ?? 'null')
+    if (!Array.isArray(saved)) return fallback
+    const known = [...new Set(saved.filter((id) => fallback.includes(id)))]
+    return [...known, ...fallback.filter((id) => !known.includes(id))]
+  } catch {
+    return fallback
+  }
+}
+
+/** Places `id` before or after `target`; other columns keep their relative order. */
+export function moveDocumentColumn(order: string[], id: string, target: string, after: boolean) {
+  if (id === target) return order
+  const next = order.filter((column) => column !== id)
+  const index = next.indexOf(target)
+  if (index < 0) return order
+  next.splice(after ? index + 1 : index, 0, id)
+  return next
+}
+
+/** Moves `id` one position among the visible columns. */
+export function stepDocumentColumn(order: string[], visible: string[], id: string, step: -1 | 1) {
+  const neighbour = visible[visible.indexOf(id) + step]
+  return neighbour === undefined ? order : moveDocumentColumn(order, id, neighbour, step > 0)
+}
+
+/** Places a newly shown column after the last visible one. */
+export function appendDocumentColumn(order: string[], visible: string[], id: string) {
+  const others = visible.filter((column) => column !== id)
+  const last = others[others.length - 1]
+  return last === undefined
+    ? [id, ...order.filter((column) => column !== id)]
+    : moveDocumentColumn(order, id, last, true)
+}
+
+function usePersisted<T>(key: string, read: (storage: Storage) => T, fallback: () => T) {
+  let initial = fallback()
+  try {
+    initial = read(window.sessionStorage)
   } catch {
     /* Storage can be disabled. */
   }
-  const visibility = ref(initial)
+  const value = ref(initial) as Ref<T>
   watch(
-    visibility,
-    (value) => {
+    value,
+    (next) => {
       try {
-        window.sessionStorage.setItem(DOCUMENT_COLUMNS_STORAGE_KEY, JSON.stringify(value))
+        window.sessionStorage.setItem(key, JSON.stringify(next))
       } catch {
         /* Keep in-memory choices usable. */
       }
     },
     { deep: true },
   )
-  return visibility
+  return value
+}
+
+export function useDocumentColumns() {
+  return usePersisted(DOCUMENT_COLUMNS_STORAGE_KEY, readDocumentColumns, defaultDocumentColumns)
+}
+
+export function useDocumentColumnOrder() {
+  return usePersisted(
+    DOCUMENT_COLUMN_ORDER_STORAGE_KEY,
+    readDocumentColumnOrder,
+    defaultDocumentColumnOrder,
+  )
 }
 
 export function annotationCount(
