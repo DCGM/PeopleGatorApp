@@ -68,6 +68,7 @@ deploy/people-gator-deploy/ Deployment utility: PR previews, staging, releases
 .github/workflows/         PR validation, image publication and preview lifecycle
 compose.dev.yaml           Development stack with Compose Watch
 compose.live-preview.yaml  Existing shared live-preview deployment
+compose.prod.yaml          Production stack (API, frontend, database) behind external Traefik
 AGENTS.md                  Required implementation workflow and feature conventions
 ```
 
