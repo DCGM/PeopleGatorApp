@@ -110,6 +110,7 @@ with [`people-gator-deploy`](deploy/people-gator-deploy/README.md). Read its
 
 | Guide | Topic |
 | --- | --- |
+| [User tutorial / Uživatelský návod](TUTORIAL.md) | Czech and English guide to search, filters, face assignments, discovery, merging and verification |
 | [Vision](docs/VISION.md) | Users, current scope and proposed roadmap |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, access rules, search, annotations and frontend |
 | [Database](docs/DATABASE.md) | PostgreSQL tables, relationships and ingestion |
