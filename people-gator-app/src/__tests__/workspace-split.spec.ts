@@ -1,6 +1,6 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useWorkspaceSplit } from '@/composables/workspace-split'
+import { SIDEBAR_WIDTH, useSidebarWidth, useWorkspaceSplit } from '@/composables/workspace-split'
 
 afterEach(() => {
   localStorage.clear()
@@ -64,6 +64,56 @@ describe('responsive workspace split', () => {
       throw new Error('blocked')
     })
     expect(() => split.layoutChanged([50, 50])).not.toThrow()
+    blocked.stop()
+  })
+})
+
+describe('scan sidebar width (#121)', () => {
+  it('saves wide widths only and restores them when the screen widens again', async () => {
+    const wide = ref(true)
+    let size = SIDEBAR_WIDTH.default
+    const panel = ref({ getSize: () => size, resize: vi.fn((value: number) => (size = value)) })
+    const scope = effectScope()
+    const sidebar = scope.run(() => useSidebarWidth(wide, panel))!
+    expect(sidebar.defaultSize).toBe(400)
+    sidebar.layoutChanged([60, 520])
+    // Narrow layouts stack the sidebar; their splitter sizes are not kept.
+    wide.value = false
+    await nextTick()
+    sidebar.layoutChanged([50, 0])
+    sidebar.layoutChanged([50, 330])
+    wide.value = true
+    await nextTick()
+    await nextTick()
+    expect(panel.value.resize).toHaveBeenLastCalledWith(520)
+    sidebar.layoutChanged([70, 319.99])
+    wide.value = false
+    await nextTick()
+    wide.value = true
+    await nextTick()
+    await nextTick()
+    expect(panel.value.resize).toHaveBeenLastCalledWith(320)
+    sidebar.layoutChanged([60, 520])
+    // Widths outside the limits are ignored.
+    sidebar.layoutChanged([90, 100])
+    sidebar.layoutChanged([10, 2000])
+    scope.stop()
+    const reload = effectScope()
+    expect(reload.run(() => useSidebarWidth(ref(true), ref(null)))!.defaultSize).toBe(520)
+    reload.stop()
+  })
+
+  it('ignores malformed or unavailable storage', () => {
+    localStorage.setItem('document-sidebar-width-v1', '{invalid')
+    const scope = effectScope()
+    expect(scope.run(() => useSidebarWidth(ref(true), ref(null)))!.defaultSize).toBe(400)
+    scope.stop()
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const blocked = effectScope()
+    const sidebar = blocked.run(() => useSidebarWidth(ref(true), ref(null)))!
+    expect(() => sidebar.layoutChanged([60, 500])).not.toThrow()
     blocked.stop()
   })
 })
