@@ -62,7 +62,7 @@ class GitHubAccessTests(unittest.TestCase):
 
     def test_mismatch_is_rejected_before_creating_state_or_making_requests(self):
         with patch.object(host.urllib.request, "urlopen") as urlopen:
-            with self.assertRaisesRegex(ValueError, "does not match GITHUB_REPOSITORY.*operator"):
+            with self.assertRaisesRegex(ValueError, "does not match GITHUB_REPOSITORY.*DEPLOY_REPOSITORY"):
                 preview.Preview({**self.config, "repository": "DCGM/people_gator",
                                     "state_dir": str(self.root / "untouched")})
             self.assertFalse((self.root / "untouched").exists())
@@ -121,7 +121,7 @@ class GitHubAccessTests(unittest.TestCase):
                     for p in self.root.rglob("*") if p.is_file()}
         before = snapshot()
         for status in (401, 403, 404):
-            for action in (lambda: self.controller.deploy(100),
+            for action in (lambda: self.controller.deploy(SHA, 123),
                            lambda: self.controller.cleanup(123), self.controller.reconcile):
                 # Exercise both repository preflight failure and PR/run access
                 # failures after repository access has already succeeded.
@@ -138,7 +138,7 @@ class GitHubAccessTests(unittest.TestCase):
                         self.assertIn("GET https://api.github.com/repos/DCGM/PeopleGatorApp", message)
                         self.assertIn("ABCD:1234:5678", message)
                         if not preflight:
-                            self.assertRegex(message, r"/(pulls/123|actions/runs/100)")
+                            self.assertRegex(message, r"/pulls/123")
                         self.assertNotIn("synthetic_secret_token", message)
                         self.assertNotIn("retained-password", message)
                         self.assertEqual(urlopen.call_count, 1 if preflight else 2)
@@ -222,16 +222,13 @@ class LifecycleTests(unittest.TestCase):
             self.controller.api.side_effect = None
             self.assertIsNone(self.controller.current_pr(123, SHA))
 
-    def test_deployment_verifies_workflow_identity(self):
-        self.controller.api.side_effect = [RUN, {"path": ".github/workflows/other.yml"}]
-        with self.assertRaises(ValueError):
-            self.controller.eligible_run(100)
-        self.controller.command.assert_not_called()
-
-    def test_stale_run_does_not_pull_images(self):
+    def test_stale_commit_does_not_pull_images(self):
         self.controller.current_pr = Mock(return_value=None)
-        self.controller.deploy(100)
+        self.assertEqual(self.controller.deploy(SHA, 123), [])
         self.controller.command.assert_not_called()
+        for sha in ("", "HEAD", SHA.upper(), SHA + "\n"):
+            with self.subTest(sha=sha), self.assertRaisesRegex(DeployError, "--sha"):
+                self.controller.build(sha)
 
     def test_image_must_match_tested_commit_and_registry(self):
         inspected = {"Config": {"Labels": {"org.opencontainers.image.revision": "d" * 40}},
@@ -255,8 +252,9 @@ class LifecycleTests(unittest.TestCase):
             json.dumps([inspected[0 if "frontend" in args[-1] else 1]])
             if args[:3] == ["docker", "image", "inspect"] else ""
         )
-        self.controller.deploy(100)
-        expected_tags = {f"ghcr.io/dcgm/peoplegatorapp-{component}:run-100-1"
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "100", "GITHUB_RUN_ATTEMPT": "1"}):
+            self.assertEqual(self.controller.deploy(SHA, 123), [123])
+        expected_tags = {f"ghcr.io/dcgm/peoplegatorapp-{component}:sha-{SHA}"
                          for component in ("frontend", "backend")}
         self.assertEqual({call.args[0][-1] for call in self.controller.command.call_args_list
                           if call.args[0][:2] == ["docker", "pull"]}, expected_tags)
@@ -264,7 +262,8 @@ class LifecycleTests(unittest.TestCase):
         environment = (directory / "compose.env").read_bytes()
         self.controller.command.reset_mock()
         self.controller.sql.reset_mock()
-        self.controller.deploy(100)
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "100", "GITHUB_RUN_ATTEMPT": "1"}):
+            self.assertEqual(self.controller.deploy(SHA, 123), [])
         self.controller.reconcile()
         self.assertEqual((directory / "state.json").read_bytes(), state)
         self.assertEqual((directory / "compose.env").read_bytes(), environment)
@@ -295,6 +294,23 @@ class LifecycleTests(unittest.TestCase):
         self.controller.command.reset_mock()
         self.controller.deploy_pr(123, {**RUN, "id": 99}, IMAGES)
         self.controller.command.assert_not_called()
+
+    def test_operator_runs_without_run_identity_compare_commits_only(self):
+        directory = self.seed_preview()
+        manual = {"id": 0, "run_attempt": 0, "head_sha": SHA}
+        self.assertTrue(self.controller.deploy_pr(123, manual, IMAGES))
+        self.controller.command.reset_mock()
+        self.assertFalse(self.controller.deploy_pr(123, manual, IMAGES))
+        self.controller.command.assert_not_called()
+        self.controller.current_pr = Mock(return_value=pull_request(sha="d" * 40))
+        self.assertTrue(self.controller.deploy_pr(123, {**manual, "head_sha": "d" * 40}, IMAGES))
+        self.assertEqual(json.loads((directory / "state.json").read_text())["sha"], "d" * 40)
+        # Workflow runs record their identity so that older runs never replace newer ones.
+        self.assertTrue(self.controller.deploy_pr(123, {**RUN, "head_sha": "d" * 40}, IMAGES))
+        self.controller.command.reset_mock()
+        self.assertFalse(self.controller.deploy_pr(123, {**RUN, "id": 99, "head_sha": "e" * 40}, IMAGES))
+        self.controller.command.assert_not_called()
+        self.assertTrue(self.controller.deploy_pr(123, {**manual, "head_sha": "e" * 40}, IMAGES))
 
     def test_redeployment_removes_only_selected_pr_containers_before_database_preparation(self):
         directory = self.seed_preview()

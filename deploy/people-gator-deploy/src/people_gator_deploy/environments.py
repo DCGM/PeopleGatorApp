@@ -7,15 +7,14 @@ Every CLI operation maps to one ``Environment`` method with the same semantics:
 * environment specific: PR ``cleanup``/``reconcile``; staging ``snapshot_init``/``refresh``;
   release ``database_migrate``/``recover``; shared ``infra_upgrade``.
 
-Lock order: per-environment ``environment.lock`` first, then the shared
-infrastructure ``controller.lock`` (shared for environment work, exclusive for
-infrastructure changes). Package installation uses its
-own lock and never waits on either.
+Settings come from ``DEPLOY_*`` variables (see :mod:`config`). Lock order:
+per-environment ``environment.lock`` first, then the shared infrastructure
+``controller.lock`` (shared for environment work, exclusive for infrastructure
+changes).
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -27,18 +26,14 @@ from .docker import Docker
 from .host import positive_int
 
 class Environment:
-    def __init__(self, name, path=None):
-        if name not in config.ENVIRONMENTS:
-            raise DeployError(f"Unknown environment {name!r}; choose one of {', '.join(config.ENVIRONMENTS)}")
+    def __init__(self, name):
         self.name = name
-        self.path = config.selected(name, path)
-        self.settings = config.read(name, self.path)
+        self.settings = config.load(name)
         self.root = Path(self.settings["state_dir"])
         self.docker = Docker(self.settings["docker_context"])
-        self.identity = hashlib.sha256(str(self.path.resolve()).encode()).hexdigest()
 
     def command(self, operation):
-        return f"people-gator-deploy {self.name} {operation} --config '{self.path}'"
+        return f"people-gator-deploy {self.name} {operation}"
 
     # Ownership and state ---------------------------------------------------
 
@@ -57,20 +52,21 @@ class Environment:
         value = json.loads(path.read_text())
         if value.get("schema_version") != STATE_SCHEMA:
             raise DeployError(f"{path}; unsupported state schema; upgrade the utility or explicitly migrate state")
-        if value.get("owner") != self.identity or value.get("environment") != self.name:
-            raise DeployError(f"{path}; resources belong to another descriptor; select that descriptor "
-                              "or an empty state_dir")
+        if value.get("environment") != self.name:
+            raise DeployError(f"{path}; resources belong to the {value.get('environment')!r} environment; "
+                              "select an empty DEPLOY_STATE_DIR")
         return value
 
     def mark(self, phase, **extra):
         previous = self.marker() or {}
+        previous.pop("owner", None)  # markers written by descriptor-based releases
         write_json(self.root / "owned.json", {**previous, **extra, "schema_version": STATE_SCHEMA,
-                                              "owner": self.identity, "environment": self.name, "phase": phase})
+                                              "environment": self.name, "phase": phase})
 
     def require_installed(self):
         marker = self.marker()
         if not marker or marker.get("phase") != "installed":
-            raise DeployError(f"{self.name}: {self.path}; resources are not installed; run {self.command('install')}")
+            raise DeployError(f"{self.name}: {self.root}; resources are not installed; run {self.command('install')}")
         return marker
 
     def infrastructure_owner(self):
@@ -117,8 +113,11 @@ class Environment:
         return result
 
     def prerequisites(self, *, private=True):
-        """Validate what every operation needs, without changing anything."""
-        config.read(self.name, self.path, inputs=private)
+        """Validate what every operation needs and publish secret files, without touching services."""
+        if private:
+            files = config.secrets(self.name, self.settings)
+            self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
+            config.materialize(files)
         self.docker.run(["docker", "info", "--format", "{{.Name}}"], timeout=30)
         version = self.docker.run(["docker", "compose", "version", "--short"], timeout=30).strip().lstrip("v")
         numbers = re.match(r"(\d+)\.(\d+)", version)
@@ -130,7 +129,8 @@ class Environment:
                     self.docker.run(["docker", "network", "inspect", self.settings[key]], timeout=30)
                 except DeployError:
                     raise DeployError(f"{self.name}: Docker network {self.settings[key]!r} ({key}) is unavailable "
-                                      f"in context {self.settings['docker_context']!r}; create it or fix {self.path}") from None
+                                      f"in context {self.settings['docker_context']!r}; create it or change "
+                                      f"DEPLOY_{key.upper()}") from None
 
     def instance(self, controller, pr):
         """(compose.env, compose-command factory) for the selected application instance."""
@@ -169,20 +169,20 @@ class Environment:
         """Configuration completeness and host prerequisites for CI, before any mutation."""
         self.prerequisites()
         marker = self.marker()
-        result = {"environment": self.name, "config": str(self.path), "scope": config.installation()["scope"],
-                  "configured": True, "provisioned": bool(marker and marker.get("phase") == "installed")}
+        result = {"environment": self.name, "state_dir": str(self.root), "configured": True,
+                  "provisioned": bool(marker and marker.get("phase") == "installed")}
         if not result["provisioned"]:
-            raise DeployError(f"{self.name}: {self.path}; configured but not installed; an operator must run {self.command('install')}")
+            raise DeployError(f"{self.name}: {self.root}; configured but not installed; an operator must run {self.command('install')}")
         if self.name != "release" and not (self.infrastructure_root / "infrastructure.env").is_file():
             raise DeployError(f"{self.infrastructure_root}/infrastructure.env; shared infrastructure is uninitialized; "
-                              f"its owner must run people-gator-deploy <environment> install")
+                              f"its owner must run people-gator-deploy pr install")
         return result
 
     def status(self, pr=None):
         """Configured, provisioned, running and healthy are reported separately and never changed."""
         marker = self.marker()
-        result = {"environment": self.name, "config": str(self.path), "scope": config.installation()["scope"],
-                  "configured": True, "provisioned": bool(marker and marker.get("phase") == "installed"),
+        result = {"environment": self.name, "state_dir": str(self.root), "configured": True,
+                  "provisioned": bool(marker and marker.get("phase") == "installed"),
                   "phase": (marker or {}).get("phase", "not-installed")}
         if not result["provisioned"]:
             return result
@@ -244,7 +244,7 @@ class Environment:
     # Lifecycle -------------------------------------------------------------------
 
     def require_fresh_application_project(self):
-        """A fresh descriptor cannot adopt another application's Compose stack."""
+        """A fresh environment cannot adopt another application's Compose stack."""
         if self.name == "pr":
             return  # deploy_pr removes the selected PR's old containers before redeployment.
         if (self.root / "compose.env").exists() or (self.root / "activation.json").exists():
@@ -254,42 +254,41 @@ class Environment:
                                      "label=com.docker.compose.project=" + project])
         if resources.strip():
             raise DeployError(f"Containers of Compose project {project} already exist without owned application "
-                              f"state; configure a different project before {self.command('install')}")
+                              f"state; set another DEPLOY_PROJECT before {self.command('install')}")
 
     def install(self):
         """Provision managed resources once; repeating it changes nothing."""
         self.prerequisites()
-        self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
         with self.environment_lock(installed=False), self.shared_lock(exclusive=True):
             old = self.marker()
             if old and old.get("phase") == "installed":
                 return {"environment": self.name, "installed": True, "changed": False}
             # Installation is fresh only: never take over files this environment did not create.
             existing = [p for p in self.root.iterdir()
-                        if p.name not in {"environment.lock", "controller.lock", "owned.json"}]
+                        if p.name not in {"environment.lock", "controller.lock", "owned.json", *config.SECRET_FILES}]
             if existing and not old:
-                raise DeployError(f"{self.root}; state_dir is not empty and not owned by this environment; "
-                                  "configure an empty state_dir")
+                raise DeployError(f"{self.root}; state directory is not empty and not owned by this environment; "
+                                  "set an empty DEPLOY_STATE_DIR")
             controller = self.controller()
             infra = self.settings.get("infrastructure", {})
             owner = self.infrastructure_owner() if self.name != "release" else None
             # Refusals happen before this environment records any ownership.
-            if infra.get("mode") == "managed" and owner and owner.get("owner") != self.identity:
+            if infra.get("mode") == "managed" and owner and owner.get("environment") != self.name:
                 raise DeployError(f"{self.infrastructure_root}; shared infrastructure belongs to another "
-                                  "environment; configure infrastructure.mode=external")
+                                  "environment")
             if infra.get("mode") == "external" and not (self.infrastructure_root / "infrastructure.env").is_file():
-                raise DeployError(f"{self.infrastructure_root}/infrastructure.env; external infrastructure is "
-                                  "uninitialized; its owning environment must run install first")
+                raise DeployError(f"{self.infrastructure_root}/infrastructure.env; shared infrastructure is "
+                                  "uninitialized; run people-gator-deploy pr install first")
             self.require_fresh_application_project()
             if infra.get("mode") == "managed" and not owner:
                 if (self.infrastructure_root / "infrastructure.env").exists():
                     raise DeployError(f"{self.infrastructure_root}; infrastructure files exist without an "
-                                      "owner; configure an empty infrastructure.state_dir")
+                                      "owner; set an empty DEPLOY_INFRASTRUCTURE_STATE_DIR")
                 resources = self.docker.run(["docker", "ps", "-aq", "--filter",
                                              "label=com.docker.compose.project=" + infra["project"]])
                 if resources.strip():
                     raise DeployError(f"Containers of Compose project {infra['project']} already exist; "
-                                      "configure another infrastructure.project")
+                                      "set another DEPLOY_INFRASTRUCTURE_PROJECT")
             self.mark("installing")
             if self.name == "release":
                 controller.install()
@@ -297,30 +296,35 @@ class Environment:
                 if infra["mode"] == "managed":
                     if not owner:
                         write_json(self.infrastructure_root / "infrastructure-owned.json",
-                                   {"owner": self.identity, "environment": self.name,
-                                    "project": infra["project"], "schema_version": STATE_SCHEMA})
+                                   {"environment": self.name, "project": infra["project"], "schema_version": STATE_SCHEMA})
                     controller.init()
                 else:
                     controller.sql("SELECT 1;")
             self.mark("installed")
         return {"environment": self.name, "installed": True, "changed": True}
 
-    def update(self, *, run_id=None, tag=None, commit=None, backup_record=None):
-        """Deploy a verified application build with already provisioned resources."""
-        if self.name == "pr" and not run_id:
-            raise DeployError("pr update requires --run-id <successful-PR-CI-run>")
+    def update(self, *, sha=None, pr=None, tag=None, backup_record=None):
+        """Deploy the images built for ``sha`` with already provisioned resources."""
+        if self.name == "pr" and (not sha or pr is None):
+            raise DeployError("pr update requires --pr <open-PR-number> and --sha <tested-commit>")
+        if self.name == "staging" and not sha:
+            raise DeployError("staging update requires --sha <current-main-commit>")
         if self.name == "release" and not tag:
             raise DeployError("release update requires --tag <release-tag>")
-        return self._deploy("update", run_id=run_id, tag=tag, commit=commit, backup_record=backup_record)
+        return self._deploy("update", sha=sha, pr=pr, tag=tag, backup_record=backup_record)
 
-    def snapshot_init(self, *, run_id=None):
+    def snapshot_init(self, *, sha=None):
         """Explicit one-time staging population from a verified snapshot."""
-        return self._deploy("snapshot-init", run_id=run_id)
+        if not sha:
+            raise DeployError("staging snapshot-init requires --sha <current-main-commit>")
+        return self._deploy("snapshot-init", sha=sha)
 
-    def refresh(self, *, run_id=None, backup_record=None):
+    def refresh(self, *, sha=None, backup_record=None):
         """Replace staging data with a new snapshot generation (explicit destructive intent)."""
+        if not sha:
+            raise DeployError("staging refresh requires --sha <current-main-commit>")
         self.private_record(backup_record, "refresh", "retained-state backup and replacement intent")
-        return self._deploy("refresh", run_id=run_id)
+        return self._deploy("refresh", sha=sha)
 
     def recover(self, *, backup_record=None, compatibility_reviewed=False):
         """Release-only explicit recovery to the retained previous images."""
@@ -343,21 +347,20 @@ class Environment:
                                   f"{self.command('refresh')} --backup-record <path>")
             self.require_fresh_application_project()
             controller = self.controller()
-            self.journal(operation, "preparing", **{k: v for k, v in options.items() if k in {"run_id", "tag", "commit"} and v})
+            self.journal(operation, "preparing", **{k: v for k, v in options.items() if k in {"sha", "pr", "tag"} and v})
             # Long snapshot preparation holds the shared lock only in shared mode,
             # so previews keep deploying; infrastructure upgrades wait.
             with self.shared_lock(), self.docker.registry():
                 try:
                     if self.name == "pr":
-                        result = {"deployed": controller.deploy(options["run_id"])}
+                        result = {"deployed": controller.deploy(options["sha"], options["pr"])}
                     elif self.name == "staging":
-                        controller.deploy(options.get("run_id"), refresh=operation in {"refresh", "snapshot-init"})
+                        controller.deploy(options["sha"], refresh=operation in {"refresh", "snapshot-init"})
                         result = {}
                     elif operation == "recover":
                         result = controller.recover()
                     else:
-                        result = controller.deploy(options["tag"], commit=options.get("commit"),
-                                                   run_id=options.get("run_id"),
+                        result = controller.deploy(options["tag"], sha=options.get("sha"),
                                                    backup_record=options.get("backup_record"))
                 except BaseException:
                     self.journal(operation, "failed")
@@ -437,7 +440,7 @@ class Environment:
             if self.name == "release" or self.settings["infrastructure"]["mode"] != "managed":
                 raise DeployError("Only the managed infrastructure owner may explicitly upgrade it")
             owner = self.infrastructure_owner()
-            if not owner or owner.get("owner") != self.identity:
+            if not owner or owner.get("environment") != self.name:
                 raise DeployError(f"{self.infrastructure_root}; shared infrastructure belongs to another environment")
             self.controller().init()
         return {"environment": self.name, "infrastructure": "upgraded"}
@@ -451,16 +454,16 @@ class Environment:
             "check": lambda: self.check(options.get("pr")),
             "logs": lambda: self.logs(options.get("pr"), tail=options.get("tail") or 200),
             "install": self.install,
-            "update": lambda: self.update(run_id=options.get("run_id"), tag=options.get("tag"),
-                                          commit=options.get("commit"), backup_record=options.get("backup_record")),
+            "update": lambda: self.update(sha=options.get("sha"), pr=options.get("pr"), tag=options.get("tag"),
+                                          backup_record=options.get("backup_record")),
             "uninstall": self.uninstall,
             "start": lambda: self.start(options.get("pr")),
             "stop": lambda: self.stop(options.get("pr")),
             "infra-upgrade": self.infra_upgrade,
             "cleanup": lambda: self.cleanup(options.get("pr")),
             "reconcile": self.reconcile,
-            "snapshot-init": lambda: self.snapshot_init(run_id=options.get("run_id")),
-            "refresh": lambda: self.refresh(run_id=options.get("run_id"), backup_record=options.get("backup_record")),
+            "snapshot-init": lambda: self.snapshot_init(sha=options.get("sha")),
+            "refresh": lambda: self.refresh(sha=options.get("sha"), backup_record=options.get("backup_record")),
             "database-migrate": lambda: self.database_migrate(backup_record=options.get("backup_record")),
             "recover": lambda: self.recover(backup_record=options.get("backup_record"),
                                             compatibility_reviewed=options.get("compatibility_reviewed", False)),
@@ -470,10 +473,9 @@ class Environment:
         return handlers[operation]()
 
 
-COMMON = ("configure", "migrate-config", "preflight", "status", "check", "logs",
-          "install", "update", "uninstall", "start", "stop")
+COMMON = ("preflight", "status", "check", "logs", "install", "update", "uninstall", "start", "stop")
 OPERATIONS = {
     "pr": (*COMMON, "cleanup", "reconcile", "infra-upgrade"),
-    "staging": (*COMMON, "snapshot-init", "refresh", "infra-upgrade"),
+    "staging": (*COMMON, "snapshot-init", "refresh"),
     "release": (*COMMON, "database-migrate", "recover"),
 }

@@ -37,7 +37,6 @@ class FakeRelease(release.Release):
         self.annotated = {"a" * 40: {"type": "commit", "sha": SECOND}}
         self.on_main = {FIRST, SECOND, OLD}
         self.history = {(FIRST, SECOND), (OLD, FIRST), (OLD, SECOND)}  # (ancestor, descendant)
-        self.runs = {FIRST: 200, SECOND: 300, OLD: 100}
         self.schema = {"current": True}
         self.events = []
         self.fail = None
@@ -55,16 +54,6 @@ class FakeRelease(release.Release):
             if head == "main":
                 return {"status": "ahead" if base in self.on_main else "diverged"}
             return {"status": "identical" if base == head else "ahead" if (base, head) in self.history else "behind"}
-        if endpoint.startswith("actions/workflows/pr-ci.yml/runs?head_sha="):
-            sha = endpoint.split("head_sha=")[1].split("&")[0]
-            return {"workflow_runs": [{"id": self.runs[sha]}] if sha in self.runs else []}
-        if endpoint.startswith("actions/runs/"):
-            run_id = int(endpoint.rsplit("/", 1)[1])
-            sha = next(sha for sha, value in self.runs.items() if value == run_id)
-            return {"id": run_id, "run_attempt": 1, "workflow_id": 9, "conclusion": "success", "event": "push",
-                    "head_branch": "main", "head_sha": sha, "head_repository": {"full_name": self.repository}}
-        if endpoint.startswith("actions/workflows/"):
-            return {"path": ".github/workflows/pr-ci.yml"}
         raise AssertionError(endpoint)
 
     def image(self, component, run):
@@ -108,21 +97,18 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaisesRegex(DeployError, "pattern"):
                 self.release.tag_commit(tag)
         with self.assertRaisesRegex(DeployError, "moved"):
-            self.release.eligible("v1.0.0", commit=SECOND)
+            self.release.eligible("v1.0.0", sha=SECOND)
         self.release.on_main.discard(FIRST)
         with self.assertRaisesRegex(DeployError, "not on main"):
             self.release.eligible("v1.0.0")
         self.release.on_main.add(FIRST)
-        del self.release.runs[FIRST]
-        with self.assertRaisesRegex(DeployError, "No successful main-push"):
-            self.release.eligible("v1.0.0")
-        self.release.runs[FIRST] = 200
-        with self.assertRaisesRegex(DeployError, "not tagged commit"):
-            self.release.eligible("v1.0.0", run_id=300)
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "200", "GITHUB_RUN_ATTEMPT": "2"}):
+            resolved, build = self.release.eligible("v1.0.0", sha=FIRST)
+        self.assertEqual((resolved, build), (FIRST, {"head_sha": FIRST, "id": 200, "run_attempt": 2}))
         self.assertEqual(self.release.events, [])
 
     def test_first_release_gates_order_and_repeated_delivery_is_idempotent(self):
-        result = self.release.deploy("v1.0.0", commit=FIRST)
+        result = self.release.deploy("v1.0.0", sha=FIRST)
         self.assertTrue(result["changed"])
         gates = ["config --quiet", "run --rm --no-deps check",
                  "up -d --wait --wait-timeout 300 backend", "up -d --wait --wait-timeout 180 frontend", "routed-readiness"]

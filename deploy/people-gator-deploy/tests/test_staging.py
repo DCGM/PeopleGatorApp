@@ -33,11 +33,8 @@ class FakeStaging(staging.Staging):
         self.root.mkdir()
         (self.root / "infrastructure.env").write_text("synthetic infra")
         self.staging_root.mkdir()
-        self.run = {"id": 100, "run_attempt": 1, "workflow_id": 9, "head_sha": SHA,
-                    "event": "push", "conclusion": "success", "head_branch": "main",
-                    "head_repository": {"full_name": self.repository}}
+        self.run = {"id": 100, "run_attempt": 1, "head_sha": SHA}
         self.main_sha = SHA
-        self.workflow_path = ".github/workflows/pr-ci.yml"
         self.events = []
         self.inputs = []
         self.fail = None
@@ -51,13 +48,13 @@ class FakeStaging(staging.Staging):
     def api(self, endpoint):
         if endpoint == "git/ref/heads/main":
             return {"object": {"sha": self.main_sha}}
-        if endpoint.startswith("actions/runs/"):
-            return dict(self.run)
-        if endpoint.startswith("actions/workflows/pr-ci.yml/runs"):
-            return {"workflow_runs": [dict(self.run)]}
-        if endpoint.startswith("actions/workflows/"):
-            return {"path": self.workflow_path}
         raise AssertionError(endpoint)
+
+    def build(self, sha):
+        return {**super().build(sha), "id": self.run["id"], "run_attempt": self.run["run_attempt"]}
+
+    def deploy(self, sha=None, *, refresh=False):
+        return super().deploy(sha or self.run["head_sha"], refresh=refresh)
 
     def image(self, part, run):
         self.events.append("pull-" + part)
@@ -105,21 +102,17 @@ class StagingTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.controller = FakeStaging(self.root)
 
-    def test_successful_current_main_only_and_stale_builds_fail_before_mutation(self):
+    def test_only_the_current_main_commit_deploys_and_stale_builds_fail_before_mutation(self):
         controller = self.controller
-        for field, value in (("event", "pull_request"), ("head_branch", "issue/16"),
-                             ("conclusion", "failure"), ("head_sha", "f" * 40),
-                             ("head_repository", {"full_name": "attacker/fork"})):
-            old = controller.run[field]
-            with self.subTest(field=field):
-                controller.run[field] = value
-                with self.assertRaisesRegex(ValueError, "current main"):
-                    controller.deploy(refresh=True)
-                self.assertEqual(controller.events, [])
-                controller.run[field] = old
-        controller.workflow_path = ".github/workflows/untrusted.yml"
-        with self.assertRaises(ValueError):
+        controller.main_sha = "f" * 40
+        with self.assertRaisesRegex(ValueError, "current main"):
             controller.deploy(refresh=True)
+        self.assertEqual(controller.events, [])
+        controller.main_sha = SHA
+        for sha in ("", "main", SHA[:-1]):
+            with self.subTest(sha=sha), self.assertRaisesRegex(ValueError, "--sha"):
+                staging.Staging.deploy(controller, sha, refresh=True)
+        self.assertEqual(controller.events, [])
 
     def test_explicit_init_then_deploy_retains_database_and_never_reads_snapshot(self):
         controller = self.controller
@@ -234,7 +227,7 @@ class StagingTests(unittest.TestCase):
             controller.deploy()
         self.assertFalse(any(event.startswith("up ") for event in controller.events))
 
-    def test_older_attempt_cannot_overwrite_newer_and_changed_attempt_is_rejected(self):
+    def test_older_attempt_cannot_overwrite_newer_but_operator_runs_may(self):
         controller = self.controller
         controller.initial()
         controller.run["run_attempt"] = 2
@@ -244,10 +237,11 @@ class StagingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "newer staging"):
             controller.deploy()
         self.assertNotIn("run --rm --no-deps migrate", controller.events)
-        run = dict(controller.run)
-        controller.run["run_attempt"] = 3
-        with self.assertRaisesRegex(ValueError, "attempt changed"):
-            controller.fence(run)
+        # Outside Actions there is no run identity; the current main commit still deploys.
+        controller.run.update(id=0, run_attempt=0)
+        controller.deploy()
+        self.assertIn("run --rm --no-deps migrate", controller.events)
+        self.assertEqual(json.loads((controller.staging_root / "state.json").read_text())["version"], [0, 0])
 
     def test_interrupted_activation_recovers_pair_and_committed_state_recovers_env(self):
         controller = self.controller
@@ -275,7 +269,7 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         self.assertNotIn("prepare", controller.events)
         controller.events.clear()
-        with self.assertRaisesRegex(DeployError, "needs snapshot_source_file for snapshot-init/refresh"):
+        with self.assertRaisesRegex(DeployError, "snapshot-init/refresh need the DEPLOY_SNAPSHOT_SOURCE secret"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
 
@@ -347,7 +341,7 @@ class StagingTests(unittest.TestCase):
         with self.assertRaises(staging.StagingConfigurationError) as raised:
             staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
                              "private_operator_value": "private-sentinel"})
-        self.assertIn("staging configure", str(raised.exception))
+        self.assertIn("DEPLOY_RUNTIME_ENV", str(raised.exception))
         self.assertNotIn("private-sentinel", str(raised.exception))
 
 

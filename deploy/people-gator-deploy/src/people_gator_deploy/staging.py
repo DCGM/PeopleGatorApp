@@ -1,9 +1,11 @@
-"""Reviewed-main staging lifecycle on the shared host primitives.
+"""Main-branch staging lifecycle on the shared host primitives.
 
-Normal deployments retain the active database and never restore or seed. Only
-explicit ``snapshot-init``/``refresh`` prepare an independent database from an
-verified latest S3 backup (or an explicitly configured legacy local archive). Storage, media and authentication objects are
-managed externally; deployment never copies, provisions or validates them.
+Deploys the images published for the current ``main`` commit. Normal
+deployments retain the active database and never restore or seed. Only explicit
+``snapshot-init``/``refresh`` prepare an independent database from a verified
+latest S3 backup (or an explicitly configured local archive). Storage, media
+and authentication objects are managed externally; deployment never copies,
+provisions or validates them.
 """
 from __future__ import annotations
 
@@ -46,7 +48,7 @@ class Staging(Host):
         staging = config.get("staging")
         if not isinstance(staging, dict) or not staging.get("state_dir"):
             raise StagingConfigurationError(
-                "Missing staging settings; run people-gator-deploy staging configure with state_dir and runtime_file."
+                "Missing staging settings; set DEPLOY_STATE_DIR and DEPLOY_RUNTIME_ENV for the staging environment."
             )
         self.staging_root = Path(staging["state_dir"])
         if not self.staging_root.is_absolute() or self.staging_root.is_relative_to(self.root):
@@ -65,7 +67,7 @@ class Staging(Host):
         runtime = Path(self.config.get("runtime_file", ""))
         if not runtime.is_absolute() or not private_file(runtime):
             raise StagingConfigurationError("runtime_file must name an owned private API environment file; "
-                                           "run people-gator-deploy staging configure --input <private-json>")
+                                           "set the DEPLOY_RUNTIME_ENV secret for the staging environment")
         # Storage settings are opaque external application configuration. Only
         # database ownership and fixed deployment settings belong to this tool.
         keys = env_keys(runtime)
@@ -76,8 +78,8 @@ class Staging(Host):
         if "snapshot_source_file" in self.config:
             return snapshots.read_source(self.config["snapshot_source_file"])
         if "snapshot" not in self.config:
-            raise StagingConfigurationError("The staging descriptor needs snapshot_source_file for snapshot-init/refresh (or a legacy snapshot); "
-                                           "run people-gator-deploy staging configure --input <private-json>")
+            raise StagingConfigurationError("snapshot-init/refresh need the DEPLOY_SNAPSHOT_SOURCE secret (or a local "
+                                           "DEPLOY_SNAPSHOT archive) for the staging environment")
         return validate_snapshot(self.config["snapshot"], inputs=True)
 
     def runtime_environment(self, values):
@@ -103,30 +105,21 @@ class Staging(Host):
         return self.docker.run(args, input=input_text, stdin=input_file, timeout=7200,
                                diagnostic=self.diagnostic_path(), progress=progress)
 
-    def eligible_main(self, run_id: int | None = None):
+    def eligible_main(self, sha: str):
+        """Only the current main commit is deployable; a newer push wins over an older queued run."""
         self.check_access()
-        if run_id is None:
-            runs = self.api("actions/workflows/pr-ci.yml/runs?branch=main&event=push&status=success&per_page=1")["workflow_runs"]
-            if not runs:
-                raise DeployError("No successful main build exists")
-            run_id = runs[0]["id"]
-        try:
-            run = self.ci_run(run_id, event="push", branch="main")
-        except IneligibleRun:
-            raise IneligibleRun("Staging requires a successful CI build of the current main revision") from None
+        run = self.build(sha)
         main_sha = self.api("git/ref/heads/main")["object"]["sha"]
         if run["head_sha"] != main_sha:
-            raise IneligibleRun("Staging requires a successful CI build of the current main revision")
+            raise IneligibleRun(f"Staging deploys only the current main revision; main moved from {sha} to {main_sha}")
         return run
 
     def fence(self, run):
-        """Stale or retried attempts stop before migration and before activation."""
-        current = self.eligible_main(run["id"])
-        if current["run_attempt"] != run["run_attempt"]:
-            raise DeployError("Build attempt changed during staging operation")
-        version = [positive_int(run["id"]), positive_int(run["run_attempt"])]
+        """Stale runs stop before migration and before activation."""
+        self.eligible_main(run["head_sha"])
+        version = [int(run.get("id") or 0), int(run.get("run_attempt") or 0)]
         attempted = self.staging_root / "attempted.json"
-        if attempted.exists() and json.loads(attempted.read_text())["version"] > version:
+        if version != [0, 0] and attempted.exists() and json.loads(attempted.read_text())["version"] > version:
             raise DeployError("A newer staging build already attempted deployment")
         write_private(attempted, json.dumps({"version": version, "sha": run["head_sha"]}))
 
@@ -270,20 +263,20 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 raise DeployError("Invalid abandoned-worker identity")
             self.command(["docker", "rm", "-f", *ids])
 
-    def deploy(self, run_id=None, *, refresh=False):
+    def deploy(self, sha, *, refresh=False):
         self.validate_inputs()
         if refresh:
             self.snapshot_input()
         self.staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.reap_workers()
         self.recover_activation(refresh_requested=refresh)
-        run = self.eligible_main(run_id)
+        run = self.eligible_main(sha)
         active_path = self.staging_root / "state.json"
         old = json.loads(active_path.read_text()) if active_path.exists() else None
         if not old and not refresh:
             raise StagingConfigurationError(
                 "Explicit snapshot initialization is required before normal staging deployment: "
-                "run people-gator-deploy staging snapshot-init (or staging.yml operation=snapshot-init)."
+                "run people-gator-deploy staging snapshot-init (or the CI workflow with operation=snapshot-init)."
             )
         if not (self.root / "infrastructure.env").is_file():
             raise DeployError("Shared infrastructure must be installed first")
@@ -320,7 +313,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         if old:
             write_private(self.staging_root / "previous.json", json.dumps(old))
             write_private(self.staging_root / "previous.env", (self.staging_root / "compose.env").read_text())
-        generation.update(sha=run["head_sha"], images=images, version=[run["id"], run["run_attempt"]], activation=activation)
+        generation.update(sha=run["head_sha"], images=images, version=[int(run.get("id") or 0), int(run.get("run_attempt") or 0)], activation=activation)
         # State is the commit point. The journal reconstructs compose.env on recovery.
         write_private(active_path, json.dumps(generation))
         write_private(self.staging_root / "compose.env", self.dotenv(values))

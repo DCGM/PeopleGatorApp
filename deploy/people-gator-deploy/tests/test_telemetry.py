@@ -12,32 +12,23 @@ from people_gator_deploy.core import DeployError
 
 
 class TelemetryTests(unittest.TestCase):
-    def test_private_file_validation_rejects_application_overrides(self):
+    def test_secret_validation_rejects_application_overrides(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            telemetry = root / 'telemetry.env'
-            users = root / 'users.json'
-            users.write_text('{}')
-            users.chmod(0o644)
-            value = {
-                'schema_version': 1, 'environment': 'pr', 'repository': 'DCGM/PeopleGatorApp',
-                'state_dir': str(root / 'state'), 'docker_context': 'rootless',
-                'domain': 'preview.example', 'web_network': 'web', 'database_network': 'db',
-                'users_file': str(users), 'telemetry_file': str(telemetry),
-                'infrastructure': {'mode': 'managed', 'project': 'infra', 'state_dir': str(root / 'state')},
-            }
-            path = root / 'config/config.json'
-            telemetry.write_text('PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=synthetic\nOTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic synthetic\n')
-            telemetry.chmod(0o600)
-            config.validate(value, 'pr', path, inputs=True)
-            telemetry.chmod(0o644)
-            with self.assertRaisesRegex(DeployError, 'telemetry_file'):
-                config.validate(value, 'pr', path, inputs=True)
-            telemetry.chmod(0o600)
-            telemetry.write_text('PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD=secret\n')
+            env = {'GITHUB_REPOSITORY': 'DCGM/PeopleGatorApp', 'DEPLOY_DOCKER_CONTEXT': 'rootless',
+                   'DEPLOY_DOMAIN': 'preview.example', 'DEPLOY_STATE_DIR': str(root / 'state'),
+                   'DEPLOY_INFRASTRUCTURE_STATE_DIR': str(root / 'infrastructure'), 'DEPLOY_USERS_JSON': '{}',
+                   'DEPLOY_TELEMETRY_ENV': 'PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=synthetic\nOTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic synthetic\n'}
+            settings = config.load('pr', env)
+            self.assertEqual(settings['telemetry_file'], str(root / 'state/telemetry.env'))
+            files = dict((path.name, (content, mode)) for path, content, mode in config.secrets('pr', settings, env))
+            self.assertEqual(files['telemetry.env'][1], 0o600)
+            env['DEPLOY_TELEMETRY_ENV'] = 'PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD=secret\n'
             with self.assertRaisesRegex(DeployError, 'only unquoted RUM') as caught:
-                config.validate(value, 'pr', path, inputs=True)
+                config.secrets('pr', settings, env)
             self.assertNotIn('=secret', str(caught.exception))
+            del env['DEPLOY_TELEMETRY_ENV']
+            self.assertNotIn('telemetry_file', config.load('pr', env))
 
     @unittest.skipUnless(shutil.which('docker'), 'Docker Compose required')
     def test_each_stack_routes_telemetry_only_to_runtime_backend(self):

@@ -1,4 +1,5 @@
-"""The self-hosted job-started guard admits only reviewed lifecycle workflows."""
+"""The self-hosted job-started guard admits only this repository's events for the runner's environment."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -7,7 +8,6 @@ import unittest
 
 GUARD = Path(__file__).resolve().parents[2] / "runner/job-started.sh"
 REPOSITORY = "Example/PeopleGatorApp"
-WORKFLOWS = f"{REPOSITORY}/.github/workflows"
 
 
 def git(directory, *args):
@@ -28,7 +28,7 @@ class RunnerGuardTests(unittest.TestCase):
         git(cls.origin, "commit", "--quiet", "--allow-empty", "-m", "reviewed")
         cls.reviewed = git(cls.origin, "rev-parse", "HEAD")
         git(cls.origin, "checkout", "--quiet", "-b", "unreviewed")
-        git(cls.origin, "commit", "--quiet", "--allow-empty", "-m", "unreviewed release workflow")
+        git(cls.origin, "commit", "--quiet", "--allow-empty", "-m", "unreviewed release")
         cls.unreviewed = git(cls.origin, "rev-parse", "HEAD")
         git(cls.origin, "checkout", "--quiet", "main")
         cls.remote = cls.origin.as_uri()
@@ -37,60 +37,72 @@ class RunnerGuardTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
-    def guard(self, workflow_ref, *, repository=REPOSITORY, sha=None, remote=None):
+    def guard(self, environment, event, ref, *, repository=REPOSITORY, sha=None, head_repository=REPOSITORY, remote=None):
         cache = tempfile.TemporaryDirectory()
         self.addCleanup(cache.cleanup)
-        environment = {"PATH": os.environ["PATH"], "HOME": cache.name,
-                       "PEOPLE_GATOR_RUNNER_REPOSITORY": REPOSITORY,
-                       "PEOPLE_GATOR_RUNNER_REMOTE": remote or self.remote,
-                       "PEOPLE_GATOR_RUNNER_CACHE": cache.name,
-                       "GITHUB_REPOSITORY": repository, "GITHUB_WORKFLOW_REF": workflow_ref,
-                       "GITHUB_WORKFLOW_SHA": self.reviewed if sha is None else sha}
-        return subprocess.run(["sh", str(GUARD)], env=environment, capture_output=True, text=True, timeout=60)
+        payload = Path(cache.name) / "event.json"
+        payload.write_text(json.dumps({"pull_request": {"head": {"repo": {"full_name": head_repository} if head_repository else None}}}))
+        variables = {"PATH": os.environ["PATH"], "HOME": cache.name,
+                     "PEOPLE_GATOR_RUNNER_REPOSITORY": REPOSITORY, "PEOPLE_GATOR_RUNNER_REMOTE": remote or self.remote,
+                     "PEOPLE_GATOR_RUNNER_CACHE": cache.name, "GITHUB_REPOSITORY": repository,
+                     "GITHUB_EVENT_NAME": event, "GITHUB_REF": ref, "GITHUB_EVENT_PATH": str(payload),
+                     "GITHUB_SHA": self.reviewed if sha is None else sha}
+        if environment is not None:
+            variables["PEOPLE_GATOR_RUNNER_ENVIRONMENT"] = environment
+        return subprocess.run(["sh", str(GUARD)], env=variables, capture_output=True, text=True, timeout=60)
 
-    def test_reviewed_main_lifecycle_workflows_run(self):
-        for name in ("pr-preview.yml", "staging.yml", "release.yml"):
-            with self.subTest(workflow=name):
-                result = self.guard(f"{WORKFLOWS}/{name}@refs/heads/main")
-                self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_release_tags_run_only_for_commits_on_main(self):
-        result = self.guard(f"{WORKFLOWS}/release.yml@refs/tags/v1.2.3", sha=self.reviewed)
+    def assertAdmitted(self, *args, **kwargs):
+        result = self.guard(*args, **kwargs)
         self.assertEqual(result.returncode, 0, result.stderr)
-        result = self.guard(f"{WORKFLOWS}/release.yml@refs/tags/v1.2.4", sha=self.unreviewed)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("is not on main", result.stderr)
+
+    def assertRefused(self, *args, message="runner guard: refused", **kwargs):
+        result = self.guard(*args, **kwargs)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(message, result.stderr)
+        return result
+
+    def test_preview_runner_serves_same_repository_pull_requests_and_main_pruning(self):
+        self.assertAdmitted("preview", "pull_request", "refs/pull/7/merge")
+        for event in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                self.assertAdmitted("preview", event, "refs/heads/main")
+        self.assertRefused("preview", "push", "refs/heads/feature")
+        self.assertRefused("preview", "push", "refs/tags/v1.0.0")
+
+    def test_fork_pull_requests_are_refused_whatever_their_workflow_says(self):
+        for head in ("Fork/PeopleGatorApp", None):
+            with self.subTest(head=head):
+                self.assertRefused("preview", "pull_request", "refs/pull/7/merge", head_repository=head,
+                                   message="other repositories never run here")
+        self.assertRefused("preview", "pull_request_target", "refs/heads/main", head_repository="Fork/PeopleGatorApp",
+                           message="other repositories never run here")
+        self.assertRefused("staging", "pull_request", "refs/pull/7/merge")
+
+    def test_staging_runner_serves_only_main(self):
+        self.assertAdmitted("staging", "push", "refs/heads/main")
+        self.assertAdmitted("staging", "workflow_dispatch", "refs/heads/main")
+        for event, ref in (("push", "refs/heads/feature"), ("push", "refs/tags/v1.0.0"), ("schedule", "refs/heads/main")):
+            with self.subTest(event=event, ref=ref):
+                self.assertRefused("staging", event, ref)
+
+    def test_release_runner_serves_only_tags_whose_commit_is_on_main(self):
+        self.assertAdmitted("release", "push", "refs/tags/v1.2.3", sha=self.reviewed)
+        self.assertAdmitted("release", "workflow_dispatch", "refs/tags/v1.2.3", sha=self.reviewed)
+        self.assertRefused("release", "push", "refs/tags/v1.2.4", sha=self.unreviewed, message="is not on main")
+        self.assertRefused("release", "push", "refs/heads/main")
+        self.assertRefused("release", "push", "refs/tags/release-1")
         for sha in ("", "not-a-commit"):
             with self.subTest(sha=sha):
-                self.assertEqual(self.guard(f"{WORKFLOWS}/release.yml@refs/tags/v1.2.3", sha=sha).returncode, 1)
+                self.assertRefused("release", "push", "refs/tags/v1.2.3", sha=sha, message="missing tagged commit")
 
     def test_unreachable_remote_fails_closed(self):
-        result = self.guard(f"{WORKFLOWS}/release.yml@refs/tags/v1.2.3",
-                            remote=(Path(self.temporary.name) / "missing").as_uri())
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("cannot read", result.stderr)
+        self.assertRefused("release", "push", "refs/tags/v1.2.3", remote=(Path(self.temporary.name) / "missing").as_uri(),
+                           message="cannot read")
 
-    def test_pull_request_branch_and_other_workflows_are_refused(self):
-        refused = (
-            f"{WORKFLOWS}/pr-ci.yml@refs/heads/main",
-            f"{WORKFLOWS}/pr-preview.yml@refs/pull/7/merge",
-            f"{WORKFLOWS}/staging.yml@refs/heads/feature",
-            f"{WORKFLOWS}/pr-preview.yml@refs/tags/v1.0.0",
-            f"{WORKFLOWS}/injected.yml@refs/heads/main",
-            f"{WORKFLOWS}/pr-preview.yml@refs/heads/main-copy",
-            "",
-        )
-        for workflow_ref in refused:
-            with self.subTest(workflow_ref=workflow_ref):
-                result = self.guard(workflow_ref)
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("runner guard: refused", result.stderr)
-
-    def test_other_repositories_are_refused(self):
-        result = self.guard(f"Fork/PeopleGatorApp/.github/workflows/pr-preview.yml@refs/heads/main",
-                            repository="Fork/PeopleGatorApp")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(f"serves only {REPOSITORY}", result.stderr)
+    def test_misconfigured_runner_and_other_repositories_are_refused(self):
+        self.assertRefused(None, "push", "refs/heads/main", message="PEOPLE_GATOR_RUNNER_ENVIRONMENT")
+        self.assertRefused("ci", "push", "refs/heads/main", message="PEOPLE_GATOR_RUNNER_ENVIRONMENT")
+        self.assertRefused("preview", "push", "refs/heads/main", repository="Fork/PeopleGatorApp", message=f"serves only {REPOSITORY}")
 
 
 if __name__ == "__main__":

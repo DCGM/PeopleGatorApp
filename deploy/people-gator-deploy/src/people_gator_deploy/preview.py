@@ -1,9 +1,9 @@
 """PR preview lifecycle: per-PR isolated database/role/storage with the synthetic preview seed.
 
-Deploys only successful same-repository PR CI builds whose head is still the
-open PR head. Redeployment preserves credentials, seeded identities, reviewed
-edits and media. Removing one closed preview never touches another preview,
-staging, releases or shared infrastructure.
+Deploys the images this workflow run published for a same-repository PR whose
+head is still the tested commit. Redeployment preserves credentials, seeded
+identities, reviewed edits and media. Removing one closed preview never touches
+another preview, staging, releases or shared infrastructure.
 """
 from __future__ import annotations
 
@@ -104,14 +104,6 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             return None
         return pr
 
-    def eligible_run(self, run_id: int) -> tuple[dict, list[int]]:
-        run = self.ci_run(run_id, event="pull_request")
-        candidates = run.get("pull_requests", [])
-        if not candidates:
-            candidates = self.api(f"commits/{run['head_sha']}/pulls?per_page=100")
-        numbers = sorted({positive_int(pr["number"]) for pr in candidates})
-        return run, numbers
-
     def env(self, number: int, state: PreviewState, images: dict[str, str], *, sha: str = "unknown", standalone_auth: bool = False) -> str:
         values = {
             "STANDALONE_AUTH": "1" if standalone_auth else "0",
@@ -131,12 +123,12 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         }
         return self.dotenv(values)
 
-    def deploy(self, run_id: int) -> list[int]:
+    def deploy(self, sha: str, pr: int) -> list[int]:
         self.check_access()
-        run, candidates = self.eligible_run(run_id)
-        current = [number for number in candidates if self.current_pr(number, run["head_sha"])]
-        if not current:
-            print("No open PR still matches this run; skipping stale deployment")
+        number = positive_int(pr)
+        run = self.build(sha)
+        if not self.current_pr(number, sha):
+            print(f"PR #{number} is closed, from a fork or no longer at {sha}; skipping stale deployment")
             return []
         if not (self.root / "infrastructure.env").exists():
             raise DeployError("Initialize preview infrastructure first: people-gator-deploy pr install")
@@ -145,7 +137,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             raise DeployError("users_file must name an existing absolute file")
         images = {component: self.image(component, run) for component in ("frontend", "backend")}
         standalone_auth = self.image_uses_standalone_auth(images["backend"])
-        return [number for number in current if self.deploy_pr(number, run, images, standalone_auth=standalone_auth)]
+        return [number] if self.deploy_pr(number, run, images, standalone_auth=standalone_auth) else []
 
     def deploy_pr(self, number: int, run: dict, images: dict[str, str], *, standalone_auth: bool = False) -> bool:
         directory = self.previews / f"pr-{positive_int(number)}"
@@ -154,13 +146,17 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         state: PreviewState = json.loads(state_file.read_text()) if state_file.exists() else {
             "password": secrets.token_hex(32),
         }
-        version = (positive_int(run["id"]), positive_int(run["run_attempt"]))
+        version = (int(run.get("id") or 0), int(run.get("run_attempt") or 0))
         deployed_version = tuple(state.get("version", [0, 0]))
-        if deployed_version > version or (
-            deployed_version == version and tuple(state.get("seeded_version", [])) == version
-            and state.get("standalone_auth", False) == standalone_auth
-        ):
-            print(f"PR #{number} already has this run or a newer deployment")
+        # Run ids order workflow runs; operator runs outside Actions carry (0, 0)
+        # and are compared by commit only.
+        if version != (0, 0) and deployed_version > version:
+            print(f"PR #{number} already has a newer deployment")
+            return False
+        if (deployed_version == version and state.get("sha") == run["head_sha"]
+                and tuple(state.get("seeded_version", [])) == version
+                and state.get("standalone_auth", False) == standalone_auth):
+            print(f"PR #{number} already runs this build")
             return False
         if not self.current_pr(number, run["head_sha"]):
             return False

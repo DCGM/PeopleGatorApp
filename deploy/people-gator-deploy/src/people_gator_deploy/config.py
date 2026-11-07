@@ -1,38 +1,52 @@
-"""Versioned environment descriptors; configuration never contacts services."""
+"""Environment settings from ``DEPLOY_*`` variables; configuration never contacts services.
+
+Deploy jobs receive each GitHub Environment's variables and secrets as process
+environment variables. Non-secret settings become the controller configuration
+directly. Secret contents (users file, API env files, backup source) are written
+to private files in the environment's host state directory before deployment,
+because Compose bind mounts and env files must outlive the job.
+"""
 from __future__ import annotations
 
-import copy
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import stat
-import sys
 
-from . import CONFIG_SCHEMA
-from .core import DeployError, atomic, lock, write_json
-from .installer import layout
+from .core import DeployError, atomic
 
 ENVIRONMENTS = ("pr", "staging", "release")
+PREFIX = "DEPLOY_"
+HOSTNAME = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
+NAME = re.compile(r"[A-Za-z0-9_.-]+")
+PROJECT = re.compile(r"[a-z0-9][a-z0-9_-]*")
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+TELEMETRY_KEY = re.compile(r"(?:PEOPLE_GATOR_API__(?:RUM|OTEL)__[A-Z0-9_]+|OTEL_EXPORTER_OTLP(?:_[A-Z0-9_]+)?)")
+
+# Secret variables and the private file each one becomes inside state_dir.
+# The users file is read by the unprivileged backend container (UID 10001).
+SECRETS = {
+    "pr": {"USERS_JSON": ("users_file", "users.json", 0o644),
+           "TELEMETRY_ENV": ("telemetry_file", "telemetry.env", 0o600)},
+    "staging": {"RUNTIME_ENV": ("runtime_file", "runtime.env", 0o600),
+                "SNAPSHOT_SOURCE": ("snapshot_source_file", "snapshot-source.json", 0o600),
+                "TELEMETRY_ENV": ("telemetry_file", "telemetry.env", 0o600)},
+    "release": {"RUNTIME_ENV": ("runtime_file", "runtime.env", 0o600),
+                "MIGRATION_ENV": ("migration_file", "migration.env", 0o600),
+                "TELEMETRY_ENV": ("telemetry_file", "telemetry.env", 0o600)},
+}
+REQUIRED_SECRETS = {"pr": ("USERS_JSON",), "staging": ("RUNTIME_ENV",), "release": ("RUNTIME_ENV", "MIGRATION_ENV")}
+SECRET_FILES = {name for environment in SECRETS.values() for _, name, _ in environment.values()}
 
 
-def installation():
-    path = Path(sys.prefix) / "installation.json"
-    return json.loads(path.read_text()) if path.exists() else layout()
+def default_state_root() -> Path:
+    return Path.home() / ".local/opt/people-gator-deploy/state"
 
 
-def selected(environment, explicit=None):
-    path = Path(explicit or os.environ.get("PEOPLE_GATOR_DEPLOY_CONFIG") or
-                Path(installation()["config"]) / environment / "config.json").expanduser()
-    if not path.is_absolute():
-        raise DeployError("--config / PEOPLE_GATOR_DEPLOY_CONFIG must be an absolute path")
-    return path
-
-
-def problem(environment, path, field, reason):
-    return DeployError(f"{environment} configuration: {path}; {field}: {reason}; "
-                       f"run people-gator-deploy {environment} configure --config '{path}' --input <private-json>")
+def problem(environment, name, reason):
+    return DeployError(f"{environment} configuration: {PREFIX}{name}: {reason}; set it as a GitHub Environment "
+                       f"variable or secret (or export it for operator commands)")
 
 
 def private_file(path: Path):
@@ -46,191 +60,151 @@ def protected_file(path: Path):
             and stat.S_IMODE(path.stat().st_mode) & 0o022 == 0)
 
 
-def validate(value, environment, path, *, inputs=False):
-    def require(condition, field, reason):
+def env_keys(text: str, *, source: str) -> set[str]:
+    keys = set()
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, _ = line.partition("=")
+        if not separator or not re.fullmatch(r"PEOPLE_GATOR_API__[A-Z0-9_]+", key):
+            raise DeployError(f"{source}: only PEOPLE_GATOR_API__* KEY=value lines are supported")
+        keys.add(key)
+    return keys
+
+
+def load(environment: str, env=None) -> dict:
+    """Validated controller settings for one environment, without reading secret values."""
+    env = os.environ if env is None else env
+    if environment not in ENVIRONMENTS:
+        raise DeployError(f"Unknown environment {environment!r}; choose one of {', '.join(ENVIRONMENTS)}")
+
+    def value(name, default=None):
+        # GitHub passes undefined variables as empty strings: empty means unset.
+        supplied = env.get(PREFIX + name)
+        return supplied if supplied else default
+
+    def require(condition, name, reason):
         if not condition:
-            raise problem(environment, path, field, reason)
-    require(isinstance(value, dict), "descriptor", "expected a JSON object")
-    require(value.get("schema_version") == CONFIG_SCHEMA, "schema_version", "unsupported; run migrate-config for older descriptors or upgrade the utility")
-    require(value.get("environment") == environment, "environment", "does not match selected command group")
-    require(bool(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", str(value.get("repository", "")))), "repository", "missing or invalid owner/repository")
-    def absolute(field, supplied):
-        require(isinstance(supplied, str) and Path(supplied).is_absolute() and "\n" not in supplied,
-                field, "requires an absolute path")
-        require(not any(part == ".." for part in Path(supplied).parts), field, "parent traversal is unsupported")
-        require(not Path(supplied).is_symlink(), field, "symlinks are unsupported")
+            raise problem(environment, name, reason)
+
+    def absolute(name, supplied):
+        require(isinstance(supplied, str) and Path(supplied).is_absolute() and "\n" not in supplied, name, "requires an absolute path")
+        require(not any(part == ".." for part in Path(supplied).parts), name, "parent traversal is unsupported")
+        require(not Path(supplied).is_symlink(), name, "symlinks are unsupported")
         return Path(supplied).resolve()
-    root = absolute("state_dir", value.get("state_dir"))
-    require(root != Path("/") and root not in path.parents and not path.is_relative_to(root), "state_dir", "must be separate from descriptor directories")
-    require(isinstance(value.get("docker_context"), str) and bool(re.fullmatch(r"[A-Za-z0-9_.-]+", value["docker_context"])), "docker_context", "select an explicit Docker context")
-    hostname = value.get("domain" if environment == "pr" else "host", "")
-    require(isinstance(hostname, str) and bool(re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", hostname)), "domain" if environment == "pr" else "host", "missing or invalid hostname")
-    require(value.get("web_network") and isinstance(value["web_network"], str), "web_network", "name an external proxy network")
+
+    repository = value("REPOSITORY") or env.get("GITHUB_REPOSITORY", "")
+    require(bool(REPOSITORY.fullmatch(repository)), "REPOSITORY", "missing or invalid owner/repository (GITHUB_REPOSITORY is used when set)")
+    context = value("DOCKER_CONTEXT", "")
+    require(bool(NAME.fullmatch(context)), "DOCKER_CONTEXT", "select an explicit Docker context")
+    root = absolute("STATE_DIR", value("STATE_DIR") or str(default_state_root() / environment))
+    require(root != Path("/"), "STATE_DIR", "must not be the filesystem root")
+    settings = {"environment": environment, "repository": repository, "docker_context": context,
+                "state_dir": str(root), "web_network": value("WEB_NETWORK", "web"),
+                "otel_network": value("OTEL_NETWORK", "logging")}
+    require(bool(settings["web_network"]) and bool(NAME.fullmatch(settings["web_network"])), "WEB_NETWORK", "name an external proxy network")
+    require(bool(NAME.fullmatch(settings["otel_network"])), "OTEL_NETWORK", "missing or invalid network")
+    if value("CERTIFICATE_RESOLVER"):
+        # "none" reuses an existing wildcard certificate instead of a Traefik resolver.
+        settings["certificate_resolver"] = "" if value("CERTIFICATE_RESOLVER") == "none" else value("CERTIFICATE_RESOLVER")
+    hostname_field = "DOMAIN" if environment == "pr" else "HOST"
+    hostname = value(hostname_field, "")
+    require(bool(HOSTNAME.fullmatch(hostname)), hostname_field, "missing or invalid hostname")
+    settings["domain" if environment == "pr" else "host"] = hostname
     if environment != "release":
-        infra = value.get("infrastructure", {})
-        require(isinstance(infra, dict) and infra.get("mode") in {"managed", "external"}, "infrastructure.mode", "choose managed or external")
-        infra_root = absolute("infrastructure.state_dir", infra.get("state_dir"))
-        if environment != "pr":
-            require(not (infra_root.is_relative_to(root) or root.is_relative_to(infra_root)), "infrastructure.state_dir", "must be outside environment state")
-        require(bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(infra.get("project", "")))), "infrastructure.project", "missing or invalid Compose project")
-        require(bool(re.fullmatch(r"[a-zA-Z0-9_.-]+", str(value.get("database_network", "")))), "database_network", "missing or invalid network")
-    if environment in {"staging", "release"}:
-        require(bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(value.get("project", "people-gator-" + environment)))),
-                "project", "invalid Compose project")
-    if "telemetry_file" in value:
-        telemetry = absolute("telemetry_file", value["telemetry_file"])
-        if inputs:
-            require(private_file(telemetry), "telemetry_file", "needs an owned mode-600 telemetry environment file")
-            for line in telemetry.read_text().splitlines():
+        settings["database_network"] = value("DATABASE_NETWORK", "people-gator-preview-db")
+        require(bool(NAME.fullmatch(settings["database_network"])), "DATABASE_NETWORK", "missing or invalid network")
+        infrastructure_root = absolute("INFRASTRUCTURE_STATE_DIR",
+                                       value("INFRASTRUCTURE_STATE_DIR") or str(default_state_root() / "infrastructure"))
+        require(not (infrastructure_root.is_relative_to(root) or root.is_relative_to(infrastructure_root)),
+                "INFRASTRUCTURE_STATE_DIR", "must be outside the environment state directory")
+        project = value("INFRASTRUCTURE_PROJECT", "people-gator-preview-infra")
+        require(bool(PROJECT.fullmatch(project)), "INFRASTRUCTURE_PROJECT", "missing or invalid Compose project")
+        # Previews own the shared PostgreSQL/collector/pgAdmin; staging shares it.
+        settings["infrastructure"] = {"mode": "managed" if environment == "pr" else "external",
+                                      "project": project, "state_dir": str(infrastructure_root)}
+        port = value("PREVIEW_LOG_PORT", "24224")
+        require(bool(re.fullmatch(r"[1-9][0-9]{0,4}", port)), "PREVIEW_LOG_PORT", "requires a TCP port number")
+        settings["preview_log_port"] = int(port)
+    if environment == "pr":
+        settings["otel_http_endpoint"] = value("OTEL_HTTP_ENDPOINT", "http://lgtm:4318")
+        settings["pgadmin_host"] = value("PGADMIN_HOST", "pgadmin-preview.peoplegator.dev")
+        require(bool(HOSTNAME.fullmatch(settings["pgadmin_host"])), "PGADMIN_HOST", "missing or invalid hostname")
+        settings["pgadmin_email"] = value("PGADMIN_EMAIL", "admin@peoplegator.dev")
+    else:
+        settings["project"] = value("PROJECT", "people-gator-" + environment)
+        require(bool(PROJECT.fullmatch(settings["project"])), "PROJECT", "invalid Compose project")
+    if environment == "staging" and value("SNAPSHOT"):
+        try:
+            snapshot = json.loads(value("SNAPSHOT"))
+        except ValueError:
+            raise problem(environment, "SNAPSHOT", "malformed JSON") from None
+        from .staging import validate_snapshot
+        try:
+            settings["snapshot"] = validate_snapshot(snapshot)
+        except DeployError as error:
+            raise problem(environment, "SNAPSHOT", str(error)) from None
+        require(not value("SNAPSHOT_SOURCE"), "SNAPSHOT_SOURCE", "choose the automatic source or the local SNAPSHOT archive, not both")
+    if environment == "release":
+        settings["database_network"] = value("DATABASE_NETWORK", "")
+        require(bool(NAME.fullmatch(settings["database_network"])), "DATABASE_NETWORK", "name the external PostgreSQL network")
+        settings["backend_memory"] = value("BACKEND_MEMORY", "4g")
+        require(value("ACCESS_REVIEWED") == "true", "ACCESS_REVIEWED",
+                "set to true after confirming the external access boundary and browser demo-login limitation")
+    for name, (field, filename, _) in SECRETS[environment].items():
+        if value(name) or name in REQUIRED_SECRETS[environment]:
+            settings[field] = str(root / filename)
+    return settings
+
+
+def secrets(environment: str, settings: dict, env=None) -> list[tuple[Path, str, int]]:
+    """Validated secret contents and their private destinations; nothing is written here."""
+    env = os.environ if env is None else env
+    files = []
+    for name, (field, filename, mode) in SECRETS[environment].items():
+        content = env.get(PREFIX + name) or ""
+        if not content.strip():
+            if name in REQUIRED_SECRETS[environment]:
+                raise problem(environment, name, "missing secret contents")
+            continue
+        if name == "TELEMETRY_ENV":
+            for line in content.splitlines():
                 if not line.strip() or line.lstrip().startswith("#"):
                     continue
                 key, separator, _ = line.partition("=")
-                require(bool(separator) and bool(re.fullmatch(
-                    r"(?:PEOPLE_GATOR_API__(?:RUM|OTEL)__[A-Z0-9_]+|OTEL_EXPORTER_OTLP(?:_[A-Z0-9_]+)?)", key)),
-                    "telemetry_file", "only unquoted RUM, API OTEL and OTLP exporter KEY=value lines are permitted")
-    if environment == "pr":
-        users = absolute("users_file", value.get("users_file"))
-        if inputs:
-            # The backend container (UID 10001) reads this bind mount.
-            require(protected_file(users), "users_file",
-                    "needs a regular users file owned by this account or root, not group/world writable")
-    elif environment == "staging":
-        runtime = absolute("runtime_file", value.get("runtime_file"))
-        require(not any(field in value for field in ("storage", "backup_source", "media_source", "accounts", "media_transfer")),
-                "descriptor", "storage/media/auth are managed externally; configure runtime_file to remove obsolete sections")
-        if inputs:
-            require(private_file(runtime), "runtime_file", "needs an owned private API environment file")
-            from .release import env_keys
+                if not separator or not TELEMETRY_KEY.fullmatch(key):
+                    raise problem(environment, name, "only unquoted RUM, API OTEL and OTLP exporter KEY=value lines are permitted")
+        elif name in {"RUNTIME_ENV", "MIGRATION_ENV"}:
             try:
-                keys = env_keys(runtime)
+                keys = env_keys(content, source=PREFIX + name)
             except DeployError as error:
-                raise problem(environment, path, "runtime_file", str(error)) from None
-            require(not any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in keys),
-                    "runtime_file", "persistence settings are managed by staging; remove them")
-        require(not ("snapshot" in value and "snapshot_source_file" in value), "snapshot_source_file",
-                "choose automatic snapshot_source_file or legacy snapshot, not both")
-        if "snapshot_source_file" in value:
-            # Resolve/read backup credentials only for snapshot operations.
-            absolute("snapshot_source_file", value["snapshot_source_file"])
-        if "snapshot" in value:
-            from .staging import validate_snapshot
+                raise problem(environment, name, str(error).partition(": ")[2]) from None
+            if environment == "staging" and any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in keys):
+                raise problem(environment, name, "persistence settings are managed by staging; remove them")
+        elif name == "USERS_JSON":
             try:
-                validate_snapshot(value["snapshot"])
+                users = json.loads(content)
+            except ValueError:
+                raise problem(environment, name, "malformed JSON") from None
+            if not isinstance(users, dict):
+                raise problem(environment, name, "expected a JSON object of users")
+        elif name == "SNAPSHOT_SOURCE":
+            from . import snapshots
+            try:
+                snapshots.parse_source(content)
             except DeployError as error:
-                raise problem(environment, path, "snapshot", str(error)) from None
-
-    else:
-        for field in ("runtime_file", "migration_file"):
-            ref = absolute(field, value.get(field))
-            if inputs:
-                require(private_file(ref), field, "needs an owned mode-600 API environment file")
-        require(value.get("access_reviewed") is True, "access_reviewed", "confirm the external access boundary and browser demo-login limitation")
-        require(value.get("database_network"), "database_network", "name the external PostgreSQL network")
-    if inputs:
-        repository = os.environ.get("GITHUB_REPOSITORY")
-        require(not repository or repository.lower() == value["repository"].lower(), "repository", "differs from the workflow repository")
-    return value
+                raise problem(environment, name, str(error)) from None
+        if name.endswith("_ENV") and not content.endswith("\n"):
+            content += "\n"
+        files.append((Path(settings[field]), content, mode))
+    return files
 
 
-def read(environment, path, *, inputs=False):
-    if not private_file(path):
-        raise problem(environment, path, "descriptor", "missing, symlinked, wrong owner or not mode 600")
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError):
-        raise problem(environment, path, "descriptor", "malformed JSON") from None
-    return validate(value, environment, path, inputs=inputs)
-
-
-def merge(original, changes):
-    result = copy.deepcopy(original)
-    for key, value in changes.items():
-        result[key] = merge(result[key], value) if isinstance(result.get(key), dict) and isinstance(value, dict) else value
-    return result
-
-
-def defaults(environment, value):
-    """Fill locations from the installation scope, so user scope needs no root-owned paths."""
-    state = Path(installation()["state"])
-    value.setdefault("schema_version", CONFIG_SCHEMA)
-    value.setdefault("environment", environment)
-    value.setdefault("state_dir", str(state / environment))
-    value.setdefault("web_network", "web")
-    if environment != "release":
-        value.setdefault("database_network", "people-gator-preview-db")
-        infra = value.setdefault("infrastructure", {})
-        if isinstance(infra, dict):
-            infra.setdefault("mode", "managed" if environment == "pr" else "external")
-            infra.setdefault("project", "people-gator-preview-infra")
-            infra.setdefault("state_dir", str(state / "infrastructure"))
-    return value
-
-
-def configure(environment, path, changes, *, dry_run=False, expected=None):
-    original = path.read_bytes() if path.exists() else None
-    if original is not None and not private_file(path):
-        raise problem(environment, path, "descriptor", "must belong to this account with mode 600")
-    if expected is not None and hashlib.sha256(original or b"").hexdigest() != expected:
-        raise problem(environment, path, "descriptor", "changed concurrently; reread and retry")
-    try:
-        previous = json.loads(original) if original else {}
-    except ValueError:
-        raise problem(environment, path, "descriptor", "malformed JSON; restore a private backup") from None
-    candidate = defaults(environment, merge(previous, changes))
-    # Staging no longer owns S3/media/auth. Explicitly supplying its external
-    # runtime file also drops obsolete private sections from pre-rollout configs.
-    if environment == "staging" and "runtime_file" in changes:
-        for field in ("storage", "backup_source", "media_source", "accounts", "media_transfer"):
-            candidate.pop(field, None)
-    if environment == "staging" and "snapshot_source_file" in changes:
-        candidate.pop("snapshot", None)
-    validate(candidate, environment, path)
-    # Data identities cannot change while an environment is installed.
-    if previous and (Path(previous.get("state_dir", "/nonexistent")) / "owned.json").exists():
-        fields = ("state_dir", "infrastructure", "database_network", "migration_file",
-                  "docker_context", "project")
-        # An explicit runtime_file adds the external settings reference to old
-        # staging descriptors without moving any retained database resources.
-        if environment != "staging" or previous.get("runtime_file") is not None:
-            fields += ("runtime_file",)
-        if any(candidate.get(field) != previous.get(field) for field in fields):
-            raise problem(environment, path, "resource identity", "installed resource identity changes require explicit migration")
-    # Detect accidental state overlap among descriptors in this installation.
-    for sibling in path.parent.parent.glob("*/config.json"):
-        if sibling == path:
+def materialize(files: list[tuple[Path, str, int]]) -> None:
+    """Write secret files privately and atomically; unchanged content is left alone."""
+    for path, content, mode in files:
+        if path.exists() and not path.is_symlink() and path.read_text() == content and stat.S_IMODE(path.stat().st_mode) == mode:
             continue
-        try:
-            other = json.loads(sibling.read_text())
-            other_root = Path(other["state_dir"]).resolve()
-        except (OSError, ValueError, KeyError):
-            continue
-        root = Path(candidate["state_dir"]).resolve()
-        if root.is_relative_to(other_root) or other_root.is_relative_to(root):
-            raise problem(environment, path, "state_dir", f"overlaps environment descriptor {sibling}")
-        if candidate.get("host") and candidate.get("host") == other.get("host"):
-            raise problem(environment, path, "host", "already used by another environment")
-    digest = hashlib.sha256(original or b"").hexdigest()
-    if not dry_run:
-        with lock(path.with_suffix(".lock")):
-            if (path.read_bytes() if path.exists() else None) != original:
-                raise problem(environment, path, "descriptor", "changed concurrently; reread and retry")
-            if original:
-                atomic(path.with_name(f"config.backup-{digest}.json"), original)
-            write_json(path, candidate)
-    return {"config": str(path), "environment": environment, "dry_run": dry_run, "previous_digest": digest, "valid": True}
-
-
-def migrate(environment, path, *, dry_run=False):
-    if not private_file(path):
-        raise problem(environment, path, "descriptor", "needs a private owned descriptor")
-    original = path.read_bytes()
-    try:
-        value = json.loads(original)
-    except ValueError:
-        raise problem(environment, path, "descriptor", "malformed JSON") from None
-    if value.get("schema_version") == 0:
-        value["schema_version"] = 1
-        value.setdefault("environment", environment)
-    elif value.get("schema_version") != 1:
-        raise problem(environment, path, "schema_version", "unsupported newer version; upgrade the utility")
-    return configure(environment, path, value, dry_run=dry_run, expected=hashlib.sha256(original).hexdigest())
+        atomic(path, content)
+        path.chmod(mode)

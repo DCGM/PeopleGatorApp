@@ -1,8 +1,9 @@
-"""Host primitives shared by every environment: GitHub reads, Docker, PostgreSQL and images.
+"""Host primitives shared by every environment: GitHub API, Docker, PostgreSQL and images.
 
-Nothing here is specific to PR previews, staging or releases. Pull-request
-content never supplies Compose files or host commands; GitHub API metadata
-selects images, which are verified by repository, revision label and digest.
+Nothing here is specific to PR previews, staging or releases. Deploy jobs run
+in the workflow run that published the ``sha-<commit>`` images, so the build
+identity is the tested commit plus this run's id/attempt; images are verified
+by repository, revision label and digest before use.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ SHA = re.compile(r"[a-f0-9]{40}")
 
 
 class IneligibleRun(DeployError):
-    """The selected CI run cannot supply deployable images."""
+    """The requested commit is not deployable to this environment."""
 
 
 def positive_int(value: str | int) -> int:
@@ -35,6 +36,70 @@ def positive_int(value: str | int) -> int:
 
 def write_private(path: Path, content: str) -> None:
     atomic(path, content)
+
+
+def run_number(name: str) -> int:
+    """Actions run id/attempt from the environment; 0 outside a workflow run."""
+    value = os.environ.get(name, "")
+    return int(value) if re.fullmatch(r"[1-9][0-9]{0,15}", value) else 0
+
+
+def github_api(repository: str, endpoint: str, *, method: str = "GET", data=None):
+    """One authenticated GitHub API request; only idempotent reads are retried."""
+    token = os.environ.get("GH_TOKEN")
+    if not token:
+        raise DeployError("GH_TOKEN is required for GitHub lifecycle commands")
+    if not re.fullmatch(r"[!-~]+", token):
+        raise DeployError("GH_TOKEN must contain a token without whitespace or control characters")
+    url = f"https://api.github.com/repos/{repository}"
+    if endpoint:
+        url += f"/{endpoint}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "people-gator-deploy",
+    }
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode()
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=body, method=method, headers=headers)
+    # Never retry permission/not-found responses or interpret them as a
+    # closed PR, including during cleanup.
+    attempts = 3 if method == "GET" else 1
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                content = response.read()
+                return json.loads(content) if content else None
+        except urllib.error.HTTPError as error:
+            request_id = error.headers.get("X-GitHub-Request-Id", "")
+            if not re.fullmatch(r"[A-Za-z0-9:-]{1,200}", request_id):
+                request_id = "unavailable"
+            message = f"GitHub API {method} {url} failed: HTTP {error.code}; GitHub request ID: {request_id}."
+            if error.code in {401, 403, 404}:
+                message += (
+                    " Check GITHUB_REPOSITORY, then the job token's repository access and its "
+                    "contents/pull-requests/deployments permissions. A 404 may mean missing access "
+                    "or a missing resource; it does not establish PR closure."
+                )
+            transient = error.code in {500, 502, 503, 504}
+            error.close()
+        except (urllib.error.URLError, TimeoutError):
+            # Exception reasons and response bodies may contain credentials
+            # or proxy details. Log only our own endpoint and fixed text.
+            message = f"GitHub API {method} {url} failed: network error or timeout."
+            transient = True
+        except ValueError:
+            raise DeployError(f"GitHub API {method} {url} returned invalid JSON") from None
+        message = message.replace(token, "[REDACTED]")
+        if not transient or attempt == attempts - 1:
+            raise DeployError(message) from None
+        delay = 2 ** attempt
+        print(f"{message} Retrying in {delay}s ({attempt + 2}/{attempts}).", file=sys.stderr, flush=True)
+        time.sleep(delay)
+    raise DeployError(f"GitHub API {method} {url} failed")
 
 
 def summary(text: str) -> None:
@@ -81,9 +146,7 @@ class Host:
         if workflow_repository and self.repository.lower() != workflow_repository.lower():
             raise DeployError(
                 f"Configured repository {self.repository} does not match GITHUB_REPOSITORY "
-                f"{workflow_repository!r}. An operator must update only the repository field "
-                "with `people-gator-deploy <environment> configure`, preserving all other "
-                "settings, state and passwords."
+                f"{workflow_repository!r}. Unset DEPLOY_REPOSITORY or make it match the workflow repository."
             )
         self._access_checked = False
         self.root = Path(config["state_dir"])
@@ -92,55 +155,8 @@ class Host:
 
     # GitHub ---------------------------------------------------------------
 
-    def api(self, endpoint: str):
-        token = os.environ.get("GH_TOKEN")
-        if not token:
-            raise DeployError("GH_TOKEN is required for GitHub lifecycle commands")
-        if not re.fullmatch(r"[!-~]+", token):
-            raise DeployError("GH_TOKEN must contain a token without whitespace or control characters")
-        url = f"https://api.github.com/repos/{self.repository}"
-        if endpoint:
-            url += f"/{endpoint}"
-        request = urllib.request.Request(url, headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "people-gator-deploy",
-        })
-        # Only idempotent reads are retried. Never retry permission/not-found
-        # responses or interpret them as a closed PR, including during cleanup.
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(request, timeout=30) as response:
-                    return json.load(response)
-            except urllib.error.HTTPError as error:
-                request_id = error.headers.get("X-GitHub-Request-Id", "")
-                if not re.fullmatch(r"[A-Za-z0-9:-]{1,200}", request_id):
-                    request_id = "unavailable"
-                message = f"GitHub API GET {url} failed: HTTP {error.code}; GitHub request ID: {request_id}."
-                if error.code in {401, 403, 404}:
-                    message += (
-                        " Check the descriptor repository against GITHUB_REPOSITORY, then "
-                        "the job token's repository access and contents/actions/pull-requests "
-                        "read permissions. A 404 may mean missing access or a missing resource; "
-                        "it does not establish PR closure."
-                    )
-                transient = error.code in {500, 502, 503, 504}
-                error.close()
-            except (urllib.error.URLError, TimeoutError):
-                # Exception reasons and response bodies may contain credentials
-                # or proxy details. Log only our own endpoint and fixed text.
-                message = f"GitHub API GET {url} failed: network error or timeout."
-                transient = True
-            except ValueError:
-                raise DeployError(f"GitHub API GET {url} returned invalid JSON") from None
-            message = message.replace(token, "[REDACTED]")
-            if not transient or attempt == 2:
-                raise DeployError(message) from None
-            delay = 2 ** attempt
-            print(f"{message} Retrying in {delay}s ({attempt + 2}/3).", file=sys.stderr, flush=True)
-            time.sleep(delay)
-        raise DeployError(f"GitHub API GET {url} failed")
+    def api(self, endpoint: str, *, method: str = "GET", data=None):
+        return github_api(self.repository, endpoint, method=method, data=data)
 
     def check_access(self) -> None:
         if self._access_checked:
@@ -148,23 +164,17 @@ class Host:
         repository = self.api("")
         if not isinstance(repository, dict) or repository.get("full_name", "").lower() != self.repository.lower():
             raise DeployError(
-                "GitHub returned a different repository identity. Update the descriptor "
-                "repository field to its current full name before retrying."
+                "GitHub returned a different repository identity. Set DEPLOY_REPOSITORY to its current "
+                "full name before retrying."
             )
         self._access_checked = True
         print(f"GitHub repository access verified: {self.repository}", flush=True)
 
-    def ci_run(self, run_id: int, *, event: str, branch: str | None = None) -> dict:
-        """A successful same-repository PR CI run of the requested event; nothing else builds images."""
-        run = self.api(f"actions/runs/{positive_int(run_id)}")
-        workflow = self.api(f"actions/workflows/{positive_int(run['workflow_id'])}")
-        if (run.get("conclusion") != "success" or run.get("event") != event
-                or (branch is not None and run.get("head_branch") != branch)
-                or workflow.get("path") != ".github/workflows/pr-ci.yml"
-                or (run.get("head_repository") or {}).get("full_name", "").lower() != self.repository.lower()
-                or not SHA.fullmatch(run.get("head_sha", ""))):
-            raise IneligibleRun(f"Run {run_id} is not an eligible successful same-repository {event} PR CI run")
-        return run
+    def build(self, sha: str) -> dict:
+        """The tested commit and this workflow run's identity; images are tagged sha-<commit>."""
+        if not SHA.fullmatch(sha or ""):
+            raise DeployError("--sha requires the tested 40-character lowercase commit")
+        return {"head_sha": sha, "id": run_number("GITHUB_RUN_ID"), "run_attempt": run_number("GITHUB_RUN_ATTEMPT")}
 
     # Docker / PostgreSQL --------------------------------------------------
 
@@ -230,9 +240,11 @@ class Host:
         print(f"Generated credentials are in {env_file}; passwords are never printed")
 
     def image(self, component: str, run: dict) -> str:
-        """Pull the run/attempt tag and return its digest after verifying the tested revision."""
+        """Pull the tested commit's tag and return its digest after verifying the revision label."""
         repository = f"ghcr.io/{self.repository.lower()}-{component}"
-        tag = f"{repository}:run-{positive_int(run['id'])}-{positive_int(run['run_attempt'])}"
+        if not SHA.fullmatch(run.get("head_sha", "")):
+            raise DeployError("Build identity needs the tested commit")
+        tag = f"{repository}:sha-{run['head_sha']}"
         self.command(["docker", "pull", tag])
         inspected = json.loads(self.command(["docker", "image", "inspect", tag]))[0]
         labels = inspected.get("Config", {}).get("Labels") or {}
