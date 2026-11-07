@@ -20,12 +20,7 @@ IMAGES = {
     component: f"ghcr.io/dcgm/peoplegatorapp-{component}@sha256:{'b' * 64}"
     for component in ("frontend", "backend")
 }
-RUN = {
-    "id": 100, "run_attempt": 1, "workflow_id": 5, "conclusion": "success",
-    "event": "pull_request", "head_sha": SHA,
-    "head_repository": {"full_name": "DCGM/PeopleGatorApp"},
-    "pull_requests": [{"number": 123}],
-}
+RUN = {"id": 100, "run_attempt": 1, "head_sha": SHA}  # this workflow run's build identity
 
 
 def pull_request(*, state="open", sha=SHA, repository="DCGM/PeopleGatorApp"):
@@ -197,10 +192,7 @@ class LifecycleTests(unittest.TestCase):
         self.controller.sql = Mock(return_value="")
         self.controller.readiness = Mock()
         self.controller.api = Mock(side_effect=lambda endpoint: (
-            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else
-            RUN if endpoint == "actions/runs/100" else
-            {"path": ".github/workflows/pr-ci.yml"} if endpoint == "actions/workflows/5"
-            else pull_request()
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else pull_request()
         ))
 
     def seed_preview(self):

@@ -103,7 +103,7 @@ class DockerAdapterTests(unittest.TestCase):
                               PEOPLE_GATOR_API__STORAGE="ambient", DOCKER_HOST="tcp://ambient:2375",
                               PEOPLE_GATOR_POSTGRES_TEST_URL="postgresql://synthetic:secret@host/test",
                               PEOPLE_GATOR_SCHEMA_TEST_URL="postgresql://synthetic:secret@host/schema",
-                              PEOPLE_GATOR_DEPLOY_CONFIG="/private/descriptor.json"):
+                              DEPLOY_USERS_JSON="{}", DEPLOY_DOMAIN="preview.example.invalid"):
             Docker("rootless").run(["docker", "compose", "--project-name", "p", "ps"])
         call = self.calls()[0]
         self.assertEqual(call["args"][:2], ["--context", "rootless"])
