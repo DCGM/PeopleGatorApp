@@ -814,6 +814,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 + urlencode({"page_link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
             "viewport-focus": focus_path,
+            # #112: drag from inside the faces and OCR lines of the same page, with
+            # and without open face actions. Entry points only; no fixture changes.
+            "scan-box-drag": focus_path,
+            "scan-box-drag-selected": focus_path + "?" + urlencode({
+                "person": active_faces.get("focus-upper", ""),
+            }),
             # Reuse Ada's two linked OCR lines; no persisted fixtures need changing.
             "person-mention-highlights": (
                 focus_path + "?" + urlencode({"selectedPerson": manifest.entities["ada"]})

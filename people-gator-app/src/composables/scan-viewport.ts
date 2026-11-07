@@ -6,6 +6,10 @@ import type { PageViewportBounds } from '@/viewmodels/document-workspace.types'
 
 const INITIAL_SCALE = 0.82
 export const SCAN_ZOOM_STEP = 0.24
+/** Pointer movement, in CSS pixels, after which a press is a drag rather than a click. */
+export const SCAN_DRAG_THRESHOLD = 6
+// Face boxes keep the default so a mouse press focuses them and their actions can take focus.
+const NATIVE_PRESS = '[data-region-type="face"]'
 
 /** Own resources for the current scan nodes, including genuine node replacement. */
 export function useScanViewport(
@@ -54,7 +58,10 @@ export function useScanViewport(
       let active = true
       const controller = Panzoom(zoomNode, {
         canvas: true,
-        handleStartEvent: (event) => event.preventDefault(),
+        handleStartEvent: (event) => {
+          if (!(event.target instanceof Element && event.target.closest(NATIVE_PRESS)))
+            event.preventDefault()
+        },
         maxScale: MAXIMUM_ZOOM,
         minScale: MINIMUM_ZOOM,
         startScale: state?.scale ?? INITIAL_SCALE,
@@ -95,8 +102,46 @@ export function useScanViewport(
         if (active && current() === controller)
           controller.zoomWithWheel(event, { step: SCAN_ZOOM_STEP })
       }
+      // Panning can start on an annotation box. Once a press moves past the threshold or
+      // becomes a pinch, the click that ends it must not select or refocus a box.
+      const pointers = new Map<number, { x: number; y: number }>()
+      let dragged = false
+      let settle: ReturnType<typeof setTimeout> | undefined
+      function pressed(event: Event) {
+        const press = (event as CustomEvent<{ originalEvent?: PointerEvent }>).detail?.originalEvent
+        if (!press || !('pointerId' in press)) return
+        if (!pointers.size) {
+          clearTimeout(settle)
+          dragged = false
+        }
+        pointers.set(press.pointerId, { x: press.clientX, y: press.clientY })
+        if (pointers.size > 1) dragged = true
+      }
+      function moved(event: PointerEvent) {
+        const start = pointers.get(event.pointerId)
+        if (
+          start &&
+          Math.hypot(event.clientX - start.x, event.clientY - start.y) > SCAN_DRAG_THRESHOLD
+        )
+          dragged = true
+      }
+      function released(event: PointerEvent) {
+        if (!pointers.delete(event.pointerId) || pointers.size) return
+        // The click follows pointerup in the same task; keyboard clicks come later.
+        settle = setTimeout(() => (dragged = false))
+      }
+      function clicked(event: MouseEvent) {
+        if (!dragged) return
+        event.preventDefault()
+        event.stopPropagation()
+      }
       viewerNode.addEventListener('wheel', wheel, { passive: false })
+      viewerNode.addEventListener('click', clicked, true)
       zoomNode.addEventListener('panzoomchange', changed)
+      zoomNode.addEventListener('panzoomstart', pressed)
+      window.addEventListener('pointermove', moved, true)
+      window.addEventListener('pointerup', released, true)
+      window.addEventListener('pointercancel', released, true)
       window.addEventListener('resize', resize)
       const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
       observer?.observe(viewerNode)
@@ -107,7 +152,13 @@ export function useScanViewport(
         active = false
         saved = { key: binding!.key, scale: controller.getScale(), ...controller.getPan() }
         viewerNode.removeEventListener('wheel', wheel)
+        viewerNode.removeEventListener('click', clicked, true)
         zoomNode.removeEventListener('panzoomchange', changed)
+        zoomNode.removeEventListener('panzoomstart', pressed)
+        window.removeEventListener('pointermove', moved, true)
+        window.removeEventListener('pointerup', released, true)
+        window.removeEventListener('pointercancel', released, true)
+        clearTimeout(settle)
         window.removeEventListener('resize', resize)
         observer?.disconnect()
         controller.destroy()

@@ -294,6 +294,14 @@ it('expands the selected tag into one card through viewport movement and collaps
     press(window, 'pointerup', 60)
     await settle()
     expect(panel()).toBe(reopened)
+    // A press on a box reaches the scan, so a drag from it pans and keeps the actions too.
+    const reachedScan = vi.fn()
+    document.body.addEventListener('pointerdown', reachedScan, { once: true })
+    press(detection.element, 'pointerdown', 10)
+    press(window, 'pointerup', 60)
+    await settle()
+    expect(reachedScan).toHaveBeenCalledTimes(1)
+    expect(panel()).toBe(reopened)
     await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
     expect(panel()).toBe(reopened)
     // A click outside closes the actions but keeps the face selected.
@@ -304,6 +312,29 @@ it('expands the selected tag into one card through viewport movement and collaps
     expect(wrapper.emitted('clearFace')).toHaveLength(1)
     expect(detection.attributes('aria-pressed')).toBe('true')
     expect(detection.attributes('aria-expanded')).toBe('false')
+    await detection.trigger('click')
+    await settle()
+    expect(panel()).not.toBeNull()
+
+    // A touch drag sends no click, so a later click on the toolbar must not report it.
+    const touch = (target: EventTarget, type: string) => {
+      const event = new MouseEvent(type, { bubbles: true })
+      Object.defineProperty(event, 'pointerType', { value: 'touch' })
+      target.dispatchEvent(event)
+    }
+    const toolbar = document.body.appendChild(document.createElement('button'))
+    toolbar.addEventListener('pointerdown', (event) => event.stopPropagation())
+    touch(detection.element, 'pointerdown')
+    touch(toolbar, 'pointerdown')
+    toolbar.click()
+    await settle()
+    expect(panel()).not.toBeNull()
+    // A tap outside still closes them.
+    touch(document.body, 'pointerdown')
+    document.body.click()
+    await settle()
+    expect(panel()).toBeNull()
+    toolbar.remove()
     await detection.trigger('click')
     await settle()
     expect(panel()).not.toBeNull()

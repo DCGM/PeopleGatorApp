@@ -2210,6 +2210,43 @@ async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
 
 
 @pytest.mark.asyncio
+async def test_scan_box_drag_examples_open_page_with_drawable_boxes(seed_target):
+    """#112: both drag links open a page whose face and OCR-line boxes lie inside its image."""
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["focus-1"])
+    plain = urlsplit(result.filter_examples["scan-box-drag"])
+    selected = urlsplit(result.filter_examples["scan-box-drag-selected"])
+    assert plain.path == selected.path
+    assert plain.path == (
+        f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    )
+    assert not plain.query
+    assert parse_qs(selected.query) == {"person": [str(result.faces["focus-upper"])]}
+    image = await get_page_image(page.library, page.document_id, page.page_id)
+    with Image.open(io.BytesIO(image.content)) as stored:
+        width, height = stored.size
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    lines = [line for region in layout.regions for line in region.lines]
+    assert len(lines) >= 2
+    for line in lines:
+        xs, ys = [x for x, _ in line.polygon], [y for _, y in line.polygon]
+        assert 0 <= min(xs) < max(xs) <= width and 0 <= min(ys) < max(ys) <= height
+    faces = [await database.faces.get(result.faces[key])
+             for key in ("focus-upper", "focus-lower", "focus-tiny")]
+    for face in faces:
+        assert face.source_id == page.source_id
+        box = face.bounding_box
+        assert box.width > 0 and box.height > 0
+        assert 0 <= box.x and box.x + box.width <= width
+        assert 0 <= box.y and box.y + box.height <= height
+    rerun = await preview.seed_preview(database, filesystem)
+    for key in ("scan-box-drag", "scan-box-drag-selected"):
+        assert rerun.filter_examples[key] == result.filter_examples[key]
+    assert [await database.faces.get(face.detection_id) for face in faces] == faces
+
+
+@pytest.mark.asyncio
 async def test_person_last_change_example_shows_mixed_annotation_states(seed_target):
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
