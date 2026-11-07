@@ -10,10 +10,11 @@
 #   release  v* tags whose commit is already on main
 #
 # Pull requests from forks are refused whatever the workflow says. Install a copy
-# from reviewed main outside the runner directory and set, in each runner's .env:
+# from reviewed main outside the runner directory and set, in each runner's .env,
+# the environments whose labels the runner carries:
 #
 #   ACTIONS_RUNNER_HOOK_JOB_STARTED=/absolute/path/to/job-started.sh
-#   PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview        # or staging / release
+#   PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview,staging   # any of preview, staging, release
 #
 # Optional settings (runner .env): PEOPLE_GATOR_RUNNER_REPOSITORY (owner/name),
 # PEOPLE_GATOR_RUNNER_REMOTE (Git URL) and PEOPLE_GATOR_RUNNER_CACHE (directory).
@@ -22,7 +23,7 @@ set -eu
 repository="${PEOPLE_GATOR_RUNNER_REPOSITORY:-DCGM/PeopleGatorApp}"
 remote="${PEOPLE_GATOR_RUNNER_REMOTE:-https://github.com/$repository.git}"
 cache="${PEOPLE_GATOR_RUNNER_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/people-gator-runner-guard}"
-environment="${PEOPLE_GATOR_RUNNER_ENVIRONMENT:-}"
+environments="$(printf '%s' "${PEOPLE_GATOR_RUNNER_ENVIRONMENT:-}" | tr ',' ' ')"
 event="${GITHUB_EVENT_NAME:-}"
 ref="${GITHUB_REF:-}"
 sha="${GITHUB_SHA:-}"
@@ -33,10 +34,13 @@ refuse() {
 }
 
 [ "${GITHUB_REPOSITORY:-}" = "$repository" ] || refuse "this runner serves only $repository"
-case "$environment" in
-    preview | staging | release) ;;
-    *) refuse "set PEOPLE_GATOR_RUNNER_ENVIRONMENT to preview, staging or release in the runner .env" ;;
-esac
+[ -n "$environments" ] || refuse "set PEOPLE_GATOR_RUNNER_ENVIRONMENT (preview, staging and/or release) in the runner .env"
+for environment in $environments; do
+    case "$environment" in
+        preview | staging | release) ;;
+        *) refuse "unknown environment '$environment' in PEOPLE_GATOR_RUNNER_ENVIRONMENT" ;;
+    esac
+done
 
 case "$event" in
     pull_request | pull_request_target)
@@ -51,13 +55,16 @@ print((head.get("repo") or {}).get("full_name", ""))' "${GITHUB_EVENT_PATH:?}" 2
         ;;
 esac
 
-case "$environment:$event:$ref" in
-    preview:pull_request:refs/pull/*/merge) exit 0 ;;
-    preview:push:refs/heads/main | preview:schedule:refs/heads/main | preview:workflow_dispatch:refs/heads/main) exit 0 ;;
-    staging:push:refs/heads/main | staging:workflow_dispatch:refs/heads/main) exit 0 ;;
-    release:push:refs/tags/v* | release:workflow_dispatch:refs/tags/v*) ;;
-    *) refuse "the $environment runner does not serve this event" ;;
-esac
+tagged_release=0
+for environment in $environments; do
+    case "$environment:$event:$ref" in
+        preview:pull_request:refs/pull/*/merge) exit 0 ;;
+        preview:push:refs/heads/main | preview:schedule:refs/heads/main | preview:workflow_dispatch:refs/heads/main) exit 0 ;;
+        staging:push:refs/heads/main | staging:workflow_dispatch:refs/heads/main) exit 0 ;;
+        release:push:refs/tags/v* | release:workflow_dispatch:refs/tags/v*) tagged_release=1 ;;
+    esac
+done
+[ "$tagged_release" = 1 ] || refuse "this runner ($environments) does not serve this event"
 
 # A tag can point at any commit, including an unreviewed workflow. Accept it
 # only when the tagged commit is already part of main's history.

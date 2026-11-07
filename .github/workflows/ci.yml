@@ -203,6 +203,10 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
+  # Preview jobs read the preview host's settings from repository variables
+  # (PREVIEW_*): remove-preview and prune-previews have no `environment:` (that
+  # would record a new Deployment), so environment-scoped variables would be
+  # empty there. Secrets stay in the `preview` environment.
   deploy-preview:
     needs: images
     if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
@@ -215,7 +219,7 @@ jobs:
       deployments: write
     environment:
       name: preview
-      url: https://pr-${{ github.event.number }}.${{ vars.DEPLOY_DOMAIN }}
+      url: https://pr-${{ github.event.number }}.${{ vars.PREVIEW_DOMAIN }}
     # Never cancel a running deployment of this PR; the closing run waits for it.
     concurrency:
       group: deploy-preview-${{ github.event.number }}
@@ -225,21 +229,21 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.DEPLOY_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.DEPLOY_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.DEPLOY_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.DEPLOY_INFRASTRUCTURE_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.DEPLOY_INFRASTRUCTURE_PROJECT }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.DEPLOY_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.DEPLOY_WEB_NETWORK }}
-      DEPLOY_CERTIFICATE_RESOLVER: ${{ vars.DEPLOY_CERTIFICATE_RESOLVER }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.DEPLOY_OTEL_NETWORK }}
-      DEPLOY_OTEL_HTTP_ENDPOINT: ${{ vars.DEPLOY_OTEL_HTTP_ENDPOINT }}
-      DEPLOY_PGADMIN_HOST: ${{ vars.DEPLOY_PGADMIN_HOST }}
-      DEPLOY_PGADMIN_EMAIL: ${{ vars.DEPLOY_PGADMIN_EMAIL }}
-      DEPLOY_PREVIEW_LOG_PORT: ${{ vars.DEPLOY_PREVIEW_LOG_PORT }}
-      DEPLOY_USERS_JSON: ${{ secrets.DEPLOY_USERS_JSON }}
-      DEPLOY_TELEMETRY_ENV: ${{ secrets.DEPLOY_TELEMETRY_ENV }}
+      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
+      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.PREVIEW_INFRASTRUCTURE_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.PREVIEW_INFRASTRUCTURE_PROJECT }}
+      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
+      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
+      DEPLOY_CERTIFICATE_RESOLVER: ${{ vars.PREVIEW_CERTIFICATE_RESOLVER }}
+      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
+      DEPLOY_OTEL_HTTP_ENDPOINT: ${{ vars.PREVIEW_OTEL_HTTP_ENDPOINT }}
+      DEPLOY_PGADMIN_HOST: ${{ vars.PREVIEW_PGADMIN_HOST }}
+      DEPLOY_PGADMIN_EMAIL: ${{ vars.PREVIEW_PGADMIN_EMAIL }}
+      DEPLOY_PREVIEW_LOG_PORT: ${{ vars.PREVIEW_LOG_PORT }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
+      DEPLOY_TELEMETRY_ENV: ${{ secrets.PREVIEW_TELEMETRY_ENV }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -269,14 +273,14 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.DEPLOY_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.DEPLOY_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.DEPLOY_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.DEPLOY_INFRASTRUCTURE_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.DEPLOY_INFRASTRUCTURE_PROJECT }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.DEPLOY_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.DEPLOY_WEB_NETWORK }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.DEPLOY_OTEL_NETWORK }}
+      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
+      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.PREVIEW_INFRASTRUCTURE_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.PREVIEW_INFRASTRUCTURE_PROJECT }}
+      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
+      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
+      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -359,14 +363,14 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.DEPLOY_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.DEPLOY_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.DEPLOY_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.DEPLOY_INFRASTRUCTURE_STATE_DIR }}
-      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.DEPLOY_INFRASTRUCTURE_PROJECT }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.DEPLOY_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.DEPLOY_WEB_NETWORK }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.DEPLOY_OTEL_NETWORK }}
+      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
+      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_STATE_DIR: ${{ vars.PREVIEW_INFRASTRUCTURE_STATE_DIR }}
+      DEPLOY_INFRASTRUCTURE_PROJECT: ${{ vars.PREVIEW_INFRASTRUCTURE_PROJECT }}
+      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
+      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
+      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
     steps:
       - uses: actions/checkout@v4
         with:

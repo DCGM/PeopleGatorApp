@@ -39,11 +39,13 @@ supplied through this file. Do not print its contents or rendered Compose
 configuration into CI logs. Replace `lgtm` with the actual reachable collector
 hostname if different.
 
-Store these lines as the `DEPLOY_TELEMETRY_ENV` secret of **each** GitHub
-Environment (`preview`, `staging`, `production`) and name the collector's Docker
-network in the `DEPLOY_OTEL_NETWORK` variable (default `logging`). Each deploy
-job writes the secret to `<DEPLOY_STATE_DIR>/telemetry.env` (mode 600) and the
-Compose stacks reference that file. Existing staging/release `DEPLOY_RUNTIME_ENV`
+Store these lines as the `PREVIEW_TELEMETRY_ENV` secret of the `preview`
+GitHub Environment and the `DEPLOY_TELEMETRY_ENV` secret of `staging` and
+`production`, and name the collector's Docker network in the
+`PREVIEW_OTEL_NETWORK` repository variable / `DEPLOY_OTEL_NETWORK` environment
+variable (default `logging`). Each deploy job writes the secret to
+`<state dir>/telemetry.env` (mode 600) and the Compose stacks reference that
+file. Existing staging/release `DEPLOY_RUNTIME_ENV`
 settings are retained; telemetry values override matching runtime values. Only
 the API runtime container receives this extra file, not frontend, migration,
 seed, check or database snapshot workers. Without the secret, telemetry remains
@@ -158,9 +160,9 @@ Never use the browser RUM token as OTLP credentials.
 1. Review and merge the implementation. A PR preview deploys with its own
    branch's deploy code, so the complete path can be verified on the PR before
    merge; staging and releases pick it up from `main` and the tag.
-2. Add the `DEPLOY_TELEMETRY_ENV` secret (and `DEPLOY_OTEL_NETWORK` if it is not
-   `logging`) to each GitHub Environment. Keep the shared infrastructure
-   unchanged.
+2. Add the telemetry secret (and the OTel network variable if it is not
+   `logging`) for each environment as described above. Keep the shared
+   infrastructure unchanged.
 3. Deploy a new eligible PR/main build or release through the normal lifecycle.
    Ensure backend startup and routed readiness succeed. No database migration,
    new seed records or frontend rebuild for credentials is needed.

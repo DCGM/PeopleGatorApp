@@ -99,6 +99,16 @@ class RunnerGuardTests(unittest.TestCase):
         self.assertRefused("release", "push", "refs/tags/v1.2.3", remote=(Path(self.temporary.name) / "missing").as_uri(),
                            message="cannot read")
 
+    def test_runners_with_several_labels_serve_every_listed_environment(self):
+        self.assertAdmitted("preview,staging", "pull_request", "refs/pull/7/merge")
+        self.assertAdmitted("preview,staging", "push", "refs/heads/main")
+        self.assertAdmitted("staging, release", "workflow_dispatch", "refs/heads/main")
+        self.assertAdmitted("staging,release", "push", "refs/tags/v1.2.3", sha=self.reviewed)
+        self.assertRefused("preview,staging", "push", "refs/tags/v1.2.3")
+        self.assertRefused("preview,staging", "pull_request", "refs/pull/7/merge", head_repository="Fork/PeopleGatorApp",
+                           message="other repositories never run here")
+        self.assertRefused("preview,ci", "push", "refs/heads/main", message="unknown environment 'ci'")
+
     def test_misconfigured_runner_and_other_repositories_are_refused(self):
         self.assertRefused(None, "push", "refs/heads/main", message="PEOPLE_GATOR_RUNNER_ENVIRONMENT")
         self.assertRefused("ci", "push", "refs/heads/main", message="PEOPLE_GATOR_RUNNER_ENVIRONMENT")

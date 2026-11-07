@@ -72,9 +72,10 @@ The CI workflow (`.github/workflows/ci.yml`) smoke-tests the real
 migration/seed CLI twice in a separate `ci_seed` database and runs the seed
 integration tests with `PEOPLE_GATOR_SCHEMA_TEST_URL`. Its deploy jobs run
 `deploy/people-gator-deploy` from the checked-out commit (a PR deploys with its
-own branch's deploy code; staging uses `main`, releases the tag) with the
-settings of the GitHub Environments `preview`, `staging` and `production`, as
-described in `deploy/people-gator-deploy/README.md`. Deployment lifecycle,
+own branch's deploy code; staging uses `main`, releases the tag) with settings
+kept in GitHub (repository variables `PREVIEW_*` and the `preview`, `staging`
+and `production` environments), as described in
+`deploy/people-gator-deploy/README.md`. Deployment lifecycle,
 workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
 update them with any change to the workflow's deploy steps, the `DEPLOY_*`
 settings or the runner guard. Keep credentials in GitHub Environment secrets

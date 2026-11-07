@@ -18,7 +18,7 @@ covered in the [utility guide](README.md).
 - An OTLP HTTP backend on `DEPLOY_OTEL_NETWORK` (default `logging`, endpoint
   `DEPLOY_OTEL_HTTP_ENDPOINT`, default `http://lgtm:4318`). The shared collector
   receives Docker fluentd logs on `127.0.0.1:<DEPLOY_PREVIEW_LOG_PORT>` (default 24224).
-- DNS: `*.<DEPLOY_DOMAIN>` (previews), `DEPLOY_PGADMIN_HOST`, the staging
+- DNS: `*.<PREVIEW_DOMAIN>` (previews), `PREVIEW_PGADMIN_HOST`, the staging
   `DEPLOY_HOST` and the production `DEPLOY_HOST` all point to the Traefik host.
   The preview wildcard does not cover staging.
 - Outbound access from the deploy account to GitHub (API and GHCR) and to the
@@ -31,11 +31,11 @@ The `frontend`, `backend` and `images` jobs run on GitHub-hosted `ubuntu-24.04`
 runners, so no PR code runs on your hosts except the deploy jobs of
 same-repository pull requests. Self-hosted runners serve only the deploy jobs:
 
-| Runner labels | Jobs | `PEOPLE_GATOR_RUNNER_ENVIRONMENT` | GitHub Environment |
+| Runner label | Jobs | `PEOPLE_GATOR_RUNNER_ENVIRONMENT` | Settings |
 | --- | --- | --- | --- |
-| `self-hosted,linux,x64,people-gator-preview` | `deploy-preview`, `remove-preview`, `prune-previews` | `preview` | `preview` |
-| `self-hosted,linux,x64,people-gator-staging` | `deploy-staging` | `staging` | `staging` |
-| `self-hosted,linux,x64,people-gator-release` | `deploy-release` | `release` | `production` |
+| `self-hosted,linux,x64,people-gator-preview` | `deploy-preview`, `remove-preview`, `prune-previews` | `preview` | repository variables `PREVIEW_*`; `preview` environment secrets |
+| `self-hosted,linux,x64,people-gator-staging` | `deploy-staging` | `staging` | `staging` environment |
+| `self-hosted,linux,x64,people-gator-release` | `deploy-release` | `release` | `production` environment |
 
 Labels only select a runner: in a public repository any workflow in a PR, branch
 or tag can request them, and a pull request's workflow file is the pull request's
@@ -49,15 +49,16 @@ payload, whatever the workflow says:
 install -D -m 755 deploy/runner/job-started.sh ~/.local/libexec/people-gator/job-started.sh
 # In each runner directory; the script itself must live outside it:
 echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$HOME/.local/libexec/people-gator/job-started.sh" >> .env
-echo "PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview" >> .env   # or staging / release
+echo "PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview,staging" >> .env   # the environments whose labels this runner carries
 ```
 
 Restart each runner service while idle so it reads `.env`, for example
 `sudo ./svc.sh stop && sudo ./svc.sh start`, or
-`systemctl --user restart github-runner@<runner>` for a user unit. A runner that
-carries several labels must still name one environment; register one runner per
-environment. Copy the script from reviewed `main`, and refresh the copy when it
-changes. Refused jobs fail in their `Set up runner` step.
+`systemctl --user restart github-runner@<runner>` for a user unit. List every
+environment whose label the runner carries (comma-separated); a job for an
+unlisted environment is refused and GitHub does not move it to another runner.
+Copy the script from reviewed `main`, and refresh the copy when it changes.
+Refused jobs fail in their `Set up runner` step.
 
 Also set **Settings → Actions → General → Fork pull request workflows** to
 require approval for all outside contributors, protect release tags (`v*`) with a
@@ -97,13 +98,13 @@ secrets, and deployment jobs cannot reach your files or containers.
 3. Move the public Traefik (and its tunnel sidecar) and the OTLP backend to this
    daemon. Containers on one daemon cannot join another daemon's networks. Keep
    development proxies on your own daemon and ports.
-4. Register one runner per environment as `gator-deploy` with its label
-   (`people-gator-preview`, `people-gator-staging`, `people-gator-release`),
-   install them with `sudo ./svc.sh install gator-deploy`, and add the
-   job-started guard with the matching `PEOPLE_GATOR_RUNNER_ENVIRONMENT`.
-   Several runners can run different environments at the same time; each
-   environment still deploys one job at a time.
-5. As `gator-deploy`, export the GitHub Environments' `DEPLOY_*` values with
+4. Register the runners as `gator-deploy` with the labels of the environments
+   they serve (`people-gator-preview`, `people-gator-staging`,
+   `people-gator-release`), install them with `sudo ./svc.sh install gator-deploy`,
+   and add the job-started guard with the matching
+   `PEOPLE_GATOR_RUNNER_ENVIRONMENT` list. Several runners can run different
+   environments at the same time; each environment still deploys one job at a time.
+5. As `gator-deploy`, export the GitHub settings as `DEPLOY_*` values with
    `DEPLOY_DOCKER_CONTEXT=rootless`, then run `pr install`, `staging install`
    and `staging snapshot-init` from a checkout of `main`
    ([one-time setup](README.md#one-time-host-setup)). Rerun the latest CI of open
@@ -113,29 +114,29 @@ secrets, and deployment jobs cannot reach your files or containers.
 
 ## PR previews
 
-- `DEPLOY_USERS_JSON`: a users JSON with Argon2 hashes, written by each job to
-  `<DEPLOY_STATE_DIR>/users.json` (mode 644) for the backend container's bind
-  mount. `people-gator-api/example.users.json` supplies the demo `test` / `test`
+- `PREVIEW_USERS_JSON` (`preview` environment secret): a users JSON with Argon2
+  hashes, written by each job to `<state dir>/users.json` (mode 644) for the
+  backend container's bind mount. `people-gator-api/example.users.json` supplies the demo `test` / `test`
   account that the preview frontend logs into.
 - `pr install` generates the shared PostgreSQL and pgAdmin passwords into
-  `<DEPLOY_INFRASTRUCTURE_STATE_DIR>/infrastructure.env` (mode 600) and starts
+  `<infrastructure state dir>/infrastructure.env` (mode 600) and starts
   PostgreSQL, the collector and pgAdmin. Back up that directory with the
   `<project>_postgres-data` and `<project>_pgadmin-data` volumes before
   `pr infra-upgrade`.
-- pgAdmin: `https://<DEPLOY_PGADMIN_HOST>`, login `DEPLOY_PGADMIN_EMAIL` with
+- pgAdmin: `https://<PREVIEW_PGADMIN_HOST>`, login `PREVIEW_PGADMIN_EMAIL` with
   `PGADMIN_DEFAULT_PASSWORD`. Its preconfigured server connects to
   `preview-postgres:5432` as `preview_admin` (`POSTGRES_ADMIN_PASSWORD`). A PR-only
   connection uses role/database `preview_pr_<N>` and the password in
-  `<DEPLOY_STATE_DIR>/pr-<N>/state.json`. Never print these files in Actions.
+  `<state dir>/pr-<N>/state.json`. Never print these files in Actions.
 - Logs reach LGTM with resource attribute `people-gator.preview.pr = "<N>"` and
   service names `people-gator-preview.<service>`; the tested SHA is
   `vcs.ref.head.revision`. Buffers are bounded; this is not an audit archive.
 
 ## Staging
 
-Staging shares the preview PostgreSQL (the same `DEPLOY_INFRASTRUCTURE_STATE_DIR`,
-`DEPLOY_INFRASTRUCTURE_PROJECT` and `DEPLOY_DATABASE_NETWORK` as `preview`) and
-has its own hostname and state directory. The utility manages **databases only**;
+Staging shares the preview PostgreSQL (its `DEPLOY_INFRASTRUCTURE_STATE_DIR`,
+`DEPLOY_INFRASTRUCTURE_PROJECT` and `DEPLOY_DATABASE_NETWORK` equal the
+`PREVIEW_*` repository values) and has its own hostname and state directory. The utility manages **databases only**;
 application S3 storage, media and authentication objects are operated externally.
 
 The `staging` GitHub Environment supplies:

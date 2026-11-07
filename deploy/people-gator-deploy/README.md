@@ -62,45 +62,55 @@ Create GitHub Environments **`preview`**, **`staging`** and **`production`**
 (Settings → Environments). Add deployment branch/tag policies: `staging` only
 `main`, `production` only `v*` tags; `preview` may stay open to all branches
 (it runs for pull requests). Required reviewers on `production` add a manual
-gate before a release job starts. The deploy jobs pass these names through
-unchanged; an undefined variable arrives empty and keeps its default.
+gate before a release job starts.
+
+The utility reads `DEPLOY_<SETTING>` from its process environment. The
+`deploy-staging` and `deploy-release` jobs pass the `staging`/`production`
+environment's variables and secrets under those same names. The preview jobs
+are different: `remove-preview` and `prune-previews` have no `environment:`
+(a job with one records a new Deployment), and environment-scoped variables are
+invisible without it, so the preview host's non-secret settings are
+**repository variables** named `PREVIEW_<SETTING>` (Settings → Secrets and
+variables → Actions → Variables) and only its secrets live in the `preview`
+environment, as `PREVIEW_USERS_JSON` and `PREVIEW_TELEMETRY_ENV`. An undefined
+variable arrives empty and keeps its default.
 
 ### Variables (not secret)
 
-| Variable | Environments | Default | Meaning |
-| --- | --- | --- | --- |
-| `DEPLOY_DOCKER_CONTEXT` | all | required | Docker context the utility names on every call, for example `rootless` |
-| `DEPLOY_DOMAIN` | preview | required | Previews are `https://pr-<N>.<domain>` |
-| `DEPLOY_HOST` | staging, production | required | Application hostname |
-| `DEPLOY_STATE_DIR` | all | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` | Private host state: per-PR state and passwords, generations, journals, generated secret files |
-| `DEPLOY_INFRASTRUCTURE_STATE_DIR` | preview, staging | `~/.local/opt/people-gator-deploy/state/infrastructure` | Shared PostgreSQL/collector/pgAdmin state (`infrastructure.env`); outside the environment state |
-| `DEPLOY_INFRASTRUCTURE_PROJECT` | preview, staging | `people-gator-preview-infra` | Compose project of the shared infrastructure |
-| `DEPLOY_DATABASE_NETWORK` | all | `people-gator-preview-db`; required for production | Docker network of the shared (preview/staging) or external (production) PostgreSQL |
-| `DEPLOY_WEB_NETWORK` | all | `web` | External Traefik network |
-| `DEPLOY_CERTIFICATE_RESOLVER` | all | `tlschallenge` | Traefik resolver; `none` reuses an existing wildcard certificate |
-| `DEPLOY_OTEL_NETWORK` | all | `logging` | Network of the OTLP backend; the backend container joins it |
-| `DEPLOY_OTEL_HTTP_ENDPOINT` | preview | `http://lgtm:4318` | OTLP endpoint of the shared log collector |
-| `DEPLOY_PGADMIN_HOST`, `DEPLOY_PGADMIN_EMAIL` | preview | `pgadmin-preview.peoplegator.dev`, `admin@peoplegator.dev` | pgAdmin routing and login |
-| `DEPLOY_PREVIEW_LOG_PORT` | preview, staging | `24224` | Host port of the fluentd log collector |
-| `DEPLOY_PROJECT` | staging, production | `people-gator-staging`, `people-gator-release` | Application Compose project |
-| `DEPLOY_BACKEND_MEMORY` | production | `4g` | Backend memory limit |
-| `DEPLOY_ACCESS_REVIEWED` | production | required `true` | Confirms the [access boundary](#release-access-boundary) |
-| `DEPLOY_REPOSITORY` | all | `GITHUB_REPOSITORY` | Only for operator commands outside Actions |
+| Setting (`DEPLOY_…`) | GitHub name | Environments | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `DOCKER_CONTEXT` | `PREVIEW_DOCKER_CONTEXT` (repository), `DEPLOY_DOCKER_CONTEXT` | all | required | Docker context the utility names on every call, for example `rootless` |
+| `DOMAIN` | `PREVIEW_DOMAIN` (repository) | preview | required | Previews are `https://pr-<N>.<domain>` |
+| `HOST` | `DEPLOY_HOST` | staging, production | required | Application hostname |
+| `STATE_DIR` | `PREVIEW_STATE_DIR` (repository), `DEPLOY_STATE_DIR` | all | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` | Private host state: per-PR state and passwords, generations, journals, generated secret files |
+| `INFRASTRUCTURE_STATE_DIR` | `PREVIEW_INFRASTRUCTURE_STATE_DIR` (repository), `DEPLOY_INFRASTRUCTURE_STATE_DIR` | preview, staging | `~/.local/opt/people-gator-deploy/state/infrastructure` | Shared PostgreSQL/collector/pgAdmin state (`infrastructure.env`); outside the environment state |
+| `INFRASTRUCTURE_PROJECT` | `PREVIEW_INFRASTRUCTURE_PROJECT` (repository), `DEPLOY_INFRASTRUCTURE_PROJECT` | preview, staging | `people-gator-preview-infra` | Compose project of the shared infrastructure |
+| `DATABASE_NETWORK` | `PREVIEW_DATABASE_NETWORK` (repository), `DEPLOY_DATABASE_NETWORK` | all | `people-gator-preview-db`; required for production | Docker network of the shared (preview/staging) or external (production) PostgreSQL |
+| `WEB_NETWORK` | `PREVIEW_WEB_NETWORK` (repository), `DEPLOY_WEB_NETWORK` | all | `web` | External Traefik network |
+| `CERTIFICATE_RESOLVER` | `PREVIEW_CERTIFICATE_RESOLVER` (repository), `DEPLOY_CERTIFICATE_RESOLVER` | all | `tlschallenge` | Traefik resolver; `none` reuses an existing wildcard certificate |
+| `OTEL_NETWORK` | `PREVIEW_OTEL_NETWORK` (repository), `DEPLOY_OTEL_NETWORK` | all | `logging` | Network of the OTLP backend; the backend container joins it |
+| `OTEL_HTTP_ENDPOINT` | `PREVIEW_OTEL_HTTP_ENDPOINT` (repository) | preview | `http://lgtm:4318` | OTLP endpoint of the shared log collector |
+| `PGADMIN_HOST`, `PGADMIN_EMAIL` | `PREVIEW_PGADMIN_HOST`, `PREVIEW_PGADMIN_EMAIL` (repository) | preview | `pgadmin-preview.peoplegator.dev`, `admin@peoplegator.dev` | pgAdmin routing and login |
+| `PREVIEW_LOG_PORT` | `PREVIEW_LOG_PORT` (repository), `DEPLOY_PREVIEW_LOG_PORT` | preview, staging | `24224` | Host port of the fluentd log collector |
+| `PROJECT` | `DEPLOY_PROJECT` | staging, production | `people-gator-staging`, `people-gator-release` | Application Compose project |
+| `BACKEND_MEMORY` | `DEPLOY_BACKEND_MEMORY` | production | `4g` | Backend memory limit |
+| `ACCESS_REVIEWED` | `DEPLOY_ACCESS_REVIEWED` | production | required `true` | Confirms the [access boundary](#release-access-boundary) |
+| `REPOSITORY` | — | all | `GITHUB_REPOSITORY` | Only for operator commands outside Actions |
 
 ### Secrets
 
 Secret values are file contents. Before each operation the utility writes them
-to private files in `DEPLOY_STATE_DIR` (mode 600; the users file 644 so the
+to private files in the state directory (mode 600; the users file 644 so the
 unprivileged backend container can read its bind mount) and references those
 paths from Compose. Unchanged contents are left alone.
 
-| Secret | Environments | File | Contents |
-| --- | --- | --- | --- |
-| `DEPLOY_USERS_JSON` | preview (required) | `users.json` | Users JSON with Argon2 hashes; `people-gator-api/example.users.json` supplies the demo `test` / `test` account |
-| `DEPLOY_RUNTIME_ENV` | staging (required), production (required) | `runtime.env` | `PEOPLE_GATOR_API__*` lines for the backend: storage, JWK, auth; staging must not set persistence (it generates its database connection) |
-| `DEPLOY_MIGRATION_ENV` | production (required) | `migration.env` | The migration role's `PEOPLE_GATOR_API__PERSISTENCE__*` lines |
-| `DEPLOY_SNAPSHOT_SOURCE` | staging | `snapshot-source.json` | Read-only backup source, exactly the six fields of [the example](examples/staging-backup-source.example.json); read only by `snapshot-init`/`refresh` |
-| `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM/OTLP lines for the API runtime container only; see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
+| Setting (`DEPLOY_…`) | GitHub secret | Environment | File | Contents |
+| --- | --- | --- | --- | --- |
+| `USERS_JSON` | `PREVIEW_USERS_JSON` | preview (required) | `users.json` | Users JSON with Argon2 hashes; `people-gator-api/example.users.json` supplies the demo `test` / `test` account |
+| `RUNTIME_ENV` | `DEPLOY_RUNTIME_ENV` | staging (required), production (required) | `runtime.env` | `PEOPLE_GATOR_API__*` lines for the backend: storage, JWK, auth; staging must not set persistence (it generates its database connection) |
+| `MIGRATION_ENV` | `DEPLOY_MIGRATION_ENV` | production (required) | `migration.env` | The migration role's `PEOPLE_GATOR_API__PERSISTENCE__*` lines |
+| `SNAPSHOT_SOURCE` | `DEPLOY_SNAPSHOT_SOURCE` | staging | `snapshot-source.json` | Read-only backup source, exactly the six fields of [the example](examples/staging-backup-source.example.json); read only by `snapshot-init`/`refresh` |
+| `TELEMETRY_ENV` | `PREVIEW_TELEMETRY_ENV`, `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM/OTLP lines for the API runtime container only; see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
 
 Operators may additionally set `DEPLOY_SNAPSHOT` (JSON `path`, `sha256`,
 `application_revision` of a private local custom-format dump) for an explicit
@@ -148,12 +158,16 @@ locations (`~/.local/opt/people-gator-deploy/state/<env>` and
 `DEPLOY_STATE_DIR`/`DEPLOY_INFRASTRUCTURE_STATE_DIR` for other prefixes or
 system scope), ownership markers stay valid, and databases, media, passwords and
 generations are untouched. Copy each descriptor's values into the GitHub
-Environment, put the users/runtime/migration/telemetry/backup-source file
-contents into secrets, set `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's
-`.env`, then delete the descriptors (`~/.local/opt/people-gator-deploy/environments`),
-the versioned installations (`~/.local/lib/people-gator-deploy`) and
-`~/.local/bin/people-gator-deploy`. Rerun open PRs' CI to redeploy their previews
-through the new workflow.
+variables above, put the users/runtime/migration/telemetry/backup-source file
+contents into the secrets, install the new runner guard with
+`PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's `.env`, then delete the
+descriptors (`~/.local/opt/people-gator-deploy/environments`), the versioned
+installations (`~/.local/lib/people-gator-deploy`) and
+`~/.local/bin/people-gator-deploy`. Keep the old users/runtime/migration/telemetry
+files in place until each environment's first successful deploy through the new
+workflow: the saved `compose.env` files still reference their paths, and
+`start`, recovery and preview cleanup read that saved environment. Rerun open
+PRs' CI to redeploy their previews through the new workflow.
 
 ## Operations
 

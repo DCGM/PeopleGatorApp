@@ -3,8 +3,9 @@
 PR previews, staging from `main` and tagged releases are deploy jobs of the
 single [CI workflow](../.github/workflows/ci.yml). Each job runs the
 [`people-gator-deploy`](people-gator-deploy/README.md) utility from its own
-checkout with the settings of a GitHub Environment (`preview`, `staging`,
-`production`); nothing is installed on the hosts beyond the one-time setup.
+checkout with settings kept in GitHub (repository variables and the `preview`,
+`staging` and `production` environments); nothing is installed on the hosts
+beyond the one-time setup.
 PR previews use the automatic synthetic seed; staging retains its own
 original-data database snapshot with storage managed externally; releases run
 the tested tagged images against real, operator-provided data.
