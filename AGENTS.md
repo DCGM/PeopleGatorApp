@@ -68,18 +68,18 @@ relationships, vectors, media formats, authentication attribution, or filters:
    migration, seed, then backend/frontend startup. Seed failure must prevent the
    candidate deployment from being marked successful.
 
-The PR CI workflow smoke-tests the real migration/seed CLI twice in a separate
-`ci_seed` database and runs the seed integration tests with
-`PEOPLE_GATOR_SCHEMA_TEST_URL`. Deployment lifecycle tests live in
-`deploy/people-gator-deploy/tests/`. An operator installs the `people-gator-deploy`
-utility and configures each environment's descriptor once, as described in
-`deploy/people-gator-deploy/README.md`. Lifecycle jobs install (or reuse) the
-utility from their exact reviewed `main` workflow commit through
-`deploy/install.py`, without sudo, and invoke its operations. PR code and
-non-default-branch workflows must not become the host controller. Keep
-descriptors, users, credentials and environment state outside utility
-installations; shared-infrastructure initialization/upgrades remain explicit
-operator actions.
+The CI workflow (`.github/workflows/ci.yml`) smoke-tests the real
+migration/seed CLI twice in a separate `ci_seed` database and runs the seed
+integration tests with `PEOPLE_GATOR_SCHEMA_TEST_URL`. Its deploy jobs run
+`deploy/people-gator-deploy` from the checked-out commit (a PR deploys with its
+own branch's deploy code; staging uses `main`, releases the tag) with the
+settings of the GitHub Environments `preview`, `staging` and `production`, as
+described in `deploy/people-gator-deploy/README.md`. Deployment lifecycle,
+workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
+update them with any change to the workflow's deploy steps, the `DEPLOY_*`
+settings or the runner guard. Keep credentials in GitHub Environment secrets
+and host state directories, never in Git; shared-infrastructure
+initialization/upgrades remain explicit operator actions.
 
 # Search and filter panels throughout the application
 

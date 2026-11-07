@@ -65,7 +65,7 @@ people-gator-api/           API package, migrations, backend tests and focused d
     └── utils/             Logging, telemetry, hashing and other helpers
 docs/                      Project and operator guides
 deploy/people-gator-deploy/ Deployment utility: PR previews, staging, releases
-.github/workflows/         PR validation, image publication and preview lifecycle
+.github/workflows/         CI: tests, image publication, preview/staging/release deploys
 compose.dev.yaml           Development stack with Compose Watch
 compose.live-preview.yaml  Existing shared live-preview deployment
 compose.prod.yaml          Production stack (API, frontend, database) behind external Traefik
@@ -100,11 +100,11 @@ Synthetic fixtures and the development-only `test` / `test` account let you
 exercise the app without project data or external AI credentials.
 
 For Docker deployments, use [Deployment](docs/DEPLOYMENT.md) and the
-[deployment entry point](deploy/README.md). PR CI type-checks/tests the frontend,
-tests backend contracts and migrations, runs the seed twice, and validates the
-deployment utility. Successful same-repository PR builds publish images to GHCR;
-trusted workflows deploy PR previews, staging from `main` and `v*` release tags
-with [`people-gator-deploy`](deploy/people-gator-deploy/README.md). Read its
+[deployment entry point](deploy/README.md). The CI workflow type-checks/tests the
+frontend, tests backend contracts and migrations, runs the seed twice, validates
+the deployment utility, publishes same-repository builds to GHCR and deploys PR
+previews, staging from `main` and `v*` release tags in the same run with
+[`people-gator-deploy`](deploy/people-gator-deploy/README.md). Read its
 [host prerequisites](deploy/people-gator-deploy/HOSTS.md) before enabling them.
 
 ## Documentation

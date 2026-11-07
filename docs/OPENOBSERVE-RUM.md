@@ -39,24 +39,16 @@ supplied through this file. Do not print its contents or rendered Compose
 configuration into CI logs. Replace `lgtm` with the actual reachable collector
 hostname if different.
 
-For **each** environment descriptor (`pr`, `staging`, `release`), merge:
-
-```json
-{
-  "telemetry_file": "/home/RUNNER/private/people-gator-telemetry.env",
-  "otel_network": "logging"
-}
-```
-
-Use that host's absolute file path and collector's Docker network. The same file
-can be referenced by multiple environments on one host; other hosts need their
-own operator-managed copy. Existing staging/release `runtime_file` settings are
-retained. Telemetry-file values override matching runtime-file values. Only the
-API runtime container receives this extra file, not frontend, migration, seed,
-check or database snapshot workers. Without `telemetry_file`, telemetry remains
+Store these lines as the `DEPLOY_TELEMETRY_ENV` secret of **each** GitHub
+Environment (`preview`, `staging`, `production`) and name the collector's Docker
+network in the `DEPLOY_OTEL_NETWORK` variable (default `logging`). Each deploy
+job writes the secret to `<DEPLOY_STATE_DIR>/telemetry.env` (mode 600) and the
+Compose stacks reference that file. Existing staging/release `DEPLOY_RUNTIME_ENV`
+settings are retained; telemetry values override matching runtime values. Only
+the API runtime container receives this extra file, not frontend, migration,
+seed, check or database snapshot workers. Without the secret, telemetry remains
 disabled by default (existing staging/release runtime settings can still enable
-it). The extra backend network defaults to the web network when `otel_network`
-is absent.
+it).
 
 The API serves an explicit allowlist of public RUM settings at
 `GET /api/v1/rum-config`, with `Cache-Control: no-store`. It is unauthenticated
@@ -163,14 +155,12 @@ Never use the browser RUM token as OTLP credentials.
 
 ## Rollout and verification
 
-1. Review and merge the implementation. Lifecycle workflows install their exact
-   reviewed `main` utility revision; PR code must not become host-controller code.
-   A preview using the older trusted controller will not consume `telemetry_file`
-   or apply the new identity/network settings. Use a fresh eligible build after
-   reviewed-main rollout to verify the complete deployment path.
-2. Create the private file, merge the descriptor fields with
-   `people-gator-deploy <environment> configure --input <private-json>` and run
-   the environment's `preflight`. Keep the shared infrastructure unchanged.
+1. Review and merge the implementation. A PR preview deploys with its own
+   branch's deploy code, so the complete path can be verified on the PR before
+   merge; staging and releases pick it up from `main` and the tag.
+2. Add the `DEPLOY_TELEMETRY_ENV` secret (and `DEPLOY_OTEL_NETWORK` if it is not
+   `logging`) to each GitHub Environment. Keep the shared infrastructure
+   unchanged.
 3. Deploy a new eligible PR/main build or release through the normal lifecycle.
    Ensure backend startup and routed readiness succeed. No database migration,
    new seed records or frontend rebuild for credentials is needed.

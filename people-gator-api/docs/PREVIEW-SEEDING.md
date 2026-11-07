@@ -138,30 +138,25 @@ to keep seed compatibility and add representative examples in the same change.
 
 ## CI and deployment
 
-PR CI migrates a separate `ci_seed` database, executes the actual seed CLI twice,
-and validates the result before the ordinary backend test suite. It uses
-throwaway local storage. Seed integration tests also run in isolated schemas on
+The CI workflow migrates a separate `ci_seed` database, executes the actual seed
+CLI twice, and validates the result before the ordinary backend test suite. It
+uses throwaway local storage. Seed integration tests also run in isolated schemas on
 `PEOPLE_GATOR_SCHEMA_TEST_URL`, checking filters, vector discovery, OCR highlights,
 face crops, reruns, review edits, merges/deletions and checkpoint recovery.
 
-The trusted deployment utility removes the selected PR's old containers while
-retaining its database and media volume, then runs `storage-init`, `migrate`, and
-`seed` from the candidate backend image before starting backend/frontend. A
-failing seed command stops startup and leaves the previous deployment
+The same run's `deploy-preview` job runs the deployment utility from the PR's
+checkout. It removes the selected PR's old containers while retaining its
+database and media volume, then runs `storage-init`, `migrate`, and `seed` from
+the candidate backend image before starting backend/frontend. A failing seed
+command fails the deploy job and leaves the previous deployment
 configuration/version intact for retry, but the preview stays stopped until a
 successful retry. Repository writes may already have committed, so checkpoints are
 used to resume; the seed is not one atomic database/filesystem transaction.
 
-After one-time operator installation, the lifecycle workflow installs or reuses
-the `people-gator-deploy` utility from its exact reviewed `main` revision, without
-sudo, and runs that pinned version; see the
-[utility guide](../../deploy/people-gator-deploy/README.md). No workflow checks out
-and executes PR deployment scripts on that host. Installed versions are verified
-against their recorded file digests, so a stale or modified installation cannot
-bypass candidate seeding. PR code never supplies the host controller; the
-candidate image supplies the fixture code.
-Successful preview state includes a `seeded_version` marker; after a host upgrade,
-rerunning the same deployment can seed previews created by older controllers.
+The candidate image supplies the fixture code and the PR branch supplies the
+deploy code; see the [utility guide](../../deploy/people-gator-deploy/README.md).
+Successful preview state includes a `seeded_version` marker, so rerunning the
+workflow seeds a preview whose earlier deployment did not complete seeding.
 
 ## Documents and scans
 

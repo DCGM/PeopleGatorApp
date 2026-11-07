@@ -1,235 +1,250 @@
 # people-gator-deploy
 
-One installable deployment utility for **PR previews**, **staging from `main`**
-and **tagged releases**. It is a Python package with a pinned boto3 S3 client and the
-`people-gator-deploy` command and an equivalent Python API
-(`people_gator_deploy.environments.Environment`). Compose files, the login page,
-the collector configuration and the database validator ship inside the package.
+The deployment utility for **PR previews**, **staging from `main`** and
+**tagged releases**. It is a Python package (`people-gator-deploy` command and
+the equivalent `people_gator_deploy.environments.Environment` API) with a pinned
+boto3 S3 client. Compose files, the staging login page, the collector
+configuration and the database validator ship inside the package.
 
-**Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker Engine
-and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
-[HOSTS.md](HOSTS.md). The first installation of each revision downloads
-`setuptools` to build the wheel and the fully pinned S3 client dependency set
-from the configured package index. The host package gathers backup archives;
-database restore uses the infrastructure PostgreSQL 16 tools and database
-validation runs in operation-scoped backend containers. Candidate application
-code never selects backups or receives backup credentials.
+The [CI workflow](../../.github/workflows/ci.yml) runs it **from the checkout of
+the commit being deployed**: a PR preview uses the PR's own deploy code, staging
+uses `main`, a release uses the tagged commit. Nothing is installed on the hosts
+beyond the one-time setup in [HOSTS.md](HOSTS.md); settings live in GitHub
+Environments and reach the utility as `DEPLOY_*` variables.
 
-## First setup
+**Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker
+Engine and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
+[HOSTS.md](HOSTS.md). Each deploy job builds the package into a job-local
+virtual environment, which downloads `setuptools` and the pinned S3 client
+dependencies from the configured package index. Database restore uses the
+infrastructure PostgreSQL 16 tools and database validation runs in
+operation-scoped backend containers. Candidate application code never selects
+backups or receives backup credentials.
 
-As each deployment runner account (no sudo needed):
+## How deployments run
+
+| Job | Runs when | Runner | Operation |
+| --- | --- | --- | --- |
+| `frontend`, `backend` | every push and PR (not `closed`, not the schedule) | hosted | tests, seed smoke test, this utility's tests |
+| `images` | after tests | hosted | build both images; push `sha-<commit>` tags to GHCR for same-repository events |
+| `deploy-preview` | same-repository PR opened/updated | `people-gator-preview` | `pr preflight`, `pr update --pr N --sha <commit>` |
+| `remove-preview` | PR closed | `people-gator-preview` | `pr cleanup --pr N` |
+| `deploy-staging` | push to `main`; manual run on `main` with `operation` | `people-gator-staging` | `staging preflight`, `staging update\|snapshot-init\|refresh --sha <commit>` |
+| `prune-previews` | after a staging deploy, daily, manual run on `main` | `people-gator-preview` | `pr reconcile` |
+| `deploy-release` | `v*` tag on `main` (also a manual run on the tag) | `people-gator-release` | `release preflight`, `release update --tag <tag> --sha <commit>` |
+
+Every deploy job checks out its commit, installs this package into
+`$RUNNER_TEMP` through [`.github/actions/deploy-tools`](../../.github/actions/deploy-tools/action.yml),
+runs `<env> preflight`, then one lifecycle operation, then `deployments supersede`
+(see [GitHub Deployments](#github-deployments)). Forks get tests and a local image
+build only; no fork event reaches a self-hosted runner (the
+[runner guard](HOSTS.md#github-runners-and-tokens) enforces this too).
+
+**Build identity.** The `images` job labels each image with the tested commit and
+tags it `sha-<commit>`. `--sha` names that commit; the utility pulls the tag,
+verifies the `org.opencontainers.image.revision` label and deploys by immutable
+digest. `GITHUB_RUN_ID`/`GITHUB_RUN_ATTEMPT` order workflow runs so an older run
+never replaces a newer deployment; operator runs outside Actions compare by
+commit only. Previews also require the PR to be open, same-repository and still
+at `--sha`; staging requires `--sha` to be the current `main` head before
+migration and again before activation; releases require the tag to resolve to
+`--sha` and the commit to be on `main`.
+
+**Concurrency.** The pipeline has one concurrency group per event and PR
+(`pull_request` runs cancel superseded runs); each deploy target has its own
+group that never cancels a running deployment or migration. Operations also take
+host file locks (per environment, then the shared infrastructure), so several
+runners on one host stay consistent.
+
+## Configuration
+
+Create GitHub Environments **`preview`**, **`staging`** and **`production`**
+(Settings → Environments). Add deployment branch/tag policies: `staging` only
+`main`, `production` only `v*` tags; `preview` may stay open to all branches
+(it runs for pull requests). Required reviewers on `production` add a manual
+gate before a release job starts. The deploy jobs pass these names through
+unchanged; an undefined variable arrives empty and keeps its default.
+
+### Variables (not secret)
+
+| Variable | Environments | Default | Meaning |
+| --- | --- | --- | --- |
+| `DEPLOY_DOCKER_CONTEXT` | all | required | Docker context the utility names on every call, for example `rootless` |
+| `DEPLOY_DOMAIN` | preview | required | Previews are `https://pr-<N>.<domain>` |
+| `DEPLOY_HOST` | staging, production | required | Application hostname |
+| `DEPLOY_STATE_DIR` | all | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` | Private host state: per-PR state and passwords, generations, journals, generated secret files |
+| `DEPLOY_INFRASTRUCTURE_STATE_DIR` | preview, staging | `~/.local/opt/people-gator-deploy/state/infrastructure` | Shared PostgreSQL/collector/pgAdmin state (`infrastructure.env`); outside the environment state |
+| `DEPLOY_INFRASTRUCTURE_PROJECT` | preview, staging | `people-gator-preview-infra` | Compose project of the shared infrastructure |
+| `DEPLOY_DATABASE_NETWORK` | all | `people-gator-preview-db`; required for production | Docker network of the shared (preview/staging) or external (production) PostgreSQL |
+| `DEPLOY_WEB_NETWORK` | all | `web` | External Traefik network |
+| `DEPLOY_CERTIFICATE_RESOLVER` | all | `tlschallenge` | Traefik resolver; `none` reuses an existing wildcard certificate |
+| `DEPLOY_OTEL_NETWORK` | all | `logging` | Network of the OTLP backend; the backend container joins it |
+| `DEPLOY_OTEL_HTTP_ENDPOINT` | preview | `http://lgtm:4318` | OTLP endpoint of the shared log collector |
+| `DEPLOY_PGADMIN_HOST`, `DEPLOY_PGADMIN_EMAIL` | preview | `pgadmin-preview.peoplegator.dev`, `admin@peoplegator.dev` | pgAdmin routing and login |
+| `DEPLOY_PREVIEW_LOG_PORT` | preview, staging | `24224` | Host port of the fluentd log collector |
+| `DEPLOY_PROJECT` | staging, production | `people-gator-staging`, `people-gator-release` | Application Compose project |
+| `DEPLOY_BACKEND_MEMORY` | production | `4g` | Backend memory limit |
+| `DEPLOY_ACCESS_REVIEWED` | production | required `true` | Confirms the [access boundary](#release-access-boundary) |
+| `DEPLOY_REPOSITORY` | all | `GITHUB_REPOSITORY` | Only for operator commands outside Actions |
+
+### Secrets
+
+Secret values are file contents. Before each operation the utility writes them
+to private files in `DEPLOY_STATE_DIR` (mode 600; the users file 644 so the
+unprivileged backend container can read its bind mount) and references those
+paths from Compose. Unchanged contents are left alone.
+
+| Secret | Environments | File | Contents |
+| --- | --- | --- | --- |
+| `DEPLOY_USERS_JSON` | preview (required) | `users.json` | Users JSON with Argon2 hashes; `people-gator-api/example.users.json` supplies the demo `test` / `test` account |
+| `DEPLOY_RUNTIME_ENV` | staging (required), production (required) | `runtime.env` | `PEOPLE_GATOR_API__*` lines for the backend: storage, JWK, auth; staging must not set persistence (it generates its database connection) |
+| `DEPLOY_MIGRATION_ENV` | production (required) | `migration.env` | The migration role's `PEOPLE_GATOR_API__PERSISTENCE__*` lines |
+| `DEPLOY_SNAPSHOT_SOURCE` | staging | `snapshot-source.json` | Read-only backup source, exactly the six fields of [the example](examples/staging-backup-source.example.json); read only by `snapshot-init`/`refresh` |
+| `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM/OTLP lines for the API runtime container only; see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
+
+Operators may additionally set `DEPLOY_SNAPSHOT` (JSON `path`, `sha256`,
+`application_revision` of a private local custom-format dump) for an explicit
+local restore; the workflow does not pass it. Invalid or missing settings fail
+the job before any Docker call with the variable name and environment, for
+example `staging configuration: DEPLOY_HOST: missing or invalid hostname; set it
+as a GitHub Environment variable or secret`.
+
+## One-time host setup
+
+Prepare the hosts, runners and guard from [HOSTS.md](HOSTS.md), then provision
+each environment once as the deployment account. The utility reads the same
+`DEPLOY_*` names from the process environment, so export the GitHub Environment's
+values (secrets as file contents) and run it from a checkout of `main`:
 
 ```sh
 git clone https://github.com/DCGM/PeopleGatorApp.git && cd PeopleGatorApp
-python3 deploy/install.py --user --revision "$(git rev-parse origin/main)"
-export PATH="$HOME/.local/bin:$PATH"
-
-cp deploy/people-gator-deploy/examples/pr.json /secure/place/pr.json   # edit, keep private
-people-gator-deploy pr configure --input /secure/place/pr.json --dry-run
-people-gator-deploy pr configure --input /secure/place/pr.json
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_DOCKER_CONTEXT=rootless
+export DEPLOY_DOMAIN=preview.peoplegator.dev DEPLOY_PGADMIN_HOST=pgadmin-preview.peoplegator.dev
+export DEPLOY_USERS_JSON="$(cat /private/preview-users.json)"
+alias people-gator-deploy='PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy'
 people-gator-deploy pr install            # creates shared PostgreSQL/collector/pgAdmin
 people-gator-deploy pr preflight
 
-# Supply a private local custom-format dump, its SHA-256/source revision,
-# and an externally maintained API runtime env file in the staging descriptor.
-people-gator-deploy staging configure --input /secure/place/staging.json
+export DEPLOY_HOST=staging.peoplegator.dev DEPLOY_RUNTIME_ENV="$(cat /private/staging-runtime.env)"
 people-gator-deploy staging install
-# after the next successful main CI build:
-people-gator-deploy staging snapshot-init   # or staging.yml → operation snapshot-init
+# Then run the CI workflow manually on main with operation=snapshot-init, or locally:
+#   export DEPLOY_SNAPSHOT_SOURCE="$(cat /private/staging-backup-source.json)"
+#   people-gator-deploy staging snapshot-init --sha "$(git rev-parse origin/main)"
 ```
 
-Then delete the edited input copies; the descriptor is now the only private
-config. Releases follow the same pattern with `examples/release.json` on the
-release runner account. After that, workflows run everything automatically.
+Releases follow the same pattern on the release runner account with
+`DEPLOY_HOST`, `DEPLOY_DATABASE_NETWORK`, `DEPLOY_RUNTIME_ENV`,
+`DEPLOY_MIGRATION_ENV` and `DEPLOY_ACCESS_REVIEWED=true`, then
+`people-gator-deploy release install`. Snapshot operations need boto3: use the
+backend environment (`uv run --locked` from `people-gator-api` with
+`PYTHONPATH=../deploy/people-gator-deploy/src`) or a venv with
+`pip install deploy/people-gator-deploy`. GitHub-reading operations (`update`,
+`cleanup`, `reconcile`, `check`, `deployments`) need `GH_TOKEN`; `update` also
+needs `GH_ACTOR` for the temporary GHCR login.
 
-## Installation and updates
-
-```sh
-python3 deploy/install.py --user --revision <40-character-sha>            # default: ~/.local
-python3 deploy/install.py --user --prefix '/srv/deploy tools' --revision <sha>
-sudo python3 deploy/install.py --system --revision <sha> --run-as <deployment-user>
-```
-
-| Scope | Executable | Versions | Descriptors | State |
-| --- | --- | --- | --- | --- |
-| user (default) | `~/.local/bin` | `~/.local/lib/people-gator-deploy/versions/<sha>` | `~/.local/opt/people-gator-deploy/environments/<env>/config.json` | `~/.local/opt/people-gator-deploy/state` |
-| system | `/usr/local/bin` | `/opt/people-gator-deploy/versions/<sha>` | `/etc/people-gator-deploy/environments/<env>/config.json` | `/var/lib/people-gator-deploy` |
-
-The installer reads only committed files (`git archive` of the requested commit),
-builds a wheel into a new virtual environment, records version, commit, schema
-versions and a SHA-256 of every installed file in `installation.json`, verifies
-it, then atomically renames it into `versions/<sha>`. Interrupted or failed
-installs leave earlier versions and the default executable untouched. Installing
-an existing commit only re-verifies it. The default executable
-(`bin/people-gator-deploy`) moves only to a descendant commit, so installing an
-older commit pins it without downgrading the default.
-
-The launcher resolves that default symlink to select its version's interpreter.
-Linux `readlink` and `dirname` (normally supplied by coreutils) must be on PATH.
-Version 1.0.1 fixes invocation through the default executable; reinstall a newer
-reviewed revision with `deploy/install.py` if a 1.0.0 default reports `bin/python`
-missing. Versioned executables remain usable during that upgrade.
-
-**How updates happen.** Every deployment workflow run installs the utility at its
-own workflow commit — the reviewed `main` commit that triggered it, or the tagged
-commit for releases — before doing anything else, and then uses that exact
-versioned executable for the whole job:
-
-- If that version is already installed and its file digests verify, it is reused
-  (about 0.1 s). A corrupt or modified version fails the job.
-- Otherwise it is built and installed (a few seconds; needs Git and package-index access), and the
-  default executable advances if the commit is newer.
-- So after any merge to `main`, the next preview/staging job on each runner
-  account runs the new utility; nothing is checked against GitHub separately, and
-  no host job polls for updates.
-
-Outside CI, update the interactive default with `people-gator-deploy self update
---from-main` (clones into a temporary directory, resolves `main` to an exact
-commit, then calls the same installer) or pin a version with
-`self ensure --revision <sha>`; `self check` verifies the running installation.
-A system installation is only upgraded by its operator; CI refuses to touch it.
-Utility updates never change an environment; `<env> update` never changes the
-utility. Old versions are kept (about 31 MB each, one per deployed `main` commit); remove
-`versions/<sha>` manually only when no job or container uses it.
-
-## Descriptors
-
-Each environment has one versioned descriptor (mode 600, owned by the deployment
-account) holding all its settings and secrets. It is selected by, in order:
-`--config <path>`, `PEOPLE_GATOR_DEPLOY_CONFIG`, then the installation scope's
-`environments/<env>/config.json`. Every command prints the selected path and
-scope. Repository `.env` files and ambient AWS/Docker/Compose variables are never
-read.
-
-```sh
-people-gator-deploy staging configure --input <json> [--dry-run]   # create or merge
-people-gator-deploy staging configure --interactive                 # top-level prompts
-people-gator-deploy staging migrate-config [--dry-run]              # explicit schema upgrades
-```
-
-`configure` deep-merges the input into the descriptor (so a file with only
-`{"snapshot_source_file": "/private/staging-backup-source.json"}` selects the
-automatic source), validates
-everything, keeps a private `config.backup-<sha256>.json` and refuses concurrent
-edits (`--expected-digest` for read-modify-write tools). It never contacts
-services or prints secrets. Once installed, state/infrastructure paths, Docker
-context, project names and
-private runtime/migration file paths cannot change implicitly. Their contents
-can be maintained externally without switching the utility's resource identity.
-
-Common fields: `repository`, absolute `state_dir`, explicit `docker_context`,
-`web_network`, and the hostname (`domain` for previews, `host` otherwise).
-Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`, `telemetry_file`,
-`preview_log_port`, `pgadmin_host`, `pgadmin_email`. Complete examples:
-[`pr`](examples/pr.json), [`staging`](examples/staging.json),
-[`release`](examples/release.json).
-
-* **pr** — `users_file`, `database_network`, and `infrastructure`
-  (`mode: managed`, a Compose `project` and its own `state_dir`): the preview
-  environment owns the shared PostgreSQL/collector/pgAdmin.
-* **staging** — `host`, `database_network`, `infrastructure` (`mode: external`,
-  the preview's `project`/`state_dir`) and an absolute `runtime_file` pointing to
-  an owned private API env file. It contains externally managed application
-  settings such as storage, media prefixes and authentication. Only the backend
-  receives it; migration/check/validation tools receive database settings only.
-  It must not define persistence settings, which staging owns.
-
-  `snapshot_source_file` names an owned private JSON file with the automatic
-  read-only backup source. It is read only for `snapshot-init`/`refresh`.
-  See [Backup gathering](#backup-gathering) for setup, selection and failures.
-  Optional `project` defaults to `people-gator-staging`.
-
-  Legacy `snapshot` objects remain supported for explicit local recovery. To
-  switch an existing fixed-local descriptor, configure `snapshot_source_file`;
-  configure removes `snapshot` atomically and preserves a private descriptor
-  backup. It does not touch staging data. Supplying both settings directly is
-  rejected. No per-date path/checksum/revision edits are needed afterward.
-  Pre-rollout descriptors must also configure `runtime_file`, which removes
-  obsolete `storage`, `backup_source`, `media_source`, `accounts` and
-  `media_transfer` sections. Their external application setup remains operator work.
-* **release** — `host`, `database_network` (external PostgreSQL), mode-600
-  `runtime_file` and `migration_file` with only `PEOPLE_GATOR_API__*` lines, and
-  `"access_reviewed": true` (see the access boundary below). Optional `project`,
-  `backend_memory`.
+**Upgrading from descriptor-based hosts.** State directories keep their
+locations (`~/.local/opt/people-gator-deploy/state/<env>` and
+`.../state/infrastructure` for user-scope installations; set
+`DEPLOY_STATE_DIR`/`DEPLOY_INFRASTRUCTURE_STATE_DIR` for other prefixes or
+system scope), ownership markers stay valid, and databases, media, passwords and
+generations are untouched. Copy each descriptor's values into the GitHub
+Environment, put the users/runtime/migration/telemetry/backup-source file
+contents into secrets, set `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's
+`.env`, then delete the descriptors (`~/.local/opt/people-gator-deploy/environments`),
+the versioned installations (`~/.local/lib/people-gator-deploy`) and
+`~/.local/bin/people-gator-deploy`. Rerun open PRs' CI to redeploy their previews
+through the new workflow.
 
 ## Operations
 
 | Operation | pr | staging | release | Meaning |
 | --- | --- | --- | --- | --- |
-| `configure`, `migrate-config` | ✓ | ✓ | ✓ | Edit/validate the descriptor only |
-| `preflight` | ✓ | ✓ | ✓ | Read-only: descriptor, inputs, Docker/Compose, networks, installation |
+| `preflight` | ✓ | ✓ | ✓ | Settings, secret files, Docker/Compose, networks, installation; no service changes |
 | `status` | ✓ (`--pr`) | ✓ | ✓ | Read-only: configured / provisioned / running / healthy, recorded SHA/images |
 | `check` | ✓ (`--pr`) | ✓ | ✓ | Runtime-role database check and routed readiness; nonzero when unhealthy |
 | `install` | ✓ | ✓ | ✓ | Provision managed resources once; repeat is a no-op |
-| `update` | `--run-id` | `[--run-id]` | `--tag [--commit] [--run-id] [--backup-record]` | Deploy a verified build with existing resources |
-| `uninstall` | ✓ | ✓ | ✓ | Remove this environment's containers; keep data, credentials, config, shared infrastructure |
+| `update` | `--pr --sha` | `--sha` | `--tag [--sha] [--backup-record]` | Deploy the tested commit's images with existing resources |
+| `uninstall` | ✓ | ✓ | ✓ | Remove this environment's containers; keep data, credentials, shared infrastructure |
 | `start` / `stop` | `--pr` | ✓ | ✓ | Same images; `start` repeats the check and readiness gates |
 | `logs` | `--pr` | ✓ | ✓ | Private operator output (`--tail`) |
 | `cleanup` / `reconcile` | ✓ | | | Remove one closed preview / all previews GitHub reports closed |
-| `snapshot-init` / `refresh` | | ✓ | | Populate once / replace with `--backup-record` |
+| `snapshot-init` / `refresh` | | `--sha` | | Populate once / replace with `--backup-record` |
 | `database-migrate` | | | ✓ | Migration role then runtime check, with `--backup-record` |
 | `recover` | | | ✓ | Reactivate retained previous images (`--backup-record --compatibility-reviewed`) |
-| `infra-upgrade` | ✓ | | | Owner-only explicit shared-infrastructure upgrade |
+| `infra-upgrade` | ✓ | | | Explicit shared-infrastructure upgrade by its owner |
 
-Exit codes: `0` success, `1` actionable failure, `2` invalid usage, `130` cancelled.
-Failures name the selected path, the field or condition and a corrective
-command, for example
-`staging configuration: <path>; snapshot: snapshot needs an absolute path, sha256 and application_revision; run people-gator-deploy staging configure --config '<path>' --input <private-json>`.
-Secret values and raw service output are never printed; failed service output is
-kept in the environment's private `last-error.log`.
+`people-gator-deploy deployments supersede <preview|staging|production> [--ref <branch>]`,
+`deployments retire --ref <branch>` and `deployments prune` maintain GitHub
+Deployments (below). Exit codes: `0` success, `1` actionable failure, `2` invalid
+usage, `130` cancelled. Secret values and raw service output are never printed;
+failed service output is kept in the environment's private `last-error.log`.
 
-**Ownership and locks.** Installation is fresh only: `install` refuses a non-empty
-`state_dir`, infrastructure files or an existing staging/release/infrastructure Compose
-project it did not create. Ownership is recorded only after those checks pass.
-A first staging/release deployment also checks for project collisions. PR updates
-remove the selected PR project's previous containers before redeployment, even
-when local per-PR state is unavailable; databases and volumes are retained.
-Installation records `owned.json`
-and, for managed infrastructure, `infrastructure-owned.json`; an external
-environment cannot change infrastructure it does not own. Operations take the
+**Ownership and locks.** Installation is fresh only: `install` refuses a
+non-empty state directory, infrastructure files or an existing
+staging/release/infrastructure Compose project it did not create, and records
+`owned.json` (and `infrastructure-owned.json` for the preview-managed
+infrastructure) only after those checks pass. Staging shares the preview
+infrastructure and cannot change it. PR updates remove the selected PR project's
+previous containers before redeployment, even when local per-PR state is
+unavailable; databases and volumes are retained. Operations take the
 environment's `environment.lock`, then the infrastructure `controller.lock` —
 shared for environment work, exclusive for `install`/`infra-upgrade` — so a long
 staging refresh does not block previews. Operations journal `operation.json`;
 success state is written only after routed readiness. Cancellation (SIGTERM or
 Ctrl-C) removes the operation's own containers.
 
+## GitHub Deployments
+
+Each deploy job declares its GitHub Environment with the application URL
+(`https://pr-<N>.<domain>`, `https://<staging host>`, `https://<production host>`),
+so GitHub records a Deployment per run under the repository's **Deployments**.
+After a successful deploy, `deployments supersede` sets older deployments of the
+same environment (for previews, of the same PR head branch) `inactive`;
+`remove-preview` runs `deployments retire` for the closed PR's branch; the prune
+job runs `deployments prune`, which keeps one active deployment for staging,
+production and each open same-repository PR branch. History is never deleted.
+These steps use the job token's `deployments: write` permission and never fail
+the deployment itself.
+
 ## Environments
 
-**PR previews.** `pr update --run-id` deploys a successful same-repository PR CI
-run whose head is still an open PR head; images are verified by revision label
-and pinned by digest. Each preview has its own database, role and storage, and
-runs container removal → storage-init → migrate → seed → startup → routed readiness.
-Updates stop and remove the selected PR project's containers and orphans without
-deleting its database or media volume. Retained state keeps credentials, seeded
-identities, edits and media; when local credentials are unavailable, database-role
-access is regenerated after stopping the old containers. Stale and already-complete
-runs leave the current deployment alone. Expect downtime during preparation; a
+**PR previews.** `pr update --pr N --sha <commit>` deploys the images this run
+published for an open same-repository PR whose head is still that commit;
+images are verified by revision label and pinned by digest. Each preview has its
+own database, role and storage, and runs container removal → storage-init →
+migrate → seed → startup → routed readiness. Updates stop and remove the
+selected PR project's containers and orphans without deleting its database or
+media volume. Retained state keeps credentials, seeded identities, edits and
+media; when local credentials are unavailable, database-role access is
+regenerated after stopping the old containers. Stale and already-complete builds
+leave the current deployment alone. Expect downtime during preparation; a
 failed migration or seed leaves the preview stopped until a successful retry.
-`pr cleanup --pr N` removes
-one closed preview including its database; `pr reconcile` repeats that for every
-preview GitHub reports closed (API errors never imply closure). `pr uninstall`
-stops all previews but keeps their data.
+`pr cleanup --pr N` removes one closed preview including its database;
+`pr reconcile` repeats that for every preview GitHub reports closed (API errors
+never imply closure). `pr uninstall` stops all previews but keeps their data.
 
-**Staging.** `staging update` deploys the current successful main build and
-retains the database; it never reads a snapshot, restores or seeds. Initialize
-once with `staging snapshot-init`; replace the database only with
-`staging refresh --backup-record <private file>`. The one-time initialization
-check runs under the environment lock, so queued initializations cannot replace
-an already initialized database without the refresh backup guard.
+**Staging.** `staging update --sha <commit>` deploys the current `main` build
+and retains the database; it never reads a snapshot, restores or seeds.
+Initialize once with `staging snapshot-init`; replace the database only with
+`staging refresh --backup-record <private file>` (the manual workflow run's
+`operation` and `backup_record` inputs). The one-time initialization check runs
+under the environment lock, so queued initializations cannot replace an already
+initialized database without the refresh backup guard.
 
 Preparation gathers the latest production archive as described below, pins its
-local inode, verifies SHA-256/custom format, restores original rows into a separate
-database/role, rejects changes during restore, and validates rows, links, vectors
-and migration history.
-It then migrates, checks the runtime role and starts the backend/frontend before
-recording success. Failed refreshes retain the active database.
+local inode, verifies SHA-256/custom format, restores original rows into a
+separate database/role, rejects changes during restore, and validates rows,
+links, vectors and migration history. It then migrates, checks the runtime role
+and starts the backend/frontend before recording success. Failed refreshes
+retain the active database.
 
-Application S3 storage and all media/authentication objects are managed externally. Staging does not
-provision buckets/users/keys, copy or validate media, change storage generations,
-or impose S3 migration requirements. Missing media does not reject a database
-snapshot. Supply the running application's external settings through
-`runtime_file`; application startup and routed readiness remain required. Normal
-updates and database refreshes leave that file and external storage untouched.
+Application S3 storage and all media/authentication objects are managed
+externally. Staging does not provision buckets/users/keys, copy or validate
+media, change storage generations, or impose S3 migration requirements. Missing
+media does not reject a database snapshot. Supply the running application's
+external settings through `DEPLOY_RUNTIME_ENV`; application startup and routed
+readiness remain required. Normal updates and database refreshes leave that
+configuration and external storage untouched.
 
 ### Backup gathering
 
@@ -239,31 +254,19 @@ Use the [restore-reader policy example](../backup/restore-policy.example.json).
 It needs no production database access, writes, deletes or application storage
 permissions. Keep the backup publisher's identity separate.
 
-Copy [staging-backup-source.example.json](examples/staging-backup-source.example.json)
-to a private host directory outside the checkout and utility installation. Set
-an explicit HTTPS endpoint, region, bucket, prefix and the reader credentials.
-The JSON is exactly those six fields; no restore database or target settings.
-Make the directory mode 700 and file mode 600, owned by the deployment account.
-Use system-trusted TLS; a private CA can be supplied through `AWS_CA_BUNDLE`.
-No ambient AWS credentials, application settings or instance profile fill missing
-values. Do not put backup credentials in `runtime_file` or GitHub input fields.
+Fill [staging-backup-source.example.json](examples/staging-backup-source.example.json)
+with an explicit HTTPS endpoint, region, bucket, prefix and the reader
+credentials — exactly those six fields, no restore database or target settings —
+and store it as the `staging` environment's `DEPLOY_SNAPSHOT_SOURCE` secret.
+Use system-trusted TLS; a private CA can be supplied through `AWS_CA_BUNDLE`. No
+ambient AWS credentials, application settings or instance profile fill missing
+values. Do not put backup credentials in `DEPLOY_RUNTIME_ENV` or workflow inputs.
 
-Configure the reference once (using an absolute private input JSON path):
-
-```json
-{"snapshot_source_file": "/private/staging-backup-source.json"}
-```
-
-```sh
-people-gator-deploy staging configure --input /private/staging-source-change.json --dry-run
-people-gator-deploy staging configure --input /private/staging-source-change.json
-```
-
-This configuration change does **not** refresh the running database. The next
-explicit `snapshot-init` or guarded `refresh` uses the source. Ordinary `update`,
+Changing the secret does **not** refresh the running database. The next explicit
+`snapshot-init` or guarded `refresh` uses the source. Ordinary `update`,
 including automatic successful-main deployments, keeps staging edits and never
-reads the source file or contacts the backup bucket. Existing initialization,
-refresh backup-record and deployment locks remain in force.
+reads the source or contacts the backup bucket. Existing initialization, refresh
+backup-record and deployment locks remain in force.
 
 Each snapshot operation follows this sequence:
 
@@ -302,14 +305,14 @@ failures. Repair the source deliberately before retrying. Do not overwrite a dat
 object as a routine fix. Ensure private disk capacity for the full compressed
 archive; abrupt process/host death can leave a private `snapshot-*` directory or
 unserved candidate database for operator cleanup after confirming no job is active.
-Media/auth copying, publisher installation and a live staging refresh are outside
-this configuration transition.
 
-**Releases.** A `v*` tag push runs `release.yml`. The tag resolves to its commit
-(annotated or lightweight); moved tags, tags not on `main`, and commits without a
-successful main-push CI run are rejected, and that run's tested images are
-promoted by digest. If the runtime check reports a pending migration, delivery
-stops until rerun with `--backup-record` (take and verify a backup first — see
+**Releases.** A `v*` tag push runs the `deploy-release` job after that run's
+tests and images; the workflow first requires the tagged commit to be on `main`.
+The tag resolves to its commit (annotated or lightweight); a moved tag, a tag not
+on `main`, or a commit other than `--sha` is rejected, and the images built for
+that commit are promoted by digest. If the runtime check reports a pending
+migration, delivery stops until the workflow is rerun on the tag with a
+`backup_record` input (take and verify a backup first — see
 [backup](../backup/README.md)); then migrate → full runtime-role check → backend
 startup → routed readiness → state commit. Expect downtime while the backend
 restarts. Re-delivering the deployed tag is a no-op; a tag that does not contain
@@ -325,36 +328,38 @@ publication commits `state.json` before replacing the retained rollback files.
 An interruption before that commit preserves the older rollback target; after
 the commit, retries and recovery finish the remaining files from the journal.
 
-**Release access boundary.** The production stack has no reload, debug, seed or
-development mounts, but the current frontend build embeds demo auto-login
-credentials ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled
-credentials are not private authentication: place the release behind a
-reviewed access boundary (for example, proxy authentication or a private
-network) before setting `access_reviewed`.
+### Release access boundary
 
-## CI/CD
-
-Workflows check out their own reviewed commit (`github.workflow_sha`, never a PR
-head), run `deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"` (see
-[updates](#installation-and-updates)), run `<env> preflight`, then one lifecycle
-operation with that pinned executable. In CI the installer only accepts the
-default-branch `pr-preview.yml`, `staging.yml` and `release.yml`, plus
-`release.yml` at a `v*` tag whose commit is already on `main`. Missing
-configuration fails the job with the remedy; CI never prompts, guesses setup or
-uses sudo. Each runner account needs its own configured descriptors.
+The production stack has no reload, debug, seed or development mounts, but the
+current frontend build embeds demo auto-login credentials
+([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled credentials are not
+private authentication: place the release behind a reviewed access boundary (for
+example, proxy authentication or a private network) before setting
+`DEPLOY_ACCESS_REVIEWED=true`.
 
 ## Development
 
+The tests need PyYAML (for the workflow tests) and, for the snapshot suites,
+boto3; the backend environment provides both:
+
 ```sh
+# From the repository root with python3-yaml installed, or
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
+# through the backend environment, as CI does:
+cd people-gator-api && PYTHONPATH=../deploy/people-gator-deploy/src uv run --locked python -B -m unittest discover -s ../deploy/people-gator-deploy/tests -v
 # Database-backed and image-backed suites, from people-gator-api with its uv environment:
 STAGING_TEST_DATABASE_PORT=… STAGING_TEST_POSTGRES_CONTAINER=… uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
 PREVIEW_TEST_POSTGRES_CONTAINER=… PYTHONPATH=deploy/people-gator-deploy/src python3 -B deploy/people-gator-deploy/tests/test_preview.py
 PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observability.py
 ```
 
+The workflow tests parse `ci.yml`, execute every deploy step's script against a
+stub `people-gator-deploy` and parse the recorded commands with the real CLI; the
+runner-guard tests run `deploy/runner/job-started.sh` against a disposable Git
+origin.
+
 `test_staging_runtime.py` needs a backend image, an internal network aliasing
-PostgreSQL as `preview-postgres` and Docker. PR CI does not run it; from
+PostgreSQL as `preview-postgres` and Docker. CI does not run it; from
 `people-gator-api`, with a disposable PostgreSQL container and its published port:
 
 ```sh
@@ -367,45 +372,36 @@ STAGING_TEST_DATABASE_USER=… STAGING_TEST_DATABASE_PASSWORD=… \
 PYTHONPATH=../deploy/people-gator-deploy/src uv run --locked python ../deploy/people-gator-deploy/tests/test_staging_runtime.py -v
 ```
 
-It runs both legacy local restore and latest-source discovery/download/restore
-against disposable TLS MinIO. It verifies the newest archive's actual records
-and that a corrupt newer archive creates no database. The backend environment
-supplies boto3 and application dependencies; no real operator source is read.
+It runs both local restore and latest-source discovery/download/restore against
+disposable TLS MinIO. It verifies the newest archive's actual records and that a
+corrupt newer archive creates no database. The backend environment supplies
+boto3 and application dependencies; no real operator source is read.
 
 ## Browser RUM and API trace correlation
 
 See [OpenObserve runtime configuration](../../docs/OPENOBSERVE-RUM.md) for the
-operator-owned telemetry file shared across PR, staging and release descriptors,
-collector networking, credential boundaries and reviewed-main rollout. The
-browser receives a dedicated RUM client token through the API; backend OTLP
-authorization stays server-side. No frontend build secrets are required.
+`DEPLOY_TELEMETRY_ENV` secret shared by the PR, staging and release environments,
+collector networking, credential boundaries and rollout. The browser receives a
+dedicated RUM client token through the API; backend OTLP authorization stays
+server-side. No frontend build secrets are required.
 
 ### Preview application capabilities
 
-The reviewed controller inspects the tested backend image's
-`org.peoplegator.auth-service` label. Missing labels select the existing
-frontend/API recipe. Value `1` selects the fixed `compose.pr-auth.yaml` recipe
-shipped with the utility; unknown versions are rejected before replacement.
-Neither label values nor PR files become controller paths or host commands.
-This lets a controller upgrade reach `main` before standalone-auth application
-images, without changing the topology of existing previews or staging.
+The utility inspects the tested backend image's `org.peoplegator.auth-service`
+label. Missing labels select the existing frontend/API recipe. Value `1` selects
+the fixed `compose.pr-auth.yaml` recipe shipped with the package; unknown versions
+are rejected before replacement. Neither label values nor PR files become host
+commands outside the package's own Compose recipes.
 
 Capability 1 runs storage initialization, migration, seed and explicit account
 provisioning before starting auth/API/frontend. Only the provisioning container
-receives the external users file; the issuer retains its own `auth-data` volume
-and has no database connection. The API uses a per-preview private issuer alias.
+receives the users file; the issuer retains its own `auth-data` volume and has
+no database connection. The API uses a per-preview private issuer alias.
 Existing account edits and actor UUIDs survive provisioning reruns. New issuer
 keys force re-login unless retained keys are copied explicitly as an operator
 step. Closure removes both preview volumes using the saved recipe selector.
 
 The selected topology is saved in the private Compose environment and successful
-preview state. An already-seeded run can be repaired when an older controller
+preview state. An already-seeded build can be repaired when an older utility
 omitted its advertised topology. Readiness requires real issuer health/JWKS
 responses and the gateway; an HTTP 200 frontend fallback is insufficient.
-
-For the #89 rollout: merge/review this controller support on `main` first, then
-build/redeploy PR #100 with the capability label. Rerunning that PR's CI triggers
-the normal lifecycle using the exact reviewed-main utility. Do not install
-utility code from the application PR or start an unmanaged replacement stack on
-the preview host. This controller preparation does not change staging or release
-auth ownership or require operator credential changes for legacy previews.

@@ -172,13 +172,14 @@ Do not put backup credentials in root `.env`: live-preview's API imports that
 entire file. No backup operation inherits the app's storage settings or AWS
 credentials.
 
-For staging initialization/refresh, configure the deployment utility's private
-`snapshot_source_file` once with the restore-reader storage settings (endpoint,
-region, bucket, prefix and read-only credentials only). It automatically lists
-all pages, selects the latest dated archive and performs a private, conditional,
-verified download before restoring a separate candidate database. No dated
-path/checksum/revision edits are required. See [Backup gathering](../people-gator-deploy/README.md#backup-gathering)
-for setup and the explicit transition from legacy local descriptors. Ordinary
+For staging initialization/refresh, set the `staging` GitHub Environment's
+`DEPLOY_SNAPSHOT_SOURCE` secret once to the restore-reader storage settings
+(endpoint, region, bucket, prefix and read-only credentials only). The
+deployment utility automatically lists all pages, selects the latest dated
+archive and performs a private, conditional, verified download before restoring
+a separate candidate database. No dated path/checksum/revision edits are
+required. See [Backup gathering](../people-gator-deploy/README.md#backup-gathering)
+for setup. Ordinary
 staging updates retain data; only `snapshot-init` and guarded `refresh` consume
 snapshots. Application S3 configuration, media copying and auth provisioning
 remain external operator work. This change does not refresh a live database.

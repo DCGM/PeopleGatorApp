@@ -33,11 +33,13 @@ docker compose -f compose.dev.yaml ps
 docker compose -f compose.dev.yaml logs --tail 100 backend frontend db
 ```
 
-On the preview host, as the deployment account, use the actual PR number:
+On the preview host, as the deployment account, with the `preview`
+environment's `DEPLOY_*` values exported ([operator commands](../deploy/people-gator-deploy/README.md#one-time-host-setup)),
+use the actual PR number:
 
 ```sh
-people-gator-deploy pr status --pr 123
-people-gator-deploy pr logs --pr 123 --tail 100
+PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr status --pr 123
+PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr logs --pr 123 --tail 100
 ```
 
 Failed service output is kept in the environment's private `last-error.log`;
