@@ -140,7 +140,7 @@ account, from a checkout of `main`:
 ```sh
 git clone https://github.com/DCGM/PeopleGatorApp.git && cd PeopleGatorApp
 cp deploy/infrastructure/example.env /private/infrastructure.env   # edit, chmod 600, keep
-docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait
+docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 ```
 
 It starts PostgreSQL (container `people-gator-postgres`, alias `preview-postgres`
@@ -177,10 +177,16 @@ databases, media, passwords and generations are untouched. The former managed
 infrastructure is the same Compose project (`people-gator-preview-infra`, same
 volumes): use `~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env`
 as the stack's `--env-file` (its `KEY='value'` lines are read as-is, and
-PostgreSQL only applies the password at first initialization) and run the
-command above once; Compose recreates the PostgreSQL container with the fixed
-name `people-gator-postgres`. Alternatively set `PREVIEW_POSTGRES_CONTAINER` to
-the current name (`people-gator-preview-infra-postgres-1`). Copy each
+PostgreSQL only applies the password at first initialization; its stale
+`OTEL_*`/`PREVIEW_LOG_PORT` keys are ignored) and run the command above once:
+Compose recreates the PostgreSQL container with the fixed name
+`people-gator-postgres` and `--remove-orphans` removes the former Fluent
+Forward collector, whose `people-gator-preview-infra_otel-data` volume can be
+deleted. Alternatively set `PREVIEW_POSTGRES_CONTAINER` to the current name
+(`people-gator-preview-infra-postgres-1`). Strip `PEOPLE_GATOR_API__OTEL__ENABLED`
+and `OTEL_EXPORTER_OTLP_*_ENDPOINT` lines from the old telemetry file before
+storing it as the preview and staging telemetry secrets; the deployment sets
+them now. Copy each
 descriptor's values into the GitHub variables above, put the
 users/runtime/migration/telemetry/backup-source file contents into the secrets,
 install the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each

@@ -77,8 +77,9 @@ archive. Preserve maintenance outcomes separately.
 
 The SDK is disabled by default in the application; the preview and staging
 stacks enable it and point it at `DEPLOY_OTEL_HTTP_ENDPOINT` (set
-`DEPLOY_OTEL_ENABLED=false` to turn it off). Releases enable it through their
-runtime or telemetry secret when the API can reach the OTLP HTTP receiver:
+`DEPLOY_OTEL_ENABLED=false` to turn it off), and reject these keys in their
+telemetry secret. Releases enable it through their runtime or telemetry secret
+when the API can reach the OTLP HTTP receiver:
 
 ```dotenv
 PEOPLE_GATOR_API__OTEL__ENABLED=true

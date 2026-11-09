@@ -2,7 +2,7 @@
 # An operator runs this stack once per host and keeps it running; the deploy
 # jobs only check it (see deploy/people-gator-deploy/HOSTS.md):
 #
-#   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait
+#   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 #
 # The project name is kept from earlier releases so existing volumes match.
 name: people-gator-preview-infra

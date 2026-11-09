@@ -14,8 +14,8 @@ This token is browser-visible by design. Account passwords and server OTLP
 exporter authorization never belong in browser settings, Git, image build args
 or frontend `VITE_*` variables.
 
-Create an operator-owned mode-600 file outside the checkout, utility installation
-and deployment state directories, for example `/home/RUNNER/private/people-gator-telemetry.env`:
+The telemetry secret of the **preview** and **staging** environments holds the
+RUM settings and, if the collector needs authorization, OTLP headers:
 
 ```dotenv
 PEOPLE_GATOR_API__RUM__ENABLED=true
@@ -25,6 +25,16 @@ PEOPLE_GATOR_API__RUM__ORGANIZATION_IDENTIFIER=default
 PEOPLE_GATOR_API__RUM__APPLICATION_ID=people-gator-app
 PEOPLE_GATOR_API__RUM__SESSION_SAMPLE_RATE=100
 PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE=100
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic REPLACE_IF_THE_COLLECTOR_REQUIRES_IT
+```
+
+Those deployments enable the SDK and set the endpoints themselves from
+`PREVIEW_OTEL_HTTP_ENDPOINT` / `DEPLOY_OTEL_HTTP_ENDPOINT` (default
+`http://lgtm:4318`); `PEOPLE_GATOR_API__OTEL__ENABLED` and endpoint keys in their
+secret are rejected because the Compose environment would shadow them. The
+**production** secret may additionally carry those lines:
+
+```dotenv
 PEOPLE_GATOR_API__OTEL__ENABLED=true
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://lgtm:4318/v1/traces
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://lgtm:4318/v1/logs

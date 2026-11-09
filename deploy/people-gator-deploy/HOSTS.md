@@ -125,7 +125,7 @@ secrets, and deployment jobs cannot reach your files or containers.
 - The shared stack's private env file holds the PostgreSQL and pgAdmin
   passwords (mode 600, outside the checkout). Back it up with the
   `people-gator-preview-infra_postgres-data` and `…_pgadmin-data` volumes before
-  rerunning `docker compose … up -d` with a newer `main`.
+  rerunning `docker compose … up -d --remove-orphans` with a newer `main`.
 - pgAdmin: `https://<PGADMIN_HOST>`, login `PGADMIN_DEFAULT_EMAIL` with
   `PGADMIN_DEFAULT_PASSWORD` from that file. Its preconfigured server connects to
   `preview-postgres:5432` as `preview_admin` (`POSTGRES_ADMIN_PASSWORD`). A PR-only
