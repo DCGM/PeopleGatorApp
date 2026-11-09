@@ -37,7 +37,7 @@ class Sink(BaseHTTPRequestHandler):
     def log_message(self, *args): pass
 HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
 """
-        config = Path(__file__).resolve().parents[1] / "src/people_gator_deploy/assets/otel-collector.yaml"
+        config = Path(__file__).resolve().parents[2] / "infrastructure/otel-collector.yaml"
         try:
             self.docker("network", "create", network)
             self.docker("run", "-d", "--rm", "--name", sink, "--network", network,

@@ -65,11 +65,13 @@ class RuntimeTests(unittest.TestCase):
         runtime.chmod(0o600)
         context = os.environ.get("STAGING_TEST_DOCKER_CONTEXT") or subprocess.check_output(
             ["docker", "context", "show"], text=True).strip()
-        controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
-            "docker_context": context, "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
+        controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(state),
+            "host": "staging-fixture.example.invalid", "docker_context": context,
+            "postgres_container": os.environ["STAGING_TEST_POSTGRES_CONTAINER"],
+            "postgres_admin_user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
+            "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
-                "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40},
-            "staging": {"state_dir": str(state), "host": "staging-fixture.example.invalid"}})
+                "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40}})
         snapshot_revision = "d34a021b0005"
         if backup_source:
             # Roundtrip already-existing thumbnail constraints. An old snapshot

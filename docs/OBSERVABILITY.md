@@ -151,7 +151,7 @@ timeouts and collector outages using synthetic data; verify receipt at the sink
 instead of relying only on an open port. Controller/logging checks from root:
 
 ```sh
-python3 -B deploy/people-gator-deploy/tests/test_observability.py -v
+python3 -B deploy/people-gator-deploy/tests/test_observability.py -v   # collector config in deploy/infrastructure
 ```
 
 Its optional end-to-end test uses disposable Docker containers and an OTLP sink:

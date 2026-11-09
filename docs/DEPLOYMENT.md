@@ -221,9 +221,11 @@ its deployments inactive; the daily and post-staging prune repeats both for any
 preview whose PR is no longer open. Shared PostgreSQL, pgAdmin and logging
 remain running. A failed migration has no automatic schema rollback.
 
-Shared-infrastructure initialization and upgrades remain explicit operator
-actions ([one-time host setup](../deploy/people-gator-deploy/README.md#one-time-host-setup));
-routine deploys do not recreate services or reset credentials/state. GHCR image
+The shared PostgreSQL, log collector and pgAdmin are an operator-run Compose
+stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
+([one-time host setup](../deploy/people-gator-deploy/README.md#one-time-host-setup));
+the utility installs nothing and every operation first checks that the stack,
+networks and Docker are up, failing with the remedy otherwise. GHCR image
 names are derived from the repository. Provision the documented DNS, Traefik,
 logging network, runner isolation, GitHub Environments and token permissions
 before enabling deployment. No database rollback is performed automatically.

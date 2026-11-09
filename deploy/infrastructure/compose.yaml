@@ -1,8 +1,18 @@
+# Shared PostgreSQL, log collector and pgAdmin for PR previews and staging.
+# An operator runs this stack once per host and keeps it running; the deploy
+# jobs only check it (see deploy/people-gator-deploy/HOSTS.md):
+#
+#   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait
+#
+# The project name is kept from earlier releases so existing volumes match.
 name: people-gator-preview-infra
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    # The deploy utility provisions per-PR and staging databases through
+    # `docker exec` into this container (DEPLOY_POSTGRES_CONTAINER).
+    container_name: ${POSTGRES_CONTAINER:-people-gator-postgres}
     restart: unless-stopped
     environment:
       POSTGRES_USER: preview_admin

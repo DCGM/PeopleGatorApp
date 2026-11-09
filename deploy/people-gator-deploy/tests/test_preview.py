@@ -5,6 +5,7 @@ from contextlib import redirect_stderr
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -236,7 +237,6 @@ class LifecycleTests(unittest.TestCase):
             self.controller.image("frontend", RUN)
 
     def test_deploy_repeats_and_populated_reconciliation_preserve_open_preview(self):
-        (self.root / "infrastructure.env").write_text("existing infrastructure credentials")
         directory = self.seed_preview()
         inspected = [{"Config": {"Labels": {"org.opencontainers.image.revision": SHA}},
                       "RepoDigests": [digest]} for digest in IMAGES.values()]
@@ -464,39 +464,6 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotIn("version", json.loads((directory / "state.json").read_text()))
         self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
 
-    def test_infrastructure_upgrade_and_reruns_preserve_credentials(self):
-        env_file = self.root / "infrastructure.env"
-        env_file.write_text("POSTGRES_ADMIN_PASSWORD=" + "c" * 64 + "\nDATABASE_NETWORK=people-gator-preview-db\n")
-        self.controller.init()
-        first = env_file.read_text()
-        self.assertIn("POSTGRES_ADMIN_PASSWORD='" + "c" * 64 + "'", first)
-        self.assertIn("PGADMIN_DEFAULT_PASSWORD='", first)
-        self.assertIn("OTEL_EXPORTER_OTLP_ENDPOINT='http://lgtm:4318'", first)
-        self.assertEqual(env_file.stat().st_mode & 0o777, 0o600)
-        self.controller.init()
-        self.assertEqual(env_file.read_text(), first)
-
-    def test_config_controls_otel_pgadmin_and_preview_log_port(self):
-        self.controller.config.update(
-            otel_network="observability", otel_http_endpoint="https://otel.example.test",
-            preview_log_port=24225, pgadmin_email="operator@example.test",
-            pgadmin_host="pgadmin.example.test", certificate_resolver="",
-        )
-        self.controller.init()
-        infrastructure = (self.root / "infrastructure.env").read_text()
-        for value in ("OTEL_NETWORK='observability'", "PGADMIN_DEFAULT_EMAIL='operator@example.test'",
-                      "PGADMIN_HOST='pgadmin.example.test'", "CERTIFICATE_RESOLVER=''",
-                      "OTEL_EXPORTER_OTLP_ENDPOINT='https://otel.example.test'"):
-            self.assertIn(value, infrastructure)
-        self.assertIn("PREVIEW_LOG_ADDRESS='127.0.0.1:24225'",
-                      self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA))
-
-    def test_infrastructure_rejects_dotenv_injection_before_starting(self):
-        self.controller.config["pgadmin_email"] = "admin@example.test\nINJECTED=value"
-        with self.assertRaises(ValueError):
-            self.controller.init()
-        self.controller.command.assert_not_called()
-
     def test_migration_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
         self.controller.command.side_effect = ["", "", RuntimeError("migration failed")]
@@ -575,24 +542,10 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(service["labels"]["people-gator.preview.pr"], "123")
             self.assertIn("com.docker.compose.service", service["logging"]["options"]["labels"])
 
-    @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
-    def test_infrastructure_routes_pgadmin_and_keeps_database_private(self):
-        self.controller.init()
-        result = subprocess.run(self.controller.infra("config", "--format", "json"),
-                                text=True, capture_output=True, check=True)
-        config = json.loads(result.stdout)
-        self.assertFalse(config["services"]["postgres"].get("ports"))
-        self.assertNotIn("web", config["services"]["postgres"]["networks"])
-        pgadmin = config["services"]["pgadmin"]
-        self.assertFalse(pgadmin.get("ports"))
-        self.assertEqual(set(pgadmin["networks"]), {"database", "web"})
-        self.assertEqual(pgadmin["labels"]["traefik.http.routers.pg-preview-pgadmin.rule"],
-                         "Host(`pgadmin-preview.peoplegator.dev`)")
-        self.assertEqual(pgadmin["environment"]["PGADMIN_CONFIG_SESSION_COOKIE_SECURE"], "True")
-        collector = config["services"]["otel-collector"]
-        self.assertEqual(collector["ports"][0]["host_ip"], "127.0.0.1")
-        self.assertTrue(config["networks"]["logging"]["external"])
-        self.assertFalse(any("docker.sock" in mount.get("source", "") for mount in collector["volumes"]))
+    def test_config_controls_the_preview_log_address(self):
+        self.controller.config.update(preview_log_port=24225)
+        self.assertIn("PREVIEW_LOG_ADDRESS='127.0.0.1:24225'",
+                      self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA))
 
 
 @unittest.skipUnless(os.environ.get("PREVIEW_TEST_POSTGRES_CONTAINER"), "requires disposable PostgreSQL container")
@@ -604,18 +557,29 @@ class DatabaseIsolationTests(unittest.TestCase):
             # The fixture lives in the caller's active context; the adapter never guesses one.
             context = os.environ.get("PREVIEW_TEST_DOCKER_CONTEXT") or subprocess.check_output(
                 ["docker", "context", "show"], text=True).strip()
+            # The shared PostgreSQL is an operator-run container the utility addresses by name.
             controller = preview.Preview({"repository": "DCGM/PeopleGatorApp", "state_dir": root,
-                                          "docker_context": context})
-
-            def sql(statements, database="postgres"):
-                return controller.command([
-                    "docker", "exec", "-i", container, "psql", "-X", "-qAt",
-                    "-v", "ON_ERROR_STOP=1", "-U", admin, "-d", database,
-                ], sql=statements)
-
-            controller.sql = sql
+                                          "docker_context": context, "postgres_container": container,
+                                          "postgres_admin_user": admin})
+            sql = controller.sql
             numbers = (900001, 900002)
+            network = "people-gator-test-" + secrets.token_hex(4)
+            subprocess.run(["docker", "network", "create", "--internal", network], check=True, capture_output=True)
             try:
+                # The real daemon's inspect output must expose the alias the check looks for.
+                controller.config["database_network"] = network
+                with self.assertRaisesRegex(DeployError, "alias preview-postgres"):
+                    controller.check_infrastructure()
+                subprocess.run(["docker", "network", "connect", "--alias", "preview-postgres", network, container],
+                               check=True, capture_output=True)
+                with patch.object(host.socket, "create_connection", side_effect=OSError("no collector")), \
+                        redirect_stderr(io.StringIO()):
+                    checked = controller.check_infrastructure()
+                self.assertEqual(checked, {"postgres_container": container, "database_network": network, "log_collector": False})
+                controller.config["postgres_container"] = "people-gator-missing-" + secrets.token_hex(4)
+                with self.assertRaisesRegex(DeployError, "does not exist"):
+                    controller.check_infrastructure()
+                controller.config["postgres_container"] = container
                 for number in numbers:
                     controller.provision_database(number, "c" * 64)
                     controller.provision_database(number, "c" * 64)
@@ -642,6 +606,8 @@ class DatabaseIsolationTests(unittest.TestCase):
                 for _ in range(2):
                     for number in numbers:
                         sql(f"DROP DATABASE IF EXISTS preview_pr_{number} WITH (FORCE); DROP ROLE IF EXISTS preview_pr_{number};")
+                subprocess.run(["docker", "network", "disconnect", network, container], capture_output=True)
+                subprocess.run(["docker", "network", "rm", network], capture_output=True)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 # Host prerequisites
 
-External services the utility checks but never creates. Prepare them before
-`people-gator-deploy <env> install`. Commands and the `DEPLOY_*` settings are
-covered in the [utility guide](README.md).
+External services the utility checks but never creates. Prepare them before the
+first deploy job. Commands and the `DEPLOY_*` settings are covered in the
+[utility guide](README.md).
 
 ## Docker, proxy and networks
 
@@ -15,10 +15,15 @@ covered in the [utility guide](README.md).
   entrypoint `websecure` and resolver `tlschallenge`
   (`DEPLOY_CERTIFICATE_RESOLVER=none` reuses an existing wildcard certificate).
   Wildcard issuance requires DNS-01.
-- An OTLP HTTP backend on `DEPLOY_OTEL_NETWORK` (default `logging`, endpoint
-  `DEPLOY_OTEL_HTTP_ENDPOINT`, default `http://lgtm:4318`). The shared collector
-  receives Docker fluentd logs on `127.0.0.1:<DEPLOY_PREVIEW_LOG_PORT>` (default 24224).
-- DNS: `*.<PREVIEW_DOMAIN>` (previews), `PREVIEW_PGADMIN_HOST`, the staging
+- An OTLP HTTP backend on `DEPLOY_OTEL_NETWORK` (default `logging`; the stack's
+  `OTEL_EXPORTER_OTLP_ENDPOINT`, default `http://lgtm:4318`).
+- The shared stack [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml)
+  on preview/staging hosts: PostgreSQL 16 with pgvector (container
+  `people-gator-postgres`, alias `preview-postgres` on the database network, no
+  published port), the log collector receiving Docker fluentd logs on
+  `127.0.0.1:<PREVIEW_LOG_PORT>` (default 24224) and pgAdmin behind Traefik. See
+  [one-time host setup](README.md#one-time-host-setup).
+- DNS: `*.<PREVIEW_DOMAIN>` (previews), the stack's `PGADMIN_HOST`, the staging
   `DEPLOY_HOST` and the production `DEPLOY_HOST` all point to the Traefik host.
   The preview wildcard does not cover staging.
 - Outbound access from the deploy account to GitHub (API and GHCR) and to the
@@ -104,13 +109,12 @@ secrets, and deployment jobs cannot reach your files or containers.
    and add the job-started guard with the matching
    `PEOPLE_GATOR_RUNNER_ENVIRONMENT` list. Several runners can run different
    environments at the same time; each environment still deploys one job at a time.
-5. As `gator-deploy`, export the GitHub settings as `DEPLOY_*` values with
-   `DEPLOY_DOCKER_CONTEXT=rootless`, then run `pr install`, `staging install`
-   and `staging snapshot-init` from a checkout of `main`
-   ([one-time setup](README.md#one-time-host-setup)). Rerun the latest CI of open
-   PRs to redeploy their previews.
-6. Remove the old runners (`./config.sh remove`) and uninstall the old
-   environments and their containers, volumes and state from your account.
+5. As `gator-deploy`, start the shared stack from a checkout of `main`
+   ([one-time setup](README.md#one-time-host-setup)), then run the CI workflow
+   manually on `main` with `operation=snapshot-init` and rerun the latest CI of
+   open PRs to redeploy their previews.
+6. Remove the old runners (`./config.sh remove`) and the old environments'
+   containers, volumes and state from your account.
 
 ## PR previews
 
@@ -118,13 +122,12 @@ secrets, and deployment jobs cannot reach your files or containers.
   hashes, written by each job to `<state dir>/users.json` (mode 644) for the
   backend container's bind mount. `people-gator-api/example.users.json` supplies the demo `test` / `test`
   account that the preview frontend logs into.
-- `pr install` generates the shared PostgreSQL and pgAdmin passwords into
-  `<infrastructure state dir>/infrastructure.env` (mode 600) and starts
-  PostgreSQL, the collector and pgAdmin. Back up that directory with the
-  `<project>_postgres-data` and `<project>_pgadmin-data` volumes before
-  `pr infra-upgrade`.
-- pgAdmin: `https://<PREVIEW_PGADMIN_HOST>`, login `PREVIEW_PGADMIN_EMAIL` with
-  `PGADMIN_DEFAULT_PASSWORD`. Its preconfigured server connects to
+- The shared stack's private env file holds the PostgreSQL and pgAdmin
+  passwords (mode 600, outside the checkout). Back it up with the
+  `people-gator-preview-infra_postgres-data` and `…_pgadmin-data` volumes before
+  rerunning `docker compose … up -d` with a newer `main`.
+- pgAdmin: `https://<PGADMIN_HOST>`, login `PGADMIN_DEFAULT_EMAIL` with
+  `PGADMIN_DEFAULT_PASSWORD` from that file. Its preconfigured server connects to
   `preview-postgres:5432` as `preview_admin` (`POSTGRES_ADMIN_PASSWORD`). A PR-only
   connection uses role/database `preview_pr_<N>` and the password in
   `<state dir>/pr-<N>/state.json`. Never print these files in Actions.
@@ -134,9 +137,9 @@ secrets, and deployment jobs cannot reach your files or containers.
 
 ## Staging
 
-Staging shares the preview PostgreSQL (its `DEPLOY_INFRASTRUCTURE_STATE_DIR`,
-`DEPLOY_INFRASTRUCTURE_PROJECT` and `DEPLOY_DATABASE_NETWORK` equal the
-`PREVIEW_*` repository values) and has its own hostname and state directory. The utility manages **databases only**;
+Staging shares the preview PostgreSQL (its `DEPLOY_POSTGRES_CONTAINER`,
+`DEPLOY_POSTGRES_ADMIN_USER` and `DEPLOY_DATABASE_NETWORK` equal the `PREVIEW_*`
+repository values) and has its own hostname and state directory. The utility manages **databases only**;
 application S3 storage, media and authentication objects are operated externally.
 
 The `staging` GitHub Environment supplies:

@@ -75,12 +75,12 @@ integration tests with `PEOPLE_GATOR_SCHEMA_TEST_URL`. Its deploy jobs run
 own branch's deploy code; staging uses `main`, releases the tag) with settings
 kept in GitHub (repository variables `PREVIEW_*` and the `preview`, `staging`
 and `production` environments), as described in
-`deploy/people-gator-deploy/README.md`. Deployment lifecycle,
+`deploy/people-gator-deploy/README.md`. The shared PostgreSQL/collector/pgAdmin
+stack is operator-run (`deploy/infrastructure`); the utility only checks it. Deployment lifecycle,
 workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
 update them with any change to the workflow's deploy steps, the `DEPLOY_*`
 settings or the runner guard. Keep credentials in GitHub Environment secrets
-and host state directories, never in Git; shared-infrastructure
-initialization/upgrades remain explicit operator actions.
+and host state directories, never in Git.
 
 # Search and filter panels throughout the application
 

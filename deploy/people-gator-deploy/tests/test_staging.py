@@ -26,12 +26,11 @@ class FakeStaging(staging.Staging):
         archive = root / "snapshot.dump"
         archive.write_bytes(b"PGDMP synthetic original database")
         archive.chmod(0o600)
-        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
+        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"),
+                          "host": "staging.peoplegator.dev", "postgres_container": "people-gator-postgres",
+                          "postgres_admin_user": "preview_admin", "database_network": "people-gator-preview-db",
                           "runtime_file": str(runtime), "snapshot": {"path": str(archive),
-                              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA},
-                          "staging": {"state_dir": str(root / "staging")}})
-        self.root.mkdir()
-        (self.root / "infrastructure.env").write_text("synthetic infra")
+                              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA}})
         self.staging_root.mkdir()
         self.run = {"id": 100, "run_attempt": 1, "head_sha": SHA}
         self.main_sha = SHA
@@ -339,7 +338,7 @@ class StagingTests(unittest.TestCase):
 
     def test_missing_staging_settings_report_safe_guidance_before_github_or_docker(self):
         with self.assertRaises(staging.StagingConfigurationError) as raised:
-            staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
+            staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root), "host": "staging.example.invalid",
                              "private_operator_value": "private-sentinel"})
         self.assertIn("DEPLOY_RUNTIME_ENV", str(raised.exception))
         self.assertNotIn("private-sentinel", str(raised.exception))

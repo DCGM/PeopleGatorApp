@@ -1,10 +1,12 @@
 """Environment settings from ``DEPLOY_*`` variables; configuration never contacts services.
 
-Deploy jobs receive each GitHub Environment's variables and secrets as process
-environment variables. Non-secret settings become the controller configuration
-directly. Secret contents (users file, API env files, backup source) are written
-to private files in the environment's host state directory before deployment,
-because Compose bind mounts and env files must outlive the job.
+Deploy jobs receive the GitHub variables and secrets as process environment
+variables. Non-secret settings become the controller configuration directly.
+Secret contents (users file, API env files, backup source) are written to
+private files in the environment's host state directory before deployment,
+because Compose bind mounts and env files must outlive the job. The shared
+PostgreSQL/collector/pgAdmin stack is operator-run (deploy/infrastructure) and
+only checked here.
 """
 from __future__ import annotations
 
@@ -113,26 +115,17 @@ def load(environment: str, env=None) -> dict:
     require(bool(HOSTNAME.fullmatch(hostname)), hostname_field, "missing or invalid hostname")
     settings["domain" if environment == "pr" else "host"] = hostname
     if environment != "release":
+        # Previews and staging share an operator-run PostgreSQL (deploy/infrastructure).
         settings["database_network"] = value("DATABASE_NETWORK", "people-gator-preview-db")
         require(bool(NAME.fullmatch(settings["database_network"])), "DATABASE_NETWORK", "missing or invalid network")
-        infrastructure_root = absolute("INFRASTRUCTURE_STATE_DIR",
-                                       value("INFRASTRUCTURE_STATE_DIR") or str(default_state_root() / "infrastructure"))
-        require(not (infrastructure_root.is_relative_to(root) or root.is_relative_to(infrastructure_root)),
-                "INFRASTRUCTURE_STATE_DIR", "must be outside the environment state directory")
-        project = value("INFRASTRUCTURE_PROJECT", "people-gator-preview-infra")
-        require(bool(PROJECT.fullmatch(project)), "INFRASTRUCTURE_PROJECT", "missing or invalid Compose project")
-        # Previews own the shared PostgreSQL/collector/pgAdmin; staging shares it.
-        settings["infrastructure"] = {"mode": "managed" if environment == "pr" else "external",
-                                      "project": project, "state_dir": str(infrastructure_root)}
+        settings["postgres_container"] = value("POSTGRES_CONTAINER", "people-gator-postgres")
+        require(bool(NAME.fullmatch(settings["postgres_container"])), "POSTGRES_CONTAINER", "missing or invalid container name")
+        settings["postgres_admin_user"] = value("POSTGRES_ADMIN_USER", "preview_admin")
+        require(bool(re.fullmatch(r"[a-z_][a-z0-9_]*", settings["postgres_admin_user"])), "POSTGRES_ADMIN_USER", "invalid role name")
         port = value("PREVIEW_LOG_PORT", "24224")
         require(bool(re.fullmatch(r"[1-9][0-9]{0,4}", port)), "PREVIEW_LOG_PORT", "requires a TCP port number")
         settings["preview_log_port"] = int(port)
-    if environment == "pr":
-        settings["otel_http_endpoint"] = value("OTEL_HTTP_ENDPOINT", "http://lgtm:4318")
-        settings["pgadmin_host"] = value("PGADMIN_HOST", "pgadmin-preview.peoplegator.dev")
-        require(bool(HOSTNAME.fullmatch(settings["pgadmin_host"])), "PGADMIN_HOST", "missing or invalid hostname")
-        settings["pgadmin_email"] = value("PGADMIN_EMAIL", "admin@peoplegator.dev")
-    else:
+    if environment != "pr":
         settings["project"] = value("PROJECT", "people-gator-" + environment)
         require(bool(PROJECT.fullmatch(settings["project"])), "PROJECT", "invalid Compose project")
     if environment == "staging" and value("SNAPSHOT"):

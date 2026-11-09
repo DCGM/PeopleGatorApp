@@ -45,19 +45,15 @@ class StagingConfigurationError(DeployError):
 class Staging(Host):
     def __init__(self, config: dict):
         super().__init__(config)
-        staging = config.get("staging")
-        if not isinstance(staging, dict) or not staging.get("state_dir"):
+        if not config.get("runtime_file"):
             raise StagingConfigurationError(
-                "Missing staging settings; set DEPLOY_STATE_DIR and DEPLOY_RUNTIME_ENV for the staging environment."
+                "Missing staging settings; set DEPLOY_HOST and the DEPLOY_RUNTIME_ENV secret for the staging environment."
             )
-        self.staging_root = Path(staging["state_dir"])
-        if not self.staging_root.is_absolute() or self.staging_root.is_relative_to(self.root):
-            raise DeployError("Staging state must be absolute and outside shared infrastructure state")
-        self.host = staging.get("host", "staging.peoplegator.dev")
+        self.staging_root = self.root
+        self.host = config.get("host", "staging.peoplegator.dev")
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.host):
             raise DeployError("Staging needs its independent hostname")
         self.worker_label = "people-gator.staging.worker=" + hashlib.sha256(str(self.staging_root.resolve()).encode()).hexdigest()[:16]
-        self.settings = staging
 
     def diagnostic_path(self):
         # Raw diagnostics remain outside Actions, collectors and utility installations.
@@ -213,12 +209,12 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             if hashlib.file_digest(stream, "sha256").hexdigest() != snapshot["sha256"]:
                 raise DeployError("Snapshot SHA-256 does not match the expected checksum")
             stream.seek(0)
-            self.private_command(self.infra("exec", "-T", "postgres", "pg_restore", "--list"), input_file=stream)
+            self.private_command(self.postgres("pg_restore", "--list"), input_file=stream)
             stream.seek(0)
             self.provision(values)
-            self.private_command(self.infra("exec", "-T", "postgres", "pg_restore", "--exit-on-error",
+            self.private_command(self.postgres("pg_restore", "--exit-on-error",
                 "--single-transaction", "--no-owner", "--no-privileges", "--no-comments", "--no-security-labels",
-                "-U", "preview_admin", "--role", values["DB_USER"], "-d", values["DB_NAME"]), input_file=stream)
+                "-U", self.config["postgres_admin_user"], "--role", values["DB_USER"], "-d", values["DB_NAME"]), input_file=stream)
             after = os.fstat(stream.fileno())
             if any(getattr(before, key) != getattr(after, key) for key in ("st_size", "st_mtime_ns", "st_ctime_ns")):
                 raise DeployError("Snapshot changed during verification or restore")
@@ -278,8 +274,6 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 "Explicit snapshot initialization is required before normal staging deployment: "
                 "run people-gator-deploy staging snapshot-init (or the CI workflow with operation=snapshot-init)."
             )
-        if not (self.root / "infrastructure.env").is_file():
-            raise DeployError("Shared infrastructure must be installed first")
         images = {part: self.image(part, run) for part in ("frontend", "backend")}
         self.fence(run)
         generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32)} if refresh else dict(old)

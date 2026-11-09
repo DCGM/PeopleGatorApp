@@ -28,9 +28,8 @@ DEPLOY_JOBS = {
 FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository"
 SHA = "a" * 40
 SAMPLES = {"DOCKER_CONTEXT": "rootless", "DOMAIN": "preview.example.invalid", "HOST": "app.example.invalid",
-           "STATE_DIR": "/srv/state/env", "INFRASTRUCTURE_STATE_DIR": "/srv/state/infra", "INFRASTRUCTURE_PROJECT": "infra",
+           "STATE_DIR": "/srv/state/env", "POSTGRES_CONTAINER": "people-gator-postgres", "POSTGRES_ADMIN_USER": "preview_admin",
            "DATABASE_NETWORK": "db", "WEB_NETWORK": "web", "CERTIFICATE_RESOLVER": "none", "OTEL_NETWORK": "logging",
-           "OTEL_HTTP_ENDPOINT": "http://lgtm:4318", "PGADMIN_HOST": "pgadmin.example.invalid", "PGADMIN_EMAIL": "a@example.invalid",
            "PREVIEW_LOG_PORT": "24224", "PROJECT": "project", "BACKEND_MEMORY": "4g", "ACCESS_REVIEWED": "true",
            "USERS_JSON": "{}", "TELEMETRY_ENV": "PEOPLE_GATOR_API__RUM__ENABLED=true", "RUNTIME_ENV": "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data",
            "MIGRATION_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator", "SNAPSHOT_SOURCE": json.dumps({
@@ -61,7 +60,7 @@ class WorkflowStructureTests(unittest.TestCase):
         self.assertIn("backup_record", events["workflow_dispatch"]["inputs"])
         self.assertEqual(len(events["schedule"]), 1)
         text = WORKFLOW.read_text()
-        for forbidden in ("workflow_run", "pull_request_target", "install.py", "sudo", "workflow_sha", "run-id",
+        for forbidden in ("workflow_run", "pull_request_target", "install.py", "sudo", "workflow_sha", "run-id", " install",
                           "versions/", "docker/login-action@v3\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - uses: ./.github"):
             self.assertNotIn(forbidden, text)
         self.assertEqual(set(re.findall(r"secrets\.([A-Za-z_]+)", text)),
@@ -176,7 +175,7 @@ class WorkflowStructureTests(unittest.TestCase):
         self.assertEqual(variables("remove-preview"), {k: v for k, v in variables("deploy-preview").items() if k in variables("remove-preview")})
         self.assertEqual(variables("prune-previews"), variables("remove-preview"))
         for job in ("remove-preview", "prune-previews"):
-            self.assertTrue({"DEPLOY_DOCKER_CONTEXT", "DEPLOY_DOMAIN", "DEPLOY_STATE_DIR", "DEPLOY_INFRASTRUCTURE_STATE_DIR"} <= set(variables(job)))
+            self.assertTrue({"DEPLOY_DOCKER_CONTEXT", "DEPLOY_DOMAIN", "DEPLOY_STATE_DIR", "DEPLOY_POSTGRES_CONTAINER"} <= set(variables(job)))
         self.assertIn("DEPLOY_SNAPSHOT_SOURCE", jobs["deploy-staging"]["env"])
         self.assertNotIn("DEPLOY_SNAPSHOT", jobs["deploy-staging"]["env"])  # local archives are an operator-only option
 

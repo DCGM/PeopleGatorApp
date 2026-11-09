@@ -17,7 +17,7 @@ class TelemetryTests(unittest.TestCase):
             root = Path(directory)
             env = {'GITHUB_REPOSITORY': 'DCGM/PeopleGatorApp', 'DEPLOY_DOCKER_CONTEXT': 'rootless',
                    'DEPLOY_DOMAIN': 'preview.example', 'DEPLOY_STATE_DIR': str(root / 'state'),
-                   'DEPLOY_INFRASTRUCTURE_STATE_DIR': str(root / 'infrastructure'), 'DEPLOY_USERS_JSON': '{}',
+                   'DEPLOY_USERS_JSON': '{}',
                    'DEPLOY_TELEMETRY_ENV': 'PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=synthetic\nOTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic synthetic\n'}
             settings = config.load('pr', env)
             self.assertEqual(settings['telemetry_file'], str(root / 'state/telemetry.env'))

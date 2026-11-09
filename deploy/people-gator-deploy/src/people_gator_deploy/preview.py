@@ -3,7 +3,7 @@
 Deploys the images this workflow run published for a same-repository PR whose
 head is still the tested commit. Redeployment preserves credentials, seeded
 identities, reviewed edits and media. Removing one closed preview never touches
-another preview, staging, releases or shared infrastructure.
+another preview, staging, releases or the operator-run shared infrastructure.
 """
 from __future__ import annotations
 
@@ -35,8 +35,7 @@ class Preview(Host):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        # Per-PR state; the shared infrastructure root is kept separately.
-        self.previews = Path(config.get("previews_dir", config["state_dir"]))
+        self.previews = self.root
         self.domain = config.get("domain", "preview.peoplegator.dev")
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.domain):
             raise DeployError("Invalid preview domain")
@@ -130,8 +129,6 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         if not self.current_pr(number, sha):
             print(f"PR #{number} is closed, from a fork or no longer at {sha}; skipping stale deployment")
             return []
-        if not (self.root / "infrastructure.env").exists():
-            raise DeployError("Initialize preview infrastructure first: people-gator-deploy pr install")
         users = Path(self.config["users_file"])
         if not users.is_absolute() or not users.is_file():
             raise DeployError("users_file must name an existing absolute file")

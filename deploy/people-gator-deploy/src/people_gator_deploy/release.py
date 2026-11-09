@@ -42,7 +42,7 @@ class Release(Host):
         return ["docker", "compose", "--project-name", self.project, "--env-file", str(env_file),
                 "-f", str(INSTALL_DIR / "compose.release.yaml"), *args]
 
-    # Installation -------------------------------------------------------
+    # Inputs -------------------------------------------------------------
 
     def validate_inputs(self):
         runtime, migration = Path(self.config["runtime_file"]), Path(self.config["migration_file"])
@@ -60,11 +60,6 @@ class Release(Host):
         for prefix in ("PEOPLE_GATOR_API__PERSISTENCE", "PEOPLE_GATOR_API__STORAGE"):
             if not any(key.startswith(prefix) for key in keys):
                 raise DeployError(f"{runtime}: define {prefix}* for the runtime role and private storage")
-
-    def install(self):
-        """External PostgreSQL/storage/proxy are checked, never created or deleted."""
-        self.validate_inputs()
-        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
 
     # Provenance ---------------------------------------------------------
 

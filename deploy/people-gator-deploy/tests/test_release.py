@@ -30,7 +30,7 @@ class FakeRelease(release.Release):
                           "docker_context": "rootless", "host": "people.example.invalid", "web_network": "web",
                           "database_network": "production-db", "runtime_file": str(private / "runtime.env"),
                           "migration_file": str(private / "migration.env")})
-        self.install()
+        self.root.mkdir(parents=True)
         self.tags = {"v1.0.0": {"type": "commit", "sha": FIRST},
                      "v1.1.0": {"type": "tag", "sha": "a" * 40},
                      "v0.9.0": {"type": "commit", "sha": OLD}}

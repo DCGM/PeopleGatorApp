@@ -18,7 +18,6 @@ class ConfigurationTests(unittest.TestCase):
         self.env = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_DOCKER_CONTEXT": "rootless",
                     "DEPLOY_DOMAIN": "preview.example.invalid", "DEPLOY_HOST": "staging.example.invalid",
                     "DEPLOY_STATE_DIR": str(self.root / "state"),
-                    "DEPLOY_INFRASTRUCTURE_STATE_DIR": str(self.root / "infrastructure"),
                     "DEPLOY_USERS_JSON": '{"test": {}}', "DEPLOY_RUNTIME_ENV": "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data",
                     "DEPLOY_MIGRATION_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n",
                     "DEPLOY_DATABASE_NETWORK": "production-db", "DEPLOY_ACCESS_REVIEWED": "true"}
@@ -42,10 +41,11 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_defaults_and_overrides(self):
         settings = config.load("pr", {k: v for k, v in self.env.items() if k != "DEPLOY_DATABASE_NETWORK"})
-        self.assertEqual(settings["infrastructure"], {"mode": "managed", "project": "people-gator-preview-infra",
-                                                      "state_dir": str(self.root / "infrastructure")})
+        self.assertEqual((settings["postgres_container"], settings["postgres_admin_user"], settings["preview_log_port"]),
+                         ("people-gator-postgres", "preview_admin", 24224))
         self.assertEqual((settings["web_network"], settings["otel_network"], settings["database_network"]),
                          ("web", "logging", "people-gator-preview-db"))
+        self.assertNotIn("infrastructure", settings)
         self.assertEqual(settings["users_file"], str(self.root / "state/users.json"))
         self.assertNotIn("telemetry_file", settings)
         self.assertNotIn("certificate_resolver", settings)
@@ -55,24 +55,24 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("telemetry_file", empty)
         self.assertEqual(config.load("pr", {**self.env, "DEPLOY_CERTIFICATE_RESOLVER": "letsencrypt"})["certificate_resolver"], "letsencrypt")
         staging = config.load("staging", {**self.env, "DEPLOY_CERTIFICATE_RESOLVER": "none", "DEPLOY_PROJECT": "stage-2",
-                                          "DEPLOY_SNAPSHOT_SOURCE": "{}", "DEPLOY_TELEMETRY_ENV": "x"})
-        self.assertEqual(staging["infrastructure"]["mode"], "external")
+                                          "DEPLOY_SNAPSHOT_SOURCE": "{}", "DEPLOY_TELEMETRY_ENV": "x",
+                                          "DEPLOY_POSTGRES_CONTAINER": "shared-pg", "DEPLOY_POSTGRES_ADMIN_USER": "admin"})
+        self.assertEqual((staging["postgres_container"], staging["postgres_admin_user"]), ("shared-pg", "admin"))
         self.assertEqual((staging["project"], staging["certificate_resolver"]), ("stage-2", ""))
         self.assertEqual(staging["snapshot_source_file"], str(self.root / "state/snapshot-source.json"))
         self.assertEqual(staging["telemetry_file"], str(self.root / "state/telemetry.env"))
         release = config.load("release", self.env)
         self.assertEqual((release["project"], release["backend_memory"], release["database_network"]),
                          ("people-gator-release", "4g", "production-db"))
-        self.assertNotIn("infrastructure", release)
+        self.assertNotIn("postgres_container", release)
         with patch.dict(os.environ, {"HOME": str(self.root / "home")}):
             implicit = config.load("staging", {k: v for k, v in self.env.items() if "STATE_DIR" not in k})
         self.assertEqual(implicit["state_dir"], str(self.root / "home/.local/opt/people-gator-deploy/state/staging"))
-        self.assertEqual(implicit["infrastructure"]["state_dir"], str(self.root / "home/.local/opt/people-gator-deploy/state/infrastructure"))
 
     def test_invalid_values_are_rejected(self):
         cases = {"DEPLOY_DOMAIN": "Preview.Example", "DEPLOY_DOCKER_CONTEXT": "root less", "DEPLOY_STATE_DIR": "relative/state",
-                 "DEPLOY_INFRASTRUCTURE_STATE_DIR": str(self.root / "state/infra"), "DEPLOY_PREVIEW_LOG_PORT": "port",
-                 "DEPLOY_INFRASTRUCTURE_PROJECT": "Infra", "DEPLOY_PGADMIN_HOST": "pg admin"}
+                 "DEPLOY_PREVIEW_LOG_PORT": "port", "DEPLOY_POSTGRES_CONTAINER": "pg container",
+                 "DEPLOY_POSTGRES_ADMIN_USER": "Admin;"}
         for name, value in cases.items():
             with self.subTest(name=name), self.assertRaisesRegex(DeployError, name):
                 config.load("pr", {**self.env, name: value})

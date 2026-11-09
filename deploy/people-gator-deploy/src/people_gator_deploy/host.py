@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
-import secrets
+import socket
 import sys
 import time
 import urllib.error
@@ -131,7 +131,7 @@ def routed_readiness(host: str, *, extra: dict[str, bytes] | None = None, attemp
 
 
 class Host:
-    """``root`` is the shared infrastructure state directory (infrastructure.env, controller.lock)."""
+    """``root`` is the environment's private state directory."""
 
     # Synthetic-data environments may relay failed command output to CI logs.
     echo_output = False
@@ -186,18 +186,13 @@ class Host:
         return self.docker.run(args, input=sql, diagnostic=self.diagnostic_path(),
                                echo=self.echo_output and sql is None)
 
-    def infra(self, *args: str) -> list[str]:
-        return [
-            "docker", "compose", "--project-name", self.config.get("infrastructure_project", "people-gator-preview-infra"),
-            "--env-file", str(self.root / "infrastructure.env"),
-            "-f", str(INSTALL_DIR / "compose.infrastructure.yaml"), *args,
-        ]
+    def postgres(self, tool: str, *args: str) -> list[str]:
+        """Run a PostgreSQL client tool inside the operator-run shared PostgreSQL container."""
+        return ["docker", "exec", "-i", self.config["postgres_container"], tool, *args]
 
     def sql(self, statements: str, database: str = "postgres") -> str:
-        return self.command(self.infra(
-            "exec", "-T", "postgres", "psql", "-X", "-qAt",
-            "-v", "ON_ERROR_STOP=1", "-U", "preview_admin", "-d", database,
-        ), sql=statements)
+        return self.command(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
+                                          "-U", self.config["postgres_admin_user"], "-d", database), sql=statements)
 
     @staticmethod
     def dotenv(values: dict[str, str]) -> str:
@@ -206,38 +201,44 @@ class Host:
             raise DeployError("Invalid character in Compose configuration")
         return "".join(f"{key}='{value}'\n" for key, value in values.items())
 
-    def init(self) -> None:
-        """Create or explicitly upgrade shared PostgreSQL/collector/pgAdmin, preserving passwords."""
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        env_file = self.root / "infrastructure.env"
-        # Upgrade old unquoted environment files without changing DB credentials.
-        existing = {}
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                key, separator, value = line.partition("=")
-                if separator:
-                    existing[key] = value.strip("'")
-        values = {
-            "POSTGRES_ADMIN_PASSWORD": existing.get("POSTGRES_ADMIN_PASSWORD") or secrets.token_hex(32),
-            "PGADMIN_DEFAULT_PASSWORD": existing.get("PGADMIN_DEFAULT_PASSWORD") or secrets.token_hex(32),
-            "PGADMIN_DEFAULT_EMAIL": self.config.get("pgadmin_email", "admin@peoplegator.dev"),
-            "PGADMIN_HOST": self.config.get("pgadmin_host", "pgadmin-preview.peoplegator.dev"),
-            "INFRA_ID": self.config.get("infrastructure_id", "preview"),
-            "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),
-            "WEB_NETWORK": self.config.get("web_network", "web"),
-            "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
-            "OTEL_NETWORK": self.config.get("otel_network", "logging"),
-            "OTEL_EXPORTER_OTLP_ENDPOINT": self.config.get("otel_http_endpoint", "http://lgtm:4318"),
-            "PREVIEW_LOG_PORT": str(self.config.get("preview_log_port", 24224)),
-        }
-        write_private(env_file, self.dotenv(values))
-        self.command(self.infra("run", "--rm", "--no-deps", "otel-collector", "validate", "--config=/etc/otelcol/preview.yaml"))
-        self.command(self.infra("up", "-d", "--wait", "--wait-timeout", "180"))
-        # Environment roles must not connect to administrative/template databases.
-        self.sql("REVOKE ALL ON DATABASE postgres, template1 FROM PUBLIC;\n")
-        print("Shared PostgreSQL, log collector and pgAdmin are ready")
-        print(f"pgAdmin: https://{values['PGADMIN_HOST']} (login: {values['PGADMIN_DEFAULT_EMAIL']})")
-        print(f"Generated credentials are in {env_file}; passwords are never printed")
+    def check_infrastructure(self) -> dict:
+        """The shared PostgreSQL and log collector must already be up; nothing is created here.
+
+        Previews and staging connect to ``preview-postgres`` on the database network
+        and send Docker logs to the collector on the loopback port.
+        """
+        container = self.config["postgres_container"]
+        network = self.config["database_network"]
+        remedy = ("start it with docker compose -f deploy/infrastructure/compose.yaml --env-file <private env> up -d "
+                  "or set DEPLOY_POSTGRES_CONTAINER")
+        try:
+            inspected = json.loads(self.command(["docker", "container", "inspect", container]))[0]
+        except DeployError:
+            raise DeployError(f"Shared PostgreSQL container {container!r} does not exist; {remedy}") from None
+        if not inspected.get("State", {}).get("Running"):
+            raise DeployError(f"Shared PostgreSQL container {container!r} is not running; {remedy}")
+        attached = inspected.get("NetworkSettings", {}).get("Networks", {}).get(network) or {}
+        # Engine 25+ reports user aliases in DNSNames and deprecates Aliases.
+        names = {*(attached.get("Aliases") or []), *(attached.get("DNSNames") or [])}
+        if not attached or "preview-postgres" not in names:
+            raise DeployError(f"Shared PostgreSQL container {container!r} must join network {network!r} with the alias "
+                              "preview-postgres (DEPLOY_DATABASE_NETWORK / deploy/infrastructure/compose.yaml)")
+        try:
+            self.sql("SELECT 1;")
+        except DeployError:
+            raise DeployError(f"psql as {self.config['postgres_admin_user']!r} failed inside {container!r}; check the "
+                              "container's PostgreSQL and DEPLOY_POSTGRES_ADMIN_USER") from None
+        port = int(self.config.get("preview_log_port", 24224))
+        collector = True
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=3):
+                pass
+        except OSError:
+            collector = False
+            # fluentd-async logging drops logs silently rather than failing containers.
+            print(f"::warning::No log collector listens on 127.0.0.1:{port}; container logs will be dropped "
+                  "until deploy/infrastructure is running", file=sys.stderr, flush=True)
+        return {"postgres_container": container, "database_network": network, "log_collector": collector}
 
     def image(self, component: str, run: dict) -> str:
         """Pull the tested commit's tag and return its digest after verifying the revision label."""
