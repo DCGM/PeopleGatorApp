@@ -5,13 +5,14 @@ from pydantic import ValidationError
 
 from people_gator_api.persistence.postgres.source_repository import PostgresSourceRepository
 from people_gator_api.persistence.postgres.utils import source_response
+from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.sources import DocumentCreateRequest, DocumentResponse, PageCreateRequest
 
 
 def test_document_name_survives_all_internal_conversions():
     request = DocumentCreateRequest(library="mzk", document_id=uuid.uuid4(), name="  Archive album  ")
     assert request.name == "Archive album"
-    source = PostgresSourceRepository._new(request.to_generic())
+    source = PostgresSourceRepository._new(request.to_generic(), GenericActor(user_id=uuid.uuid4()))
     source.id = uuid.uuid4()
     response = DocumentResponse.from_generic(source_response(source))
     assert response.name == "Archive album"

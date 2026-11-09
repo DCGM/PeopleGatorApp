@@ -284,3 +284,12 @@ preferences persist for the browser tab; resized widths remain local to the
 mounted view. `npm run test:document-widths` remains a compatibility entry point
 for the same maintained browser checks and accepts `DOCUMENT_WIDTHS_ORIGIN`
 and `DOCUMENT_WIDTHS_EVIDENCE` (default origin port 5193).
+
+### Document creation columns (#128)
+
+`people-gator-app/scripts/check-document-creation.mjs` exercises the real seeded
+`preview-creation` scenario at 1440 × 900 and 390 × 844 CSS pixels. It checks
+hidden defaults, column add/move/remove and tab-session reload persistence,
+creator/API-key labels, local dates and Unknown legacy values. Mobile captures
+scroll the table horizontally to show each new column. See the
+[evidence and reproduction command](evidence/issue128/README.md).

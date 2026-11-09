@@ -332,9 +332,6 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
 # unassigned face and a repeated phrase that includes an unlinked occurrence,
 # beside further pages whose faces and occurrences exceed one sidebar batch.
 SIDEBAR_PAGES = (
-    Page("creation-user-1", "creation-user", 1),
-    Page("creation-key-1", "creation-key", 1),
-    Page("creation-legacy-1", "creation-legacy", 1),
     Page("scan-sidebar-1", "scan-sidebar", 1, (
         Face("sidebar-hana-left", "sidebar-hana", 0, 2),
         Face("sidebar-unassigned", None, 1, 2),
@@ -641,6 +638,9 @@ PAGES = (
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
          lines=TELEPROMPTER_WRAPPED_LINES),
     *SIDEBAR_PAGES,
+    Page("creation-user-1", "creation-user", 1),
+    Page("creation-key-1", "creation-key", 1),
+    Page("creation-legacy-1", "creation-legacy", 1),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

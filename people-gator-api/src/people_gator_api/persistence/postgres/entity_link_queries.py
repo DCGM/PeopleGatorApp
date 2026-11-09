@@ -1,5 +1,6 @@
 """Shared document scope, same-witness filters and batched link aggregates."""
 
+from sqlalchemy.orm import aliased
 from sqlalchemy import tuple_, select, union_all, or_, exists, func
 from people_gator_api.schemas.entity_links import EntityLinkStats
 from .models import Source, Document, Page, Entity, ImageOccurrence, TextMention, User, APIKey
@@ -188,6 +189,7 @@ async def load_link_stats(session, objects, *, entities=False):
             for obj in pages:
                 obj._registered_page_count = counts.get((obj.library, obj.document_id), 0)
         await load_document_summaries(session, objects)
+        await load_source_attribution(session, objects)
 
 
 def linked_entity_counts(owner_ids=None):
@@ -210,16 +212,6 @@ def linked_entity_counts(owner_ids=None):
 
 async def load_document_summaries(session, objects):
     """Batched source attribution and document totals without Cartesian products."""
-    sources = {obj.id: obj for obj in objects if isinstance(obj, Source)}
-    if sources:
-        for owner, user, key in await session.execute(
-            select(Source.id, User.display_name, APIKey.display_name)
-            .outerjoin(User, User.id == Source.created_by_user_id)
-            .outerjoin(APIKey, APIKey.id == Source.created_by_api_key_id)
-            .where(Source.id.in_(sources))
-        ):
-            sources[owner]._created_by_user_name = user
-            sources[owner]._created_by_api_key_name = key
     documents = {obj.id: obj for obj in objects if isinstance(obj, Document)}
     if not documents:
         return
@@ -238,13 +230,28 @@ async def load_document_summaries(session, objects):
     linked = linked_entity_counts(list(documents))
     for owner, count in await session.execute(linked):
         documents[owner]._document_summary["linked_entity_count"] = count
+
+
+async def load_source_attribution(session, objects):
+    """One bounded query for creator and modifier names, regardless of batch size."""
+    sources = {obj.id: obj for obj in objects if isinstance(obj, Source)}
+    if not sources:
+        return
+    creator, creator_key = aliased(User), aliased(APIKey)
     attribution = (
-        select(Source.id, User.display_name, APIKey.display_name)
+        select(Source.id, User.display_name, APIKey.display_name,
+               creator.display_name, creator_key.display_name)
         .outerjoin(User, User.id == Source.last_touched_by_user_id)
         .outerjoin(APIKey, APIKey.id == Source.last_touched_by_api_key_id)
-        .where(Source.id.in_(documents))
+        .outerjoin(creator, creator.id == Source.created_by_user_id)
+        .outerjoin(creator_key, creator_key.id == Source.created_by_api_key_id)
+        .where(Source.id.in_(sources))
     )
-    for owner, user, key in await session.execute(attribution):
-        documents[owner]._document_summary.update(
-            last_touched_by_user_name=user, last_touched_by_api_key_name=key,
-        )
+    for owner, user, key, created_user, created_key in await session.execute(attribution):
+        source = sources[owner]
+        source._created_by_user_name = created_user
+        source._created_by_api_key_name = created_key
+        if isinstance(source, Document):
+            source._document_summary.update(
+                last_touched_by_user_name=user, last_touched_by_api_key_name=key,
+            )
