@@ -33,6 +33,22 @@ class GenericActor(BaseModel):
     user_id: uuid.UUID
 
 
+class CreationMetadata(BaseModel):
+    """Recorded server creation time and actor, independent of later edits."""
+
+    created_at: AwareDatetime | None = None
+    created_by_user_id: uuid.UUID | None = None
+    created_by_api_key_id: uuid.UUID | None = None
+
+
+class TouchMetadata(BaseModel):
+    """Latest recorded modification and actor; legacy history may be unknown."""
+
+    last_touched_at: AwareDatetime | None = None
+    last_touched_by_user_id: uuid.UUID | None = None
+    last_touched_by_api_key_id: uuid.UUID | None = None
+
+
 class GenericListRequest(BaseModel):
     """Request one deterministic page of results.
 
@@ -158,6 +174,8 @@ __all__ = [
     "ErrorResponse",
     "FileUploadResponse",
     "GenericActor",
+    "CreationMetadata",
+    "TouchMetadata",
     "GenericListRequest",
     "GenericListResponse",
     "ListFilterBase",

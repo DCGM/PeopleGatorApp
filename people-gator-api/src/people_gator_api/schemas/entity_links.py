@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from pydantic import AwareDatetime
-from .creation import CreationMetadata
+from .common import CreationMetadata, TouchMetadata
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from .enums import EntityLinkState
@@ -27,10 +27,7 @@ class EntityLinkPatch(BaseModel):
     entity_link_state: EntityLinkState | None | MissingType = MISSING
 
 
-class EntityLinkResponse(CreationMetadata):
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: uuid.UUID | None = None
-    last_touched_by_api_key_id: uuid.UUID | None = None
+class EntityLinkResponse(CreationMetadata, TouchMetadata):
     entity_link_state: EntityLinkState | None = None
     entity_link_verified_by_user_id: uuid.UUID | None = None
     entity_link_verified_at: datetime | None = None

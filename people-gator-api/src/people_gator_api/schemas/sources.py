@@ -7,7 +7,6 @@ from typing import Annotated, Self
 
 from pydantic import (
     AnyUrl,
-    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -18,6 +17,8 @@ from people_gator_api.schemas.annotation_counts import AnnotationCountFilter, Do
 from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
+    CreationMetadata,
+    TouchMetadata,
     GenericListRequest,
     GenericListResponse,
     ListFilterBase,
@@ -376,21 +377,15 @@ class ImageLookupRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class SourceResponseBase(BaseModel):
+class SourceResponseBase(CreationMetadata, TouchMetadata):
     """A linkable reference to a typed source."""
 
     model_config = ConfigDict(extra="forbid")
     source_id: uuid.UUID
     source_type: SourceKind
     url: AnyUrl
-    created_at: AwareDatetime | None = None
-    created_by_user_id: uuid.UUID | None = None
-    created_by_api_key_id: uuid.UUID | None = None
     created_by_user_name: str | None = None
     created_by_api_key_name: str | None = None
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: uuid.UUID | None = None
-    last_touched_by_api_key_id: uuid.UUID | None = None
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> Self:
