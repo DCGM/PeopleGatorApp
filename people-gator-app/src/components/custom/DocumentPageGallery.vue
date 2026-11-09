@@ -100,7 +100,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
             <PagePosition
               class="shrink-0"
               :number="pageNumber"
-              :total="documentPageCount ?? totalCount"
+              :total="documentPageCount ?? (personOnly ? undefined : totalCount)"
             />
           </div>
           <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
@@ -137,20 +137,28 @@ useIntersectionObserver(sentinel, ([entry]) => {
           </div>
         </div>
       </div>
-      <p v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
-        No matching pages.
-      </p>
       <div v-if="props.error" class="flex flex-wrap items-center gap-2 py-3" role="alert">
         <p class="text-sm text-destructive">Could not load document pages.</p>
         <Button type="button" variant="outline" size="sm" @click="emit('retry')">
           Retry pages
         </Button>
       </div>
-      <p v-else-if="!props.loading && props.totalCount === 1" class="sr-only" role="status">
+      <p
+        v-else-if="
+          !props.loading &&
+          (documentPageCount === 1 ||
+            (documentPageCount == null && !personOnly && props.totalCount === 1))
+        "
+        class="sr-only"
+        role="status"
+      >
         This document has one registered page.
       </p>
       <ScrollArea type="always" orientation="horizontal" class="w-full">
-        <ol ref="list" class="flex w-max items-start gap-2 px-1 pb-4 pt-2">
+        <ol ref="list" class="flex min-h-40 w-max min-w-full items-start gap-2 px-1 pb-4 pt-2">
+          <li v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
+            No matching pages.
+          </li>
           <li v-for="item in props.items" :key="item.sourceId" class="w-14 shrink-0 sm:w-16">
             <RouterLink
               :to="props.location(item)"
@@ -187,15 +195,17 @@ useIntersectionObserver(sentinel, ([entry]) => {
               >
                 {{ item.label }}
               </span>
-              <Badge
-                v-if="item.unassignedFaces"
-                variant="outline"
-                :title="`${item.unassignedFaces} unassigned faces`"
-              >
-                <UserRoundSearch class="size-3" aria-hidden="true" />
-                {{ item.unassignedFaces }}
-                <span class="sr-only">unassigned faces</span>
-              </Badge>
+              <span class="flex h-6 items-center justify-center">
+                <Badge
+                  v-if="item.unassignedFaces"
+                  variant="outline"
+                  :title="`${item.unassignedFaces} unassigned faces`"
+                >
+                  <UserRoundSearch class="size-3" aria-hidden="true" />
+                  {{ item.unassignedFaces }}
+                  <span class="sr-only">unassigned faces</span>
+                </Badge>
+              </span>
             </RouterLink>
           </li>
           <li
