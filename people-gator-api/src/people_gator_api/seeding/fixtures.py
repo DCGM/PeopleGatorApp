@@ -26,6 +26,7 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("strip-other-person", "Otto Page", (), "Synthetic other-person contrast confined to the bottom-strip scenario.", "reviewer"),
     Person("strip-person", "Nora Page", (), "Synthetic bottom-strip face and mention filtering example.", "reviewer"),
     *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
              "Synthetic duplicate for first/last-selected merge practice.", "importer")
@@ -328,10 +329,7 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
                 box=(50 + index % 6 * 120, 190 + index // 6 * 160, 110, 140))
 
 
-# Issue #103: one page with face and text-only people, two of Hana's faces, an
-# unassigned face and a repeated phrase that includes an unlinked occurrence,
-# beside further pages whose faces and occurrences exceed one sidebar batch.
-SIDEBAR_PAGES = (
+PAGE_STRIP_PAGES = (
     # #131: independent unassigned-face highlights and person matches by either
     # face or mention; >12 matches exercise filtered cursor pagination.
     Page("page-strip-1", "page-strip", 1, (Face("strip-unassigned", None, 0, 0, embedded=False),)),
@@ -340,12 +338,19 @@ SIDEBAR_PAGES = (
     Page("page-strip-4", "page-strip", 4,
          (Face("strip-mixed-assigned", "strip-person", 0, 0, embedded=False),
           Face("strip-mixed-unassigned", None, 1, 0, embedded=False))),
-    Page("page-strip-5", "page-strip", 5, (Face("strip-other", "ada", 0, 0, embedded=False),)),
+    Page("page-strip-5", "page-strip", 5, (Face("strip-other", "strip-other-person", 0, 0, embedded=False),)),
     Page("page-strip-6", "page-strip", 6),
     *(Page(f"page-strip-{i}", "page-strip", i, mentions=(
         Mention(f"strip-more-{i}", "strip-person", f"Nora Page reviewed entry {i}."),)) for i in range(7, 19)),
     Page("page-strip-mirror-1", "page-strip-mirror", 1,
          (Face("strip-mirror", "strip-person", 0, 0, embedded=False),)),
+)
+
+
+# Issue #103: one page with face and text-only people, two of Hana's faces, an
+# unassigned face and a repeated phrase that includes an unlinked occurrence,
+# beside further pages whose faces and occurrences exceed one sidebar batch.
+SIDEBAR_PAGES = (
     Page("scan-sidebar-1", "scan-sidebar", 1, (
         Face("sidebar-hana-left", "sidebar-hana", 0, 2),
         Face("sidebar-unassigned", None, 1, 2),
@@ -651,6 +656,7 @@ PAGES = (
     Page("teleprompter-wrap-2", "teleprompter", 2, (),
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
          lines=TELEPROMPTER_WRAPPED_LINES),
+    *PAGE_STRIP_PAGES,
     *SIDEBAR_PAGES,
 )
 

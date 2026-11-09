@@ -114,7 +114,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (45, 168, 122)
+    assert await counts(database) == (46, 168, 122)
     assert len(result.documents) == 59 and len(result.pages) == 136
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
@@ -175,7 +175,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
         (
             EntityListFilter(has_detections=True, has_mentions=False),
             {"actions", "emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana", "review-candidate",
-             "sidebar-rosa", "sidebar-karel"},
+             "sidebar-rosa", "sidebar-karel", "strip-other-person"},
 
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas",
@@ -398,7 +398,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (45, 168, 122)
+    assert await counts(database) == (46, 168, 122)
 
 
 @pytest.mark.asyncio
@@ -418,7 +418,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (45, 168, 122)
+    assert await counts(database) == (46, 168, 122)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -441,7 +441,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (46, 168, 122)
+    assert await counts(database) == (47, 168, 122)
 
 
 
@@ -466,8 +466,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 45 and len(result.faces) == 168
-    assert await counts(database) == (45, 168, 122)
+    assert len(result.entities) == 46 and len(result.faces) == 168
+    assert await counts(database) == (46, 168, 122)
 
 
 
@@ -488,7 +488,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (44, 167, 121)
+    assert await counts(database) == (45, 167, 121)
 
 
 
@@ -1313,7 +1313,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
     expected_libraries = [
-        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-page-strip', 'preview-page-strip-mirror', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
         'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
@@ -3616,7 +3616,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (45, 168, 122)
+    assert await counts(db) == (46, 168, 122)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -5036,7 +5036,10 @@ async def test_page_strip_highlights_person_matching_pagination_and_preservation
         thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
         with Image.open(io.BytesIO(thumbnail.content)) as image:
             assert image.width == 256
-    assert parse_qs(urlsplit(seed.filter_examples["page-strip-person"]).query) == {"gallery_person": [str(person)]}
+    assert parse_qs(urlsplit(seed.filter_examples["page-strip-person"]).query) == {"selectedPerson": [str(person)], "gallery_person_only": ["on"]}
+
+    selected_link = parse_qs(urlsplit(seed.filter_examples["page-strip-selected-person"]).query)
+    assert selected_link == {"selectedPerson": [str(person)]}
 
     await database.faces.patch(seed.faces["strip-unassigned"], FacePatchRequest(
         entity_id=person, entity_link_state="manual",

@@ -1428,10 +1428,13 @@ faces (4), another person's face (5), an empty page (6), and more Nora mentions
 (7–18). Every page has deterministic local scan/layout media.
 
 The bottom **Document pages** strip marks pages 1 and 4 independently of its
-**Person** setting. Select **Nora Page**, or open `page-strip-person`, to get
+person scope. Select **Nora Page** in the right panel (or open
+`page-strip-selected-person`), then enable **Nora Page only** in the single-line
+strip header. The `page-strip-person` link opens this state directly, giving
 15 matching pages across two batches, including the mention-only page. The
-current scan can remain open while excluded by this filter. Clear the person tag
-to restore all 18 pages. The same archive document UUID in
+current scan can remain open while excluded by this filter. Turn the toggle off
+to restore all 18 pages. The header retains the document name, NDK link and 1/18
+page position without adding a selector, filter tags or extra rows. The same archive document UUID in
 `preview-page-strip-mirror` demonstrates library isolation.
 
 On disposable data, assign page 1's face, unlink page 3's mention, or delete

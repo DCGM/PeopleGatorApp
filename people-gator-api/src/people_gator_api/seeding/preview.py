@@ -847,10 +847,15 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
             ),
+            "page-strip-selected-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
             "page-strip-person": (
                 f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
-                + "?" + urlencode({"gallery_person": manifest.entities["strip-person"]})
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
             ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. The gallery loads until the current page is found.
