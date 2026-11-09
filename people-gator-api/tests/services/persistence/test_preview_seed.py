@@ -611,20 +611,26 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
     )
 
     database, _, _ = seed_target
+    from people_gator_api.schemas.users import UserCreateRequest
+    user = await database.users.get_or_create(UserCreateRequest(
+        display_name="Document registrar", is_active=True,
+        external_subject="document-registrar", external_issuer="issue128-test",
+    ))
+    actor = GenericActor(user_id=user.user_id)
     request = DocumentCreateRequest(
         library="names-test", document_id=uuid.uuid4(), name="  Named album  "
     )
-    created = await create_document_route(payload=request, database=database, user=None)
+    created = await create_document_route(payload=request, database=database, user=actor)
     assert created.name == "Named album"
     assert (
         await get_document_route(
-            document_source_id=created.source_id, database=database, user=None
+            document_source_id=created.source_id, database=database, user=actor
         )
     ).name == created.name
     assert (
         await lookup_document_route(
             database=database,
-            user=None,
+            user=actor,
             library=request.library,
             document_id=request.document_id,
         )
@@ -633,15 +639,15 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
     batch = await create_document_batch_route(
         payload=[request.model_copy(update={"name": "Replacement"}), legacy],
         database=database,
-        user=None,
+        user=actor,
     )
     assert [item.name for item in batch] == ["Named album", None]
     with pytest.raises(HTTPException) as conflict:
-        await create_document_route(payload=request, database=database, user=None)
+        await create_document_route(payload=request, database=database, user=actor)
     assert conflict.value.status_code == 409
     listed = await list_documents_route(
         database=database,
-        user=None,
+        user=actor,
         filter=DocumentListFilter(library=["names-test"]),
         list_request=GenericListRequest(limit=100),
     )
