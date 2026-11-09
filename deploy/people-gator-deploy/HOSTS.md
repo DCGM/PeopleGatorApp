@@ -2,7 +2,8 @@
 
 External services the utility checks but never creates. Prepare them before the
 first deploy job. Commands and the `DEPLOY_*` settings are covered in the
-[utility guide](README.md).
+[utility guide](README.md); [GITHUB-SETUP.md](../GITHUB-SETUP.md) walks through
+the GitHub side.
 
 ## Docker, proxy and networks
 

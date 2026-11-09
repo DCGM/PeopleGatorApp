@@ -71,8 +71,9 @@ runners on one host stay consistent.
 
 ## Configuration
 
-Create GitHub Environments **`preview`**, **`staging`** and **`production`**
-(Settings → Environments). Add deployment branch/tag policies: `staging` only
+[GITHUB-SETUP.md](../GITHUB-SETUP.md) walks through creating everything below
+with `gh` commands. Create GitHub Environments **`preview`**, **`staging`** and
+**`production`** (Settings → Environments). Add deployment branch/tag policies: `staging` only
 `main`, `production` only `v*` tags; `preview` may stay open to all branches
 (it runs for pull requests). Required reviewers on `production` add a manual
 gate before a release job starts.

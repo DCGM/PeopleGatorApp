@@ -196,7 +196,8 @@ therefore deploys with the deploy code of its own branch; staging uses `main`
 and releases the tagged commit. Settings come from GitHub: repository variables `PREVIEW_*` and the `preview`
 environment's secrets for the preview host, the `staging` and `production`
 environments' `DEPLOY_*` variables and secrets for the others (see the
-[configuration reference](../deploy/people-gator-deploy/README.md#configuration));
+[configuration reference](../deploy/people-gator-deploy/README.md#configuration)
+and the step-by-step [GitHub setup](../deploy/GITHUB-SETUP.md));
 hosts keep only state directories and the self-hosted runners' [job-started
 guard](../deploy/runner/job-started.sh), which admits only this repository's
 events for the runner's environment and refuses fork pull requests
