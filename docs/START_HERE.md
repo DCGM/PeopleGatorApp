@@ -135,3 +135,10 @@ The scan workspace's top-bar breadcrumbs show the stored document name and page
 number when available, falling back independently to archive UUIDs. The document
 breadcrumb opens that document's pages. Explore the seed CLI's
 `breadcrumb-*` links for named, missing-metadata and long-title examples.
+
+Documents also offers optional **Created** and **Created by** columns through
+**Add column**. Created by shows the registering user and API key, when used.
+Sources registered before creation tracking show **Unknown**; registration retries
+preserve their recorded creation. These columns support the same add/move/remove
+and tab-session preferences, without creation sorting or filtering. Explore the
+seed's `document-creation` link for user, API-key and legacy examples.
