@@ -82,7 +82,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
     <div class="px-3 pt-2 sm:px-5">
       <div class="w-full overflow-x-auto">
         <div
-          class="gallery-header flex w-full min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
+          class="gallery-header flex w-full min-w-[22rem] sm:min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
         >
           <div class="flex min-w-0 items-center gap-2">
             <h2
@@ -108,7 +108,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
               :model-value="personOnly && Boolean(selectedPersonId)"
               variant="outline"
               size="sm"
-              class="w-36 min-w-0"
+              class="w-28 min-w-0 sm:w-36"
               :disabled="!selectedPersonId"
               :aria-label="
                 selectedPersonId
@@ -125,8 +125,14 @@ useIntersectionObserver(sentinel, ([entry]) => {
                 selectedPersonId ? `${selectedPersonName || 'Selected person'} only` : 'Person only'
               }}</span></Toggle
             >
-            <div v-if="sort && sortOptions" class="w-44 min-w-0">
-              <SortControl v-model="sort" :options="sortOptions" label="Sort pages" size="sm" />
+            <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
+              <SortControl
+                v-model="sort"
+                :options="sortOptions"
+                label="Sort pages"
+                size="sm"
+                compact-on-mobile
+              />
             </div>
           </div>
         </div>
