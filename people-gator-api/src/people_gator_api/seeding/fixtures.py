@@ -26,6 +26,7 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("strip-person", "Nora Page", (), "Synthetic bottom-strip face and mention filtering example.", "reviewer"),
     *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
              "Synthetic duplicate for first/last-selected merge practice.", "importer")
       for i in range(1, 4)),
@@ -147,6 +148,8 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("page-strip", "preview-page-strip", "Page strip review practice"),
+    Document("page-strip-mirror", "preview-page-strip-mirror", "Page strip isolation mirror", "page-strip"),
     Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
@@ -329,6 +332,20 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
 # unassigned face and a repeated phrase that includes an unlinked occurrence,
 # beside further pages whose faces and occurrences exceed one sidebar batch.
 SIDEBAR_PAGES = (
+    # #131: independent unassigned-face highlights and person matches by either
+    # face or mention; >12 matches exercise filtered cursor pagination.
+    Page("page-strip-1", "page-strip", 1, (Face("strip-unassigned", None, 0, 0, embedded=False),)),
+    Page("page-strip-2", "page-strip", 2, (Face("strip-assigned", "strip-person", 0, 0, embedded=False),)),
+    Page("page-strip-3", "page-strip", 3, mentions=(Mention("strip-mentioned", "strip-person", "Nora Page signed the register."),)),
+    Page("page-strip-4", "page-strip", 4,
+         (Face("strip-mixed-assigned", "strip-person", 0, 0, embedded=False),
+          Face("strip-mixed-unassigned", None, 1, 0, embedded=False))),
+    Page("page-strip-5", "page-strip", 5, (Face("strip-other", "ada", 0, 0, embedded=False),)),
+    Page("page-strip-6", "page-strip", 6),
+    *(Page(f"page-strip-{i}", "page-strip", i, mentions=(
+        Mention(f"strip-more-{i}", "strip-person", f"Nora Page reviewed entry {i}."),)) for i in range(7, 19)),
+    Page("page-strip-mirror-1", "page-strip-mirror", 1,
+         (Face("strip-mirror", "strip-person", 0, 0, embedded=False),)),
     Page("scan-sidebar-1", "scan-sidebar", 1, (
         Face("sidebar-hana-left", "sidebar-hana", 0, 2),
         Face("sidebar-unassigned", None, 1, 2),

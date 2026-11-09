@@ -1418,3 +1418,25 @@ media generated before #121, so the new lines appear on the scan and in the
 transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
+
+### Bottom page-strip review (#131)
+
+Open the manifest's `page-strip-review` link, or the **Page strip review practice**
+document in `preview-page-strip`. Its 18 pages include unassigned faces (1, 4),
+Nora Page's assigned face (2), her mention alone (3), mixed assigned/unassigned
+faces (4), another person's face (5), an empty page (6), and more Nora mentions
+(7–18). Every page has deterministic local scan/layout media.
+
+The bottom **Document pages** strip marks pages 1 and 4 independently of its
+**Person** setting. Select **Nora Page**, or open `page-strip-person`, to get
+15 matching pages across two batches, including the mention-only page. The
+current scan can remain open while excluded by this filter. Clear the person tag
+to restore all 18 pages. The same archive document UUID in
+`preview-page-strip-mirror` demonstrates library isolation.
+
+On disposable data, assign page 1's face, unlink page 3's mention, or delete
+page 2's face and inspect membership/count refresh. Seed tests exercise these
+repository queries and local thumbnails and verify a second seed preserves
+assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
+Existing interrupted-checkpoint recovery coverage remains in place. These are
+additive fixtures; seeding does not replace older page-gallery media or records.
