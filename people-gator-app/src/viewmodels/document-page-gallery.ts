@@ -20,6 +20,7 @@ export type PageGalleryItem = {
   pageId: string
   label: string
   current: boolean
+  unassignedFaces?: number | null
   thumbnailUrl: string
   thumbnailLoading: boolean
   thumbnailFailed: boolean
@@ -41,11 +42,13 @@ export function useDocumentPageGallery(
   currentPageId: MaybeRefOrGetter<string>,
   batchSize = PAGE_GALLERY_BATCH_SIZE,
   sort: MaybeRefOrGetter<SortState<PageSortField>> = GALLERY_DEFAULT,
+  personId: MaybeRefOrGetter<string> = '',
 ) {
   const query = usePageListQuery(
     computed(() => ({
       'filter.library': [toValue(library)],
       'filter.document_id': [toValue(documentId)],
+      ...(toValue(personId) ? { 'filter.entity_id': [toValue(personId)] } : {}),
       ...listSortParams(toValue(sort)),
       limit: batchSize,
       return_total_count: true,
@@ -79,6 +82,7 @@ export function useDocumentPageGallery(
     ],
     () => {
       if (
+        !toValue(personId) &&
         !currentLoaded.value &&
         query.data.value &&
         query.hasNextPage.value &&
@@ -120,6 +124,7 @@ export function useDocumentPageGallery(
       pageId: page.page_id,
       label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
+      unassignedFaces: page.entity_link_stats?.faces?.unassigned ?? null,
       thumbnailUrl: thumbnailUrls.value.get(page.source_id) ?? '',
       thumbnailLoading: thumbnailQueries.value[index]?.isPending ?? false,
       thumbnailFailed: thumbnailQueries.value[index]?.isError ?? false,

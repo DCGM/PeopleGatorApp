@@ -33,6 +33,8 @@ import {
 import type { Face } from '@/viewmodels/document-workspace.types'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
+import DocumentPageGalleryFilters from '@/components/custom/DocumentPageGalleryFilters.vue'
+import { GALLERY_PERSON_KEY, useGalleryPerson } from '@/viewmodels/gallery-person'
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
@@ -125,6 +127,7 @@ const activityDirection = setting('activityDirection')
 const peopleScope = setting('peopleScope')
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
+const galleryPerson = useGalleryPerson()
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
 const {
   page,
@@ -155,11 +158,17 @@ const gallery = useDocumentPageGallery(
   pageId,
   PAGE_GALLERY_BATCH_SIZE,
   gallerySort,
+  galleryPerson,
 )
 function galleryLocation(item: PageGalleryItem) {
   return {
     name: 'document-page',
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
+    query: {
+      [GALLERY_PERSON_KEY]: galleryPerson.value || undefined,
+      [GALLERY_SORT_KEYS.field]: route.query[GALLERY_SORT_KEYS.field],
+      [GALLERY_SORT_KEYS.direction]: route.query[GALLERY_SORT_KEYS.direction],
+    },
   }
 }
 
@@ -986,7 +995,15 @@ onBeforeUnmount(() => {
                 :sort-options="GALLERY_SORTS"
                 @load-more="gallery.loadMore()"
                 @retry="gallery.retry()"
-              />
+              >
+                <template #filters>
+                  <DocumentPageGalleryFilters
+                    v-model:person-id="galleryPerson"
+                    v-model:sort="gallerySort"
+                    :sort-options="GALLERY_SORTS"
+                  />
+                </template>
+              </DocumentPageGallery>
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>

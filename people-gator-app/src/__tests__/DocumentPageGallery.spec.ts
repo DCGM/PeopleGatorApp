@@ -89,6 +89,24 @@ describe('DocumentPageGallery', () => {
     wrapper.unmount()
   })
 
+  it('marks unassigned faces independently of the current page and announces empty filtered results', async () => {
+    const { wrapper } = await mountGallery({
+      items: [
+        { ...item(1, true), unassignedFaces: 0 },
+        { ...item(2), unassignedFaces: 2 },
+      ],
+    })
+    expect(wrapper.findAll('a')[0]!.attributes('aria-label')).not.toContain('unassigned')
+    expect(wrapper.findAll('a')[1]!.attributes('aria-label')).toBe(
+      'Page page-2, 2 unassigned faces',
+    )
+    expect(wrapper.findAll('a')[1]!.text()).toContain('unassigned faces')
+    expect(wrapper.findAll('a')[1]!.attributes('aria-current')).toBeUndefined()
+    await wrapper.setProps({ items: [], totalCount: 0 })
+    expect(wrapper.get('[role=status]').text()).toBe('No matching pages.')
+    wrapper.unmount()
+  })
+
   it('opens another page in the workspace, dropping filters and page selections', async () => {
     const { wrapper, router } = await mountGallery()
     await wrapper.findAll('a')[2]!.trigger('click')

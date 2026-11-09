@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ImageOff } from '@lucide/vue'
+import { ImageOff, UserRoundSearch } from '@lucide/vue'
 import { useIntersectionObserver } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
 import ArchiveLink from './ArchiveLink.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PageGalleryItem } from '@/viewmodels/document-page-gallery'
@@ -35,7 +36,7 @@ const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
 
 function itemName(item: PageGalleryItem) {
-  return `Page ${item.pageId}${item.current ? ', current page' : ''}`
+  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.unassignedFaces ? `, ${item.unassignedFaces} unassigned ${item.unassignedFaces === 1 ? 'face' : 'faces'}` : ''}`
 }
 
 /** Scroll only the strip, never the window, so the scan stays where it is. */
@@ -84,16 +85,19 @@ useIntersectionObserver(sentinel, ([entry]) => {
           </h2>
           <ArchiveLink :url="documentUrl" kind="document" />
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <SortControl
-            v-if="sort && sortOptions"
-            v-model="sort"
-            :options="sortOptions"
-            label="Sort pages"
-            size="sm"
-          />
-        </div>
       </div>
+      <slot name="filters">
+        <SortControl
+          v-if="sort && sortOptions"
+          v-model="sort"
+          :options="sortOptions"
+          label="Sort pages"
+          size="sm"
+        />
+      </slot>
+      <p v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
+        No matching pages.
+      </p>
       <div v-if="props.error" class="flex flex-wrap items-center gap-2 py-3" role="alert">
         <p class="text-sm text-destructive">Could not load document pages.</p>
         <Button type="button" variant="outline" size="sm" @click="emit('retry')">
@@ -141,6 +145,15 @@ useIntersectionObserver(sentinel, ([entry]) => {
               >
                 {{ item.label }}
               </span>
+              <Badge
+                v-if="item.unassignedFaces"
+                variant="outline"
+                :title="`${item.unassignedFaces} unassigned faces`"
+              >
+                <UserRoundSearch class="size-3" aria-hidden="true" />
+                {{ item.unassignedFaces }}
+                <span class="sr-only">unassigned faces</span>
+              </Badge>
             </RouterLink>
           </li>
           <li

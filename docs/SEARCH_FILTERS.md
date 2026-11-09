@@ -481,3 +481,20 @@ cards show the state counts used by the active filters/sort from batched entity
 statistics. Verification moves a link between state buckets without changing
 totals; review and verification mutations restart People continuation pages.
 Unassigned is intentionally absent: ownerless evidence cannot belong to a person.
+
+### Viewer bottom page strip (#131)
+
+The **Document pages** strip marks pages containing unassigned faces with a
+person-search icon and count. The count covers that page's complete face set,
+independently of sidebar filters and the selected person. Unverified assigned
+faces and unassigned mentions do not trigger it. With no strip filter, empty
+pages remain available.
+
+Use **Person** in the strip settings to show pages with an assigned face **or**
+a linked text mention for that person. The filter stays within the current
+library/document and runs before pagination/counting. Its `gallery_person` URL
+field is independent of sidebar selections and survives page-strip navigation,
+reload and browser history, alongside `gallery_sort` / `gallery_dir`. On mobile,
+open the sliders button; active person tags remain accessible when collapsed.
+Removing the tag or clearing filters restores all document pages. A filtered-out
+current scan stays open; the strip does not fetch every batch trying to find it.
