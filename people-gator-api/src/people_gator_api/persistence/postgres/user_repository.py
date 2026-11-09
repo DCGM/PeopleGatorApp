@@ -140,6 +140,7 @@ class PostgresUserRepository(UserRepository):
                     exists().where(Entity.user_id.in_(unique)),
                     exists().where(Entity.last_touched_by_user_id.in_(unique)),
                     exists().where(Source.last_touched_by_user_id.in_(unique)),
+                    exists().where(Source.created_by_user_id.in_(unique)),
                     exists().where(APIKey.user_id.in_(unique)),
                     exists().where(Face.user_id.in_(unique)),
                 )

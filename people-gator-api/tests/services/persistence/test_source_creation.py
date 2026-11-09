@@ -83,6 +83,31 @@ async def test_registration_creation_is_immutable_in_single_and_batch_imports(mi
 
 
 @pytest.mark.asyncio
+async def test_source_creation_alone_protects_creator_and_api_key_owner(migrated_postgres):
+    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+        db = postgres_database(session)
+        reviewer, importer = await actors(db)
+        document, _ = await db.sources.get_or_create_document(
+            DocumentCreateRequest(library='creator-reference', document_id=uuid.uuid4()), context=importer,
+        )
+        assert document.last_touched_at is None
+        other = await db.users.get_or_create(UserCreateRequest(
+            display_name='Other user', external_subject='other', external_issuer='issue128', is_active=True,
+        ))
+        with pytest.raises(ValueError, match='referenced API key'):
+            await db.api_keys.get_or_create(APIKeyCreateRequest(
+                identifier='creation-importer', display_name='Creation importer', user_id=other.user_id,
+            ))
+        # A user without an API key is protected by source creation alone.
+        await db.sources.get_or_create_document(
+            DocumentCreateRequest(library='creator-reference', document_id=uuid.uuid4()), context=other,
+        )
+        with pytest.raises(ValueError, match='referenced'):
+            await db.users.delete(other.user_id)
+        assert await db.sources.get_document(document.source_id) is not None
+
+
+@pytest.mark.asyncio
 async def test_registration_routes_use_ingest_actor_for_documents_and_pages(migrated_postgres, monkeypatch):
     async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
         db = postgres_database(session)

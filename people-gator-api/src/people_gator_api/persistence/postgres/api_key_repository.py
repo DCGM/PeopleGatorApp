@@ -46,6 +46,7 @@ class PostgresAPIKeyRepository(APIKeyRepository):
             },
             where=or_(APIKey.user_id == statement.excluded.user_id,
                 ~exists(select(1).where(Source.last_touched_by_api_key_id == APIKey.id))
+                & ~exists(select(1).where(Source.created_by_api_key_id == APIKey.id))
                 & ~exists(select(1).where(Entity.last_touched_by_api_key_id == APIKey.id))),
         ).returning(APIKey)
         key = (
