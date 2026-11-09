@@ -4,20 +4,13 @@ x-staging-labels: &staging-labels
   people-gator.environment: staging
   people-gator.staging.sha: ${COMMIT_SHA:-unknown}
 
-# Docker sends stdout/stderr, including migration/check logs, to the host collector.
-# The driver connects from the Docker daemon, not from the container's network.
+# Container output stays local (docker logs); the backend ships application
+# logs, traces and metrics itself through its OpenTelemetry SDK (below).
 x-staging-logging: &staging-logging
-  driver: fluentd
+  driver: json-file
   options:
-    fluentd-address: ${PREVIEW_LOG_ADDRESS:-127.0.0.1:24224}
-    fluentd-async: 'true'
-    fluentd-buffer-limit: '8192'
-    fluentd-sub-second-precision: 'true'
-    fluentd-write-timeout: '3s'
-    labels: people-gator.environment,people-gator.staging.sha,com.docker.compose.service
-    tag: people-gator.staging
-    cache-max-size: 10m
-    cache-max-file: '3'
+    max-size: 10m
+    max-file: '3'
 
 x-backend: &backend
   image: ${BACKEND_IMAGE:?required}
@@ -77,6 +70,11 @@ services:
       PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${COMMIT_SHA:-unknown}
       PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
       PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER: ""
+      # Direct OTLP export to the operator's collector on the telemetry network.
+      PEOPLE_GATOR_API__OTEL__ENABLED: ${OTEL_ENABLED:-true}
+      PEOPLE_GATOR_API__OTEL__TRACES_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/traces
+      PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/logs
+      PEOPLE_GATOR_API__OTEL__METRICS_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/metrics
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
       interval: 10s

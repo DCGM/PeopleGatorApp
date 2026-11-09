@@ -41,8 +41,9 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_defaults_and_overrides(self):
         settings = config.load("pr", {k: v for k, v in self.env.items() if k != "DEPLOY_DATABASE_NETWORK"})
-        self.assertEqual((settings["postgres_container"], settings["postgres_admin_user"], settings["preview_log_port"]),
-                         ("people-gator-postgres", "preview_admin", 24224))
+        self.assertEqual((settings["postgres_container"], settings["postgres_admin_user"]), ("people-gator-postgres", "preview_admin"))
+        self.assertEqual((settings["otel_enabled"], settings["otel_http_endpoint"]), (True, "http://lgtm:4318"))
+        self.assertFalse(config.load("pr", {**self.env, "DEPLOY_OTEL_ENABLED": "false", "DEPLOY_OTEL_HTTP_ENDPOINT": "https://otel.example.test:4318"})["otel_enabled"])
         self.assertEqual((settings["web_network"], settings["otel_network"], settings["database_network"]),
                          ("web", "logging", "people-gator-preview-db"))
         self.assertNotIn("infrastructure", settings)
@@ -65,13 +66,14 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual((release["project"], release["backend_memory"], release["database_network"]),
                          ("people-gator-release", "4g", "production-db"))
         self.assertNotIn("postgres_container", release)
+        self.assertNotIn("otel_http_endpoint", release)  # releases configure OTel through their runtime/telemetry secrets
         with patch.dict(os.environ, {"HOME": str(self.root / "home")}):
             implicit = config.load("staging", {k: v for k, v in self.env.items() if "STATE_DIR" not in k})
         self.assertEqual(implicit["state_dir"], str(self.root / "home/.local/opt/people-gator-deploy/state/staging"))
 
     def test_invalid_values_are_rejected(self):
         cases = {"DEPLOY_DOMAIN": "Preview.Example", "DEPLOY_DOCKER_CONTEXT": "root less", "DEPLOY_STATE_DIR": "relative/state",
-                 "DEPLOY_PREVIEW_LOG_PORT": "port", "DEPLOY_POSTGRES_CONTAINER": "pg container",
+                 "DEPLOY_OTEL_HTTP_ENDPOINT": "lgtm:4318/v1/logs", "DEPLOY_OTEL_ENABLED": "yes", "DEPLOY_POSTGRES_CONTAINER": "pg container",
                  "DEPLOY_POSTGRES_ADMIN_USER": "Admin;"}
         for name, value in cases.items():
             with self.subTest(name=name), self.assertRaisesRegex(DeployError, name):

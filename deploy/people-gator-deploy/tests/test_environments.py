@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from people_gator_deploy import cli, host
+from people_gator_deploy import cli
 from people_gator_deploy.core import DeployError, write_json
 from people_gator_deploy.environments import Environment
 
@@ -70,10 +70,6 @@ class EnvironmentTests(unittest.TestCase):
             "DEPLOY_RUNTIME_ENV": "# External application storage and auth settings\n",
         }
         self.environment_patch = None
-        # Pretend no log collector listens; the check only warns about it.
-        collector = patch.object(host.socket, "create_connection", side_effect=OSError("refused"))
-        self.collector = collector.start()
-        self.addCleanup(collector.stop)
         self.stderr = io.StringIO()
 
     def configure(self, name="pr", **changes):
@@ -125,11 +121,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = self.environment()
         result = self.preflight(environment)
         self.assertEqual(result["infrastructure"], {"postgres_container": "people-gator-postgres",
-                                                    "database_network": "people-gator-preview-db", "log_collector": False})
-        self.assertIn("::warning::No log collector listens on 127.0.0.1:24224", self.stderr.getvalue())
-        self.assertEqual(self.collector.call_args.args[0], ("127.0.0.1", 24224))
-        self.collector.side_effect = None
-        self.assertTrue(self.preflight(self.environment())["infrastructure"]["log_collector"])
+                                                    "database_network": "people-gator-preview-db"})
         inspected = environment.docker.commands("inspect")
         self.assertIn(["docker", "network", "inspect", "people-gator-preview-db"], inspected)
         self.assertIn(["docker", "network", "inspect", "logging"], inspected)

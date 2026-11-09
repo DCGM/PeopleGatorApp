@@ -207,6 +207,9 @@ tested commit's images with temporary registry credentials, verifies their
 revision labels and deploys by immutable digest. Preview order is selected PR
 container removal → storage initialization → migration → seed → backend/frontend
 health → routed readiness. A failed seed blocks success and fails the job.
+The backend exports logs, traces and metrics directly to the operator's OTLP
+collector; container output stays in local rotating `json-file` logs
+([Observability](OBSERVABILITY.md)).
 Existing database, media and JWT keys survive successful preview updates.
 Container removal retains volumes and the database; it also replaces a previous
 per-PR stack when local instance state is unavailable. Expect downtime during
@@ -221,8 +224,7 @@ its deployments inactive; the daily and post-staging prune repeats both for any
 preview whose PR is no longer open. Shared PostgreSQL, pgAdmin and logging
 remain running. A failed migration has no automatic schema rollback.
 
-The shared PostgreSQL, log collector and pgAdmin are an operator-run Compose
-stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
+The shared PostgreSQL and pgAdmin are an operator-run Compose stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
 ([one-time host setup](../deploy/people-gator-deploy/README.md#one-time-host-setup));
 the utility installs nothing and every operation first checks that the stack,
 networks and Docker are up, failing with the remedy otherwise. GHCR image

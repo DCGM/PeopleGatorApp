@@ -15,13 +15,13 @@ first deploy job. Commands and the `DEPLOY_*` settings are covered in the
   entrypoint `websecure` and resolver `tlschallenge`
   (`DEPLOY_CERTIFICATE_RESOLVER=none` reuses an existing wildcard certificate).
   Wildcard issuance requires DNS-01.
-- An OTLP HTTP backend on `DEPLOY_OTEL_NETWORK` (default `logging`; the stack's
-  `OTEL_EXPORTER_OTLP_ENDPOINT`, default `http://lgtm:4318`).
+- An OTLP HTTP collector on `DEPLOY_OTEL_NETWORK` (default `logging`) at
+  `DEPLOY_OTEL_HTTP_ENDPOINT` (default `http://lgtm:4318`): the backend sends its
+  logs, traces and metrics there directly. No Docker log driver is used.
 - The shared stack [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml)
   on preview/staging hosts: PostgreSQL 16 with pgvector (container
   `people-gator-postgres`, alias `preview-postgres` on the database network, no
-  published port), the log collector receiving Docker fluentd logs on
-  `127.0.0.1:<PREVIEW_LOG_PORT>` (default 24224) and pgAdmin behind Traefik. See
+  published port) and pgAdmin behind Traefik. See
   [one-time host setup](README.md#one-time-host-setup).
 - DNS: `*.<PREVIEW_DOMAIN>` (previews), the stack's `PGADMIN_HOST`, the staging
   `DEPLOY_HOST` and the production `DEPLOY_HOST` all point to the Traefik host.
@@ -131,9 +131,10 @@ secrets, and deployment jobs cannot reach your files or containers.
   `preview-postgres:5432` as `preview_admin` (`POSTGRES_ADMIN_PASSWORD`). A PR-only
   connection uses role/database `preview_pr_<N>` and the password in
   `<state dir>/pr-<N>/state.json`. Never print these files in Actions.
-- Logs reach LGTM with resource attribute `people-gator.preview.pr = "<N>"` and
-  service names `people-gator-preview.<service>`; the tested SHA is
-  `vcs.ref.head.revision`. Buffers are bounded; this is not an audit archive.
+- Backend logs, traces and metrics reach the collector with resource attributes
+  `people-gator.preview.pr = "<N>"`, `deployment.environment.name = preview` and
+  `vcs.ref.head.revision`; container output stays in local `json-file` logs.
+  This is not an audit archive.
 
 ## Staging
 

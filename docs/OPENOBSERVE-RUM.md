@@ -123,11 +123,11 @@ settings. OpenObserve must allow browser ingestion from PR, staging and release
 origins; ensure any proxy/CSP permits HTTPS connections to its host.
 
 The existing LGTM collector must have an OTLP HTTP receiver reachable from the
-backend's `otel_network` and a **traces** pipeline forwarding to OpenObserve.
-Working container logs alone do not establish this. The deployment utility's
-bundled Fluent Forward collector only handles container logs; this change does
-not modify that shared infrastructure or substitute it for the LGTM receiver.
-Enable or adjust trace forwarding through an explicit operator change.
+backend's OTel network (`DEPLOY_OTEL_NETWORK`) and a **traces** pipeline
+forwarding to OpenObserve. The preview and staging stacks point the backend at
+`DEPLOY_OTEL_HTTP_ENDPOINT` for logs, traces and metrics; there is no separate
+container-log collector. Enable or adjust trace forwarding through an explicit
+operator change.
 
 The backend SDK exports traces, metrics and structured application logs directly
 to `http://lgtm:4318` when OTEL is enabled in every deployment mode. The locked
@@ -150,9 +150,10 @@ Settings resolve the aliases; exporters do not read or combine endpoint parts.
 The API setting takes priority when both environment names are supplied. The
 former `HTTP_ENDPOINT` plus signal paths, unused gRPC/profile settings and generic
 backend base-URL expansion are removed. Migrate existing backend telemetry files
-to the complete per-signal URLs above. The deployment utility's separate
-container-log collector retains its own standard OTLP base configuration.
-Prefer the existing LGTM collector for routing and OpenObserve credentials.
+to the complete per-signal URLs above. In previews and staging the deployment
+sets the endpoints from `DEPLOY_OTEL_HTTP_ENDPOINT`; the telemetry secret adds
+RUM settings and OTLP headers only. Prefer the existing LGTM collector for
+routing and OpenObserve credentials.
 Never use the browser RUM token as OTLP credentials.
 
 ## Rollout and verification

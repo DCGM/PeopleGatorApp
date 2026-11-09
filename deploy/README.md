@@ -20,7 +20,7 @@ Compose Watch or native API/Vite development.
 | [`../compose.live-preview.yaml`](../compose.live-preview.yaml) | Existing shared development preview; external Traefik/S3 dependencies |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Tests, images and the preview/staging/release deploy jobs |
 | [`../.github/actions/deploy-tools`](../.github/actions/deploy-tools/action.yml) | Installs the utility into the job's temporary directory |
-| [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL, log collector and pgAdmin for previews and staging; the deploy jobs only check it |
+| [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL and pgAdmin for previews and staging; the deploy jobs only check it |
 | [`runner/job-started.sh`](runner/job-started.sh) | Self-hosted runner hook admitting only this repository's events for the runner's environment |
 | [`people-gator-deploy/`](people-gator-deploy/README.md) | Package, CLI, lifecycle operations, `DEPLOY_*` settings and recovery |
 | [`people-gator-deploy/HOSTS.md`](people-gator-deploy/HOSTS.md) | DNS, proxy, runners, GitHub Environments, buckets and accounts to prepare |

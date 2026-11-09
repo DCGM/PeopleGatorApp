@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import re
-import socket
 import sys
 import time
 import urllib.error
@@ -202,10 +201,9 @@ class Host:
         return "".join(f"{key}='{value}'\n" for key, value in values.items())
 
     def check_infrastructure(self) -> dict:
-        """The shared PostgreSQL and log collector must already be up; nothing is created here.
+        """The shared PostgreSQL must already be up; nothing is created here.
 
-        Previews and staging connect to ``preview-postgres`` on the database network
-        and send Docker logs to the collector on the loopback port.
+        Previews and staging connect to ``preview-postgres`` on the database network.
         """
         container = self.config["postgres_container"]
         network = self.config["database_network"]
@@ -228,17 +226,7 @@ class Host:
         except DeployError:
             raise DeployError(f"psql as {self.config['postgres_admin_user']!r} failed inside {container!r}; check the "
                               "container's PostgreSQL and DEPLOY_POSTGRES_ADMIN_USER") from None
-        port = int(self.config.get("preview_log_port", 24224))
-        collector = True
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=3):
-                pass
-        except OSError:
-            collector = False
-            # fluentd-async logging drops logs silently rather than failing containers.
-            print(f"::warning::No log collector listens on 127.0.0.1:{port}; container logs will be dropped "
-                  "until deploy/infrastructure is running", file=sys.stderr, flush=True)
-        return {"postgres_container": container, "database_network": network, "log_collector": collector}
+        return {"postgres_container": container, "database_network": network}
 
     def image(self, component: str, run: dict) -> str:
         """Pull the tested commit's tag and return its digest after verifying the revision label."""

@@ -9,8 +9,8 @@ Every CLI operation maps to one ``Environment`` method with the same semantics:
 
 Settings come from ``DEPLOY_*`` variables (see :mod:`config`). Nothing is
 installed or provisioned on the host: every operation first checks that the
-operator-run infrastructure (Docker, networks, the shared PostgreSQL and the log
-collector) is up, then works under the environment's ``environment.lock``.
+operator-run infrastructure (Docker, networks and the shared PostgreSQL) is up,
+then works under the environment's ``environment.lock``.
 """
 from __future__ import annotations
 

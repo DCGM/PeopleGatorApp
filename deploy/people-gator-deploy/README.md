@@ -9,7 +9,7 @@ configuration and the database validator ship inside the package.
 The [CI workflow](../../.github/workflows/ci.yml) runs it **from the checkout of
 the commit being deployed**: a PR preview uses the PR's own deploy code, staging
 uses `main`, a release uses the tagged commit. The utility installs and
-provisions nothing: the shared PostgreSQL, log collector and pgAdmin are an
+provisions nothing: the shared PostgreSQL and pgAdmin are an
 operator-run Compose stack ([`deploy/infrastructure`](../infrastructure/compose.yaml))
 that every operation only **checks**, and the application stacks are plain
 frontend + backend Compose files. Settings live in GitHub and reach the utility
@@ -47,11 +47,11 @@ build only; no fork event reaches a self-hosted runner (the
 Docker context, Compose 2.32+, the `web`, OTel and database networks, and (for
 previews and staging) the shared PostgreSQL container: it must exist, run, join
 `DEPLOY_DATABASE_NETWORK` with the alias `preview-postgres` the application stacks
-connect to, and answer `psql` as the admin user. A missing log collector on
-`127.0.0.1:<DEPLOY_PREVIEW_LOG_PORT>` only warns (Docker's `fluentd-async`
-logging drops logs instead of failing containers). Failures name the setting or
+connect to, and answer `psql` as the admin user. Failures name the setting or
 the `docker compose -f deploy/infrastructure/compose.yaml … up -d` remedy before
-any Compose command runs.
+any Compose command runs. The backend exports its own logs, traces and metrics
+to `DEPLOY_OTEL_HTTP_ENDPOINT`; container output stays in local rotating
+`json-file` logs ([Observability](../../docs/OBSERVABILITY.md)).
 
 **Build identity.** The `images` job labels each image with the tested commit and
 tags it `sha-<commit>`. `--sha` names that commit; the utility pulls the tag,
@@ -102,7 +102,8 @@ variable arrives empty and keeps its default.
 | `WEB_NETWORK` | `PREVIEW_WEB_NETWORK` (repository), `DEPLOY_WEB_NETWORK` | all | `web` | External Traefik network |
 | `CERTIFICATE_RESOLVER` | `PREVIEW_CERTIFICATE_RESOLVER` (repository), `DEPLOY_CERTIFICATE_RESOLVER` | all | `tlschallenge` | Traefik resolver; `none` reuses an existing wildcard certificate |
 | `OTEL_NETWORK` | `PREVIEW_OTEL_NETWORK` (repository), `DEPLOY_OTEL_NETWORK` | all | `logging` | Network of the OTLP backend; the backend container joins it |
-| `PREVIEW_LOG_PORT` | `PREVIEW_LOG_PORT` (repository), `DEPLOY_PREVIEW_LOG_PORT` | preview, staging | `24224` | Loopback port of the fluentd log collector from `deploy/infrastructure` |
+| `OTEL_HTTP_ENDPOINT` | `PREVIEW_OTEL_HTTP_ENDPOINT` (repository), `DEPLOY_OTEL_HTTP_ENDPOINT` | preview, staging | `http://lgtm:4318` | OTLP HTTP base URL the backend sends logs, traces and metrics to (`/v1/{logs,traces,metrics}` appended) |
+| `OTEL_ENABLED` | `PREVIEW_OTEL_ENABLED` (repository), `DEPLOY_OTEL_ENABLED` | preview, staging | `true` | Set `false` to run the backend without the OpenTelemetry SDK |
 | `PROJECT` | `DEPLOY_PROJECT` | staging, production | `people-gator-staging`, `people-gator-release` | Application Compose project |
 | `BACKEND_MEMORY` | `DEPLOY_BACKEND_MEMORY` | production | `4g` | Backend memory limit |
 | `ACCESS_REVIEWED` | `DEPLOY_ACCESS_REVIEWED` | production | required `true` | Confirms the [access boundary](#release-access-boundary) |
@@ -121,7 +122,7 @@ paths from Compose. Unchanged contents are left alone.
 | `RUNTIME_ENV` | `DEPLOY_RUNTIME_ENV` | staging (required), production (required) | `runtime.env` | `PEOPLE_GATOR_API__*` lines for the backend: storage, JWK, auth; staging must not set persistence (it generates its database connection) |
 | `MIGRATION_ENV` | `DEPLOY_MIGRATION_ENV` | production (required) | `migration.env` | The migration role's `PEOPLE_GATOR_API__PERSISTENCE__*` lines |
 | `SNAPSHOT_SOURCE` | `DEPLOY_SNAPSHOT_SOURCE` | staging | `snapshot-source.json` | Read-only backup source, exactly the six fields of [the example](examples/staging-backup-source.example.json); read only by `snapshot-init`/`refresh` |
-| `TELEMETRY_ENV` | `PREVIEW_TELEMETRY_ENV`, `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM/OTLP lines for the API runtime container only; see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
+| `TELEMETRY_ENV` | `PREVIEW_TELEMETRY_ENV`, `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM settings and OTLP headers for the API runtime container only; previews/staging reject OTel enable/endpoint keys here (the deployment sets them); see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
 
 Operators may additionally set `DEPLOY_SNAPSHOT` (JSON `path`, `sha256`,
 `application_revision` of a private local custom-format dump) for an explicit
@@ -143,8 +144,7 @@ docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrast
 ```
 
 It starts PostgreSQL (container `people-gator-postgres`, alias `preview-postgres`
-on the database network), the log collector on `127.0.0.1:24224` and pgAdmin
-behind Traefik. Rerun the same command after editing the file or pulling a newer
+on the database network) and pgAdmin behind Traefik. Rerun the same command after editing the file or pulling a newer
 `main` to upgrade it; passwords and volumes are kept. Release hosts need only
 their external PostgreSQL, Traefik and networks.
 
@@ -382,7 +382,6 @@ cd people-gator-api && PYTHONPATH=../deploy/people-gator-deploy/src uv run --loc
 # Database-backed and image-backed suites, from people-gator-api with its uv environment:
 STAGING_TEST_DATABASE_PORT=… STAGING_TEST_POSTGRES_CONTAINER=… uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
 PREVIEW_TEST_POSTGRES_CONTAINER=… PYTHONPATH=deploy/people-gator-deploy/src python3 -B deploy/people-gator-deploy/tests/test_preview.py
-PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observability.py
 ```
 
 The workflow tests parse `ci.yml`, execute every deploy step's script against a

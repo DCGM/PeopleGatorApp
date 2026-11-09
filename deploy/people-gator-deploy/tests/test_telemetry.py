@@ -27,6 +27,16 @@ class TelemetryTests(unittest.TestCase):
             with self.assertRaisesRegex(DeployError, 'only unquoted RUM') as caught:
                 config.secrets('pr', settings, env)
             self.assertNotIn('=secret', str(caught.exception))
+            # Previews/staging own OTel enablement and endpoints; the secret may not shadow them.
+            for line in ('PEOPLE_GATOR_API__OTEL__ENABLED=false', 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://x:4318/v1/logs'):
+                env['DEPLOY_TELEMETRY_ENV'] = line + '\n'
+                with self.subTest(line=line), self.assertRaisesRegex(DeployError, 'DEPLOY_OTEL_ENABLED'):
+                    config.secrets('pr', settings, env)
+            release = config.load('release', {**env, 'DEPLOY_HOST': 'app.example', 'DEPLOY_DATABASE_NETWORK': 'db',
+                                              'DEPLOY_ACCESS_REVIEWED': 'true', 'DEPLOY_RUNTIME_ENV': 'PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data',
+                                              'DEPLOY_MIGRATION_ENV': 'PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=m'})
+            self.assertTrue(config.secrets('release', release, {**env, 'DEPLOY_HOST': 'app.example', 'DEPLOY_RUNTIME_ENV': 'PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data',
+                                                               'DEPLOY_MIGRATION_ENV': 'PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=m'}))
             del env['DEPLOY_TELEMETRY_ENV']
             self.assertNotIn('telemetry_file', config.load('pr', env))
 
@@ -37,6 +47,7 @@ class TelemetryTests(unittest.TestCase):
             root = Path(directory)
             telemetry = root / 'telemetry.env'
             telemetry.write_text('PEOPLE_GATOR_API__RUM__ENABLED=true\nPEOPLE_GATOR_API__RUM__CLIENT_TOKEN=synthetic-rum\nOTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic synthetic\n')
+            otel = {'pr': 'true', 'staging': 'true', 'release': None}  # releases configure OTel through their secrets
             runtime = root / 'runtime.env'
             runtime.write_text('PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data\n')
             (root / 'staging-login.html').write_text('')
@@ -47,7 +58,7 @@ class TelemetryTests(unittest.TestCase):
                 'DB_NAME': 'test', 'DB_USER': 'test', 'DB_PASSWORD': 'synthetic',
                 'USERS_FILE': str(runtime), 'RUNTIME_FILE': str(runtime), 'MIGRATION_FILE': str(runtime),
                 'CORS_ORIGIN_REGEX': '^https://app.example$', 'TELEMETRY_FILE': str(telemetry),
-                'APPLICATION_OTEL_NETWORK': 'logging', 'DATABASE_NETWORK': 'database',
+                'APPLICATION_OTEL_NETWORK': 'logging', 'DATABASE_NETWORK': 'database', 'OTEL_HTTP_ENDPOINT': 'http://collector:4318',
             }
             environment = {key: os.environ[key] for key in ('PATH', 'HOME') if key in os.environ}
             environment.update(variables)
@@ -65,6 +76,10 @@ class TelemetryTests(unittest.TestCase):
                     self.assertEqual(env['PEOPLE_GATOR_API__DEPLOYMENT__VERSION'], 'v1.2.3' if name == 'release' else 'abc123')
                     self.assertIn('telemetry', backend['networks'])
                     self.assertEqual(rendered['networks']['telemetry']['name'], 'logging')
+                    self.assertEqual(env.get('PEOPLE_GATOR_API__OTEL__ENABLED'), otel[name])
+                    if otel[name]:
+                        self.assertEqual(env['PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT'], 'http://collector:4318/v1/logs')
+                    self.assertEqual(backend['logging']['driver'], 'json-file')
                     for service, settings in rendered['services'].items():
                         if service != 'backend':
                             self.assertNotIn('synthetic-rum', json.dumps(settings))

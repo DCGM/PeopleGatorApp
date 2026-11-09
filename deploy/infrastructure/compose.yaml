@@ -1,4 +1,4 @@
-# Shared PostgreSQL, log collector and pgAdmin for PR previews and staging.
+# Shared PostgreSQL and pgAdmin for PR previews and staging.
 # An operator runs this stack once per host and keeps it running; the deploy
 # jobs only check it (see deploy/people-gator-deploy/HOSTS.md):
 #
@@ -31,25 +31,6 @@ services:
       retries: 30
       start_period: 10s
     # PostgreSQL has no published host port and never joins Traefik's network.
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.162.0
-    restart: unless-stopped
-    user: '0:0'
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    mem_limit: 256m
-    command: [--config=/etc/otelcol/preview.yaml]
-    environment:
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://lgtm:4318}
-    ports:
-      # Only the host's Docker daemon needs access to the Fluent Forward receiver.
-      - '127.0.0.1:${PREVIEW_LOG_PORT:-24224}:24224'
-    volumes:
-      - ./otel-collector.yaml:/etc/otelcol/preview.yaml:ro
-      - otel-data:/var/lib/otelcol
-    networks: [logging]
 
   pgadmin:
     image: dpage/pgadmin4:9.18
@@ -86,7 +67,6 @@ services:
       - traefik.http.services.pg-${INFRA_ID:-preview}-pgadmin.loadbalancer.server.port=5050
 
 volumes:
-  otel-data:
   pgadmin-data:
   postgres-data:
 
@@ -97,6 +77,3 @@ networks:
   web:
     external: true
     name: ${WEB_NETWORK:-web}
-  logging:
-    external: true
-    name: ${OTEL_NETWORK:-logging}

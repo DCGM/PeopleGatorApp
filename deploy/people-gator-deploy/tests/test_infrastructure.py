@@ -25,7 +25,7 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(document["name"], "people-gator-preview-infra")  # existing volumes keep matching
         self.assertEqual(document["services"]["postgres"]["container_name"], "${POSTGRES_CONTAINER:-people-gator-postgres}")
         self.assertEqual(document["services"]["postgres"]["networks"]["database"]["aliases"], ["preview-postgres"])
-        self.assertTrue((INFRASTRUCTURE / "otel-collector.yaml").is_file())
+        self.assertNotIn("otel-collector", compose)  # the backend exports telemetry itself
         self.assertEqual(json.loads((INFRASTRUCTURE / "pgadmin-servers.json").read_text())["Servers"]["1"]["Host"], "preview-postgres")
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
@@ -44,11 +44,8 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(set(pgadmin["networks"]), {"database", "web"})
         self.assertEqual(pgadmin["labels"]["traefik.http.routers.pg-preview-pgadmin.rule"], "Host(`pgadmin.example.test`)")
         self.assertEqual(pgadmin["environment"]["PGADMIN_CONFIG_SESSION_COOKIE_SECURE"], "True")
-        collector = config["services"]["otel-collector"]
-        self.assertEqual(collector["ports"][0]["host_ip"], "127.0.0.1")
-        self.assertTrue(config["networks"]["logging"]["external"])
+        self.assertEqual(set(config["services"]), {"postgres", "pgadmin"})
         self.assertTrue(config["networks"]["database"]["internal"])
-        self.assertFalse(any("docker.sock" in mount.get("source", "") for mount in collector["volumes"]))
 
 
 if __name__ == "__main__":

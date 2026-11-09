@@ -30,7 +30,7 @@ SHA = "a" * 40
 SAMPLES = {"DOCKER_CONTEXT": "rootless", "DOMAIN": "preview.example.invalid", "HOST": "app.example.invalid",
            "STATE_DIR": "/srv/state/env", "POSTGRES_CONTAINER": "people-gator-postgres", "POSTGRES_ADMIN_USER": "preview_admin",
            "DATABASE_NETWORK": "db", "WEB_NETWORK": "web", "CERTIFICATE_RESOLVER": "none", "OTEL_NETWORK": "logging",
-           "PREVIEW_LOG_PORT": "24224", "PROJECT": "project", "BACKEND_MEMORY": "4g", "ACCESS_REVIEWED": "true",
+           "OTEL_ENABLED": "true", "OTEL_HTTP_ENDPOINT": "http://lgtm:4318", "PROJECT": "project", "BACKEND_MEMORY": "4g", "ACCESS_REVIEWED": "true",
            "USERS_JSON": "{}", "TELEMETRY_ENV": "PEOPLE_GATOR_API__RUM__ENABLED=true", "RUNTIME_ENV": "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data",
            "MIGRATION_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator", "SNAPSHOT_SOURCE": json.dumps({
                "endpoint_url": "https://s3.example.invalid", "region": "r", "bucket": "backups", "prefix": "p/",

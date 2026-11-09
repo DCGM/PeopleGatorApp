@@ -124,7 +124,8 @@ class Staging(Host):
         if not re.fullmatch(r"[a-f0-9]{16}", identity) or not re.fullmatch(r"[a-f0-9]{64}", generation["password"]):
             raise DeployError("Invalid staging generation state")
         return {"COMMIT_SHA": sha, "STAGING_HOST": self.host,
-                "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
+                "OTEL_ENABLED": "true" if self.config.get("otel_enabled", True) else "false",
+                "OTEL_HTTP_ENDPOINT": self.config.get("otel_http_endpoint", "http://lgtm:4318"),
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
                 "DB_PASSWORD": generation["password"], "RUNTIME_FILE": self.config["runtime_file"],
                 "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),

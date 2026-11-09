@@ -5,8 +5,8 @@ variables. Non-secret settings become the controller configuration directly.
 Secret contents (users file, API env files, backup source) are written to
 private files in the environment's host state directory before deployment,
 because Compose bind mounts and env files must outlive the job. The shared
-PostgreSQL/collector/pgAdmin stack is operator-run (deploy/infrastructure) and
-only checked here.
+PostgreSQL/pgAdmin stack is operator-run (deploy/infrastructure) and only
+checked here; the backend exports logs, traces and metrics itself over OTLP.
 """
 from __future__ import annotations
 
@@ -25,6 +25,9 @@ NAME = re.compile(r"[A-Za-z0-9_.-]+")
 PROJECT = re.compile(r"[a-z0-9][a-z0-9_-]*")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TELEMETRY_KEY = re.compile(r"(?:PEOPLE_GATOR_API__(?:RUM|OTEL)__[A-Z0-9_]+|OTEL_EXPORTER_OTLP(?:_[A-Z0-9_]+)?)")
+# Previews and staging own OTel enablement and endpoints (DEPLOY_OTEL_*); the
+# Compose environment would silently shadow these keys from the secret.
+DEPLOY_OWNED_TELEMETRY = re.compile(r"PEOPLE_GATOR_API__OTEL__(?:ENABLED|[A-Z]+_ENDPOINT)|OTEL_EXPORTER_OTLP(?:_[A-Z]+)?_ENDPOINT")
 
 # Secret variables and the private file each one becomes inside state_dir.
 # The users file is read by the unprivileged backend container (UID 10001).
@@ -122,9 +125,12 @@ def load(environment: str, env=None) -> dict:
         require(bool(NAME.fullmatch(settings["postgres_container"])), "POSTGRES_CONTAINER", "missing or invalid container name")
         settings["postgres_admin_user"] = value("POSTGRES_ADMIN_USER", "preview_admin")
         require(bool(re.fullmatch(r"[a-z_][a-z0-9_]*", settings["postgres_admin_user"])), "POSTGRES_ADMIN_USER", "invalid role name")
-        port = value("PREVIEW_LOG_PORT", "24224")
-        require(bool(re.fullmatch(r"[1-9][0-9]{0,4}", port)), "PREVIEW_LOG_PORT", "requires a TCP port number")
-        settings["preview_log_port"] = int(port)
+        # The backend sends logs, traces and metrics straight to this OTLP HTTP collector.
+        settings["otel_http_endpoint"] = value("OTEL_HTTP_ENDPOINT", "http://lgtm:4318")
+        require(bool(re.fullmatch(r"https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?", settings["otel_http_endpoint"])),
+                "OTEL_HTTP_ENDPOINT", "requires an http(s)://host[:port] OTLP HTTP base URL without a path")
+        require(value("OTEL_ENABLED", "true") in {"true", "false"}, "OTEL_ENABLED", "must be true or false")
+        settings["otel_enabled"] = value("OTEL_ENABLED", "true") == "true"
     if environment != "pr":
         settings["project"] = value("PROJECT", "people-gator-" + environment)
         require(bool(PROJECT.fullmatch(settings["project"])), "PROJECT", "invalid Compose project")
@@ -168,6 +174,8 @@ def secrets(environment: str, settings: dict, env=None) -> list[tuple[Path, str,
                 key, separator, _ = line.partition("=")
                 if not separator or not TELEMETRY_KEY.fullmatch(key):
                     raise problem(environment, name, "only unquoted RUM, API OTEL and OTLP exporter KEY=value lines are permitted")
+                if environment != "release" and DEPLOY_OWNED_TELEMETRY.fullmatch(key):
+                    raise problem(environment, name, f"{key} is set by the deployment; use DEPLOY_OTEL_ENABLED / DEPLOY_OTEL_HTTP_ENDPOINT")
         elif name in {"RUNTIME_ENV", "MIGRATION_ENV"}:
             try:
                 keys = env_keys(content, source=PREFIX + name)

@@ -537,15 +537,20 @@ class LifecycleTests(unittest.TestCase):
         self.assertTrue(all(mount.startswith("/") for mount in config["services"]["backend"]["tmpfs"]))
         for name in ("frontend", "backend", "migrate", "seed", "storage-init"):
             service = config["services"][name]
-            self.assertEqual(service["logging"]["driver"], "fluentd")
-            self.assertEqual(service["logging"]["options"]["fluentd-async"], "true")
+            self.assertEqual(service["logging"]["driver"], "json-file")  # container output stays local
             self.assertEqual(service["labels"]["people-gator.preview.pr"], "123")
-            self.assertIn("com.docker.compose.service", service["logging"]["options"]["labels"])
+        backend = config["services"]["backend"]["environment"]
+        self.assertEqual(backend["PEOPLE_GATOR_API__OTEL__ENABLED"], "true")
+        self.assertEqual(backend["PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT"], "http://lgtm:4318/v1/logs")
+        self.assertEqual(backend["PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER"], "123")
+        self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", config["services"]["seed"]["environment"])
 
-    def test_config_controls_the_preview_log_address(self):
-        self.controller.config.update(preview_log_port=24225)
-        self.assertIn("PREVIEW_LOG_ADDRESS='127.0.0.1:24225'",
-                      self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA))
+    def test_config_controls_direct_otlp_export(self):
+        self.controller.config.update(otel_enabled=False, otel_http_endpoint="https://otel.example.test:4318")
+        environment = self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA)
+        self.assertIn("OTEL_ENABLED='false'", environment)
+        self.assertIn("OTEL_HTTP_ENDPOINT='https://otel.example.test:4318'", environment)
+        self.assertNotIn("PREVIEW_LOG_ADDRESS", environment)
 
 
 @unittest.skipUnless(os.environ.get("PREVIEW_TEST_POSTGRES_CONTAINER"), "requires disposable PostgreSQL container")
@@ -572,10 +577,8 @@ class DatabaseIsolationTests(unittest.TestCase):
                     controller.check_infrastructure()
                 subprocess.run(["docker", "network", "connect", "--alias", "preview-postgres", network, container],
                                check=True, capture_output=True)
-                with patch.object(host.socket, "create_connection", side_effect=OSError("no collector")), \
-                        redirect_stderr(io.StringIO()):
-                    checked = controller.check_infrastructure()
-                self.assertEqual(checked, {"postgres_container": container, "database_network": network, "log_collector": False})
+                checked = controller.check_infrastructure()
+                self.assertEqual(checked, {"postgres_container": container, "database_network": network})
                 controller.config["postgres_container"] = "people-gator-missing-" + secrets.token_hex(4)
                 with self.assertRaisesRegex(DeployError, "does not exist"):
                     controller.check_infrastructure()
