@@ -383,6 +383,11 @@ class SourceResponseBase(BaseModel):
     source_id: uuid.UUID
     source_type: SourceKind
     url: AnyUrl
+    created_at: AwareDatetime | None = None
+    created_by_user_id: uuid.UUID | None = None
+    created_by_api_key_id: uuid.UUID | None = None
+    created_by_user_name: str | None = None
+    created_by_api_key_name: str | None = None
     last_touched_at: AwareDatetime | None = None
     last_touched_by_user_id: uuid.UUID | None = None
     last_touched_by_api_key_id: uuid.UUID | None = None
@@ -393,6 +398,11 @@ class SourceResponseBase(BaseModel):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            created_at=generic.created_at,
+            created_by_user_id=generic.created_by_user_id,
+            created_by_api_key_id=generic.created_by_api_key_id,
+            created_by_user_name=generic.created_by_user_name,
+            created_by_api_key_name=generic.created_by_api_key_name,
             last_touched_at=generic.last_touched_at,
             last_touched_by_user_id=generic.last_touched_by_user_id,
             last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
@@ -487,6 +497,11 @@ class PageResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            created_at=generic.created_at,
+            created_by_user_id=generic.created_by_user_id,
+            created_by_api_key_id=generic.created_by_api_key_id,
+            created_by_user_name=generic.created_by_user_name,
+            created_by_api_key_name=generic.created_by_api_key_name,
             last_touched_at=generic.last_touched_at,
             last_touched_by_user_id=generic.last_touched_by_user_id,
             last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
@@ -525,6 +540,11 @@ class DocumentResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            created_at=generic.created_at,
+            created_by_user_id=generic.created_by_user_id,
+            created_by_api_key_id=generic.created_by_api_key_id,
+            created_by_user_name=generic.created_by_user_name,
+            created_by_api_key_name=generic.created_by_api_key_name,
             last_touched_at=generic.last_touched_at,
             last_touched_by_user_id=generic.last_touched_by_user_id,
             last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
@@ -551,6 +571,11 @@ class ImageResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            created_at=generic.created_at,
+            created_by_user_id=generic.created_by_user_id,
+            created_by_api_key_id=generic.created_by_api_key_id,
+            created_by_user_name=generic.created_by_user_name,
+            created_by_api_key_name=generic.created_by_api_key_name,
             last_touched_at=generic.last_touched_at,
             last_touched_by_user_id=generic.last_touched_by_user_id,
             last_touched_by_api_key_id=generic.last_touched_by_api_key_id,

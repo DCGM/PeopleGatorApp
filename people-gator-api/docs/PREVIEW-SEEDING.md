@@ -1418,3 +1418,25 @@ media generated before #121, so the new lines appear on the scan and in the
 transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
+
+### Document creation (#128)
+
+Open the seed manifest's `document-creation` link (`/documents?library=preview-creation`).
+Use **Add column** to show **Created** and **Created by**. Both are hidden by
+default, retain the table's add/move/remove and tab-session preferences, and
+provide no creation sort or filter. Created displays local date/time; Created by
+shows the user name and the API-key name in parentheses when used.
+
+The three documents and their local page scans demonstrate a bearer reviewer,
+an API-key importer, and a historical source with **Unknown** creation. Ordinary
+seed registration uses the real preview importer actor; the reviewer example
+uses the preview reviewer. The historical pair uses the repository's internal
+`restore_legacy_source` operation with a restoring actor, without assigning that
+actor to historical creation. This operation only inserts missing records; it
+never clears creation on existing sources and is not an HTTP registration route.
+
+Migration `d34a021b0015` leaves existing source creation fields NULL. Registration
+never backfills them or changes known creation on a retry. Seed reruns retain
+source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
+The creation integration checks query both document and page responses and
+read their actual media before repeating the seed and checking preservation.

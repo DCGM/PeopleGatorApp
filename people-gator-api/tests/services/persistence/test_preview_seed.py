@@ -1125,7 +1125,8 @@ async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_ta
     actor = GenericActor(user_id=seed.users["reviewer"])
     doc = await db.sources.get_document(seed.documents["link-states"])
     mirror, _ = await db.sources.get_or_create_document(
-        DocumentCreateRequest(library="other-link-library", document_id=doc.document_id)
+        DocumentCreateRequest(library="other-link-library", document_id=doc.document_id),
+        context=GenericActor(user_id=seed.users['reviewer']),
     )
     direct = await db.text_mentions.create(
         TextMentionCreateRequest(
@@ -1446,7 +1447,7 @@ async def test_issue8_source_only_actor_and_key_references(seed_target):
     database, _, _ = seed_target
     user = await database.users.get_or_create(UserCreateRequest(display_name='Source only actor', external_subject='source-only-actor', external_issuer='issue8-test', is_active=True))
     other = await database.users.get_or_create(UserCreateRequest(display_name='Other actor', external_subject='other-actor', external_issuer='issue8-test', is_active=True))
-    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'))
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'), context=GenericActor(user_id=user.user_id))
     actor = GenericActor(user_id=user.user_id)
     face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), actor)
     await database.faces.delete(face.detection_id, context=actor)
@@ -4097,9 +4098,9 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
     original_patch = db.sources.patch_page
     first_id = legacy = None
 
-    async def legacy_create(spec):
+    async def legacy_create(spec, *, context):
         nonlocal first_id, legacy
-        result = await original_create(spec.model_copy(update={'page_number': None}))
+        result = await original_create(spec.model_copy(update={'page_number': None}), context=context)
         first_id = result[0].source_id
         legacy = result[0]
         return result
@@ -4993,3 +4994,45 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
     assert preserved.page_number == 42
     assert preserved.last_touched_at == edited.last_touched_at
     assert (await database.entities.get(person_id)).name == "Renamed Ada"
+
+
+@pytest.mark.asyncio
+async def test_source_creation_examples_and_legacy_unknown_survive_reruns(seed_target):
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    before = {}
+    for key in ('creation-user', 'creation-key', 'creation-legacy'):
+        document = await db.sources.get_document(seed.documents[key])
+        page = await db.sources.get_page(seed.pages[key + '-1'])
+        before[key] = (document, page)
+        for source in (document, page):
+            if key == 'creation-legacy':
+                assert source.created_at is None
+                assert source.created_by_user_id is None
+                assert source.created_by_api_key_id is None
+                assert source.created_by_user_name is None
+                assert source.created_by_api_key_name is None
+            else:
+                actor = 'reviewer' if key == 'creation-user' else 'importer'
+                assert source.created_at is not None
+                assert source.created_by_user_id == seed.users[actor]
+                assert source.created_by_user_name == ('Preview reviewer' if actor == 'reviewer' else 'Preview face importer')
+                assert source.created_by_api_key_id == (None if actor == 'reviewer' else seed.api_keys['importer'])
+                assert source.created_by_api_key_name == (None if actor == 'reviewer' else 'Preview face importer')
+        # The scenario includes usable media and canonical links.
+        assert (await get_page_image(page.library, page.document_id, page.page_id)).content
+    from people_gator_api.schemas.sources import PagePatchRequest
+    edited = await db.sources.patch_page(before['creation-key'][1].source_id,
+        PagePatchRequest(page_number=9), context=GenericActor(user_id=seed.users['reviewer']))
+    rerun = await preview.seed_preview(db, fs)
+    assert rerun.documents == seed.documents and rerun.pages == seed.pages
+    assert rerun.filter_examples['document-creation'] == '/documents?library=preview-creation'
+    for key, (document, page) in before.items():
+        for original, current in (
+            (document, await db.sources.get_document(document.source_id)),
+            (page, await db.sources.get_page(page.source_id)),
+        ):
+            for field in ('created_at', 'created_by_user_id', 'created_by_api_key_id'):
+                assert getattr(current, field) == getattr(original, field)
+    after = await db.sources.get_page(edited.source_id)
+    assert after.page_number == 9 and after.last_touched_at == edited.last_touched_at

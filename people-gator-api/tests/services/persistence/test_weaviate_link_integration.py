@@ -70,12 +70,14 @@ async def test_weaviate_link_contract_and_additive_upgrade():
         doc, _ = await db.sources.get_or_create_document(
             DocumentCreateRequest(
                 library="issue6", document_id=uuid.uuid4(), name="Review"
-            )
+            ),
+            context=actor,
         )
         page, _ = await db.sources.get_or_create_page(
             PageCreateRequest(
                 library=doc.library, document_id=doc.document_id, page_id=uuid.uuid4()
-            )
+            ),
+            context=actor,
         )
         face = await db.faces.create(
             FaceCreateRequest(

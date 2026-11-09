@@ -138,12 +138,12 @@ async def upload_target(migrated_postgres, monkeypatch):
         library, document_id = "preview-concurrency", fixture_id("issue10-concurrency-document")
         await database.sources.get_or_create_document(DocumentCreateRequest(
             library=library, document_id=document_id, name="Upload concurrency test",
-        ))
+        ), context=GenericActor(user_id=user.user_id))
         pages = [
             (await database.sources.get_or_create_page(PageCreateRequest(
                 library=library, document_id=document_id,
                 page_id=fixture_id(f"issue10-concurrency-page-{index}"),
-            )))[0]
+            ), context=GenericActor(user_id=user.user_id)))[0]
             for index in range(16)
         ]
     monkeypatch.setattr(database_service, "_postgres_engine", engine)

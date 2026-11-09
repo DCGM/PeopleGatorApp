@@ -140,6 +140,26 @@ export type DocumentResponse = {
      */
     url: string;
     /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
+    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1232,6 +1252,26 @@ export type FoundDocument = {
      */
     url: string;
     /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
+    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1554,6 +1594,26 @@ export type FoundPage = {
      * Url
      */
     url: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     /**
      * Last Touched At
      */
@@ -2056,6 +2116,26 @@ export type ImageResponse = {
      */
     url: string;
     /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
+    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2281,6 +2361,26 @@ export type PageResponse = {
      */
     url: string;
     /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
+    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2416,6 +2516,26 @@ export type SourceResponseBase = {
      * Url
      */
     url: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     /**
      * Last Touched At
      */

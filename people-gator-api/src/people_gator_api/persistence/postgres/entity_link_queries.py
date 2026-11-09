@@ -209,7 +209,17 @@ def linked_entity_counts(owner_ids=None):
 
 
 async def load_document_summaries(session, objects):
-    """Three bounded batch queries, with no page/evidence Cartesian product."""
+    """Batched source attribution and document totals without Cartesian products."""
+    sources = {obj.id: obj for obj in objects if isinstance(obj, Source)}
+    if sources:
+        for owner, user, key in await session.execute(
+            select(Source.id, User.display_name, APIKey.display_name)
+            .outerjoin(User, User.id == Source.created_by_user_id)
+            .outerjoin(APIKey, APIKey.id == Source.created_by_api_key_id)
+            .where(Source.id.in_(sources))
+        ):
+            sources[owner]._created_by_user_name = user
+            sources[owner]._created_by_api_key_name = key
     documents = {obj.id: obj for obj in objects if isinstance(obj, Document)}
     if not documents:
         return

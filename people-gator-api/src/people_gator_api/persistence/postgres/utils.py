@@ -676,6 +676,9 @@ def entity_response(entity: Entity) -> EntityResponse:
 def source_response(source: Source) -> GenericSourceResponse:
     common: dict[str, Any] = {
         "entity_link_stats": getattr(source, "_entity_link_stats", None) or {},
+        **creation_metadata(source),
+        "created_by_user_name": getattr(source, "_created_by_user_name", None),
+        "created_by_api_key_name": getattr(source, "_created_by_api_key_name", None),
         "source_id": source.id,
         "last_touched_at": source.last_touched_at,
         "last_touched_by_user_id": source.last_touched_by_user_id,

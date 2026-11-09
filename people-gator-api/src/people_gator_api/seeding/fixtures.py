@@ -147,6 +147,9 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("creation-user", "preview-creation", "Creation: reviewer registration"),
+    Document("creation-key", "preview-creation", "Creation: API key registration"),
+    Document("creation-legacy", "preview-creation", "Creation: legacy unknown"),
     Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
@@ -329,6 +332,9 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
 # unassigned face and a repeated phrase that includes an unlinked occurrence,
 # beside further pages whose faces and occurrences exceed one sidebar batch.
 SIDEBAR_PAGES = (
+    Page("creation-user-1", "creation-user", 1),
+    Page("creation-key-1", "creation-key", 1),
+    Page("creation-legacy-1", "creation-legacy", 1),
     Page("scan-sidebar-1", "scan-sidebar", 1, (
         Face("sidebar-hana-left", "sidebar-hana", 0, 2),
         Face("sidebar-unassigned", None, 1, 2),

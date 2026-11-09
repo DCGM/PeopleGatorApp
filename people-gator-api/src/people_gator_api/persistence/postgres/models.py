@@ -252,7 +252,7 @@ class Alias(Base):
     entity: Mapped[Entity] = relationship(back_populates="aliases")
 
 
-class Source(Base):
+class Source(RecordedCreation, Base):
     """URL-addressable evidence source and polymorphic source root."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("sources")

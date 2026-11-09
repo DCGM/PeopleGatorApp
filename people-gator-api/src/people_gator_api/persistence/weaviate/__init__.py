@@ -1151,8 +1151,9 @@ class WeaviateSourceRepository(SourceRepository):
         )
 
     async def get_or_create(
-        self, spec: GenericSourceCreateRequest
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor
     ) -> tuple[GenericSourceResponse, CreateResult]:
+        # Legacy adapter omits creation attribution, as with modification metadata.
         i, p = _source_data(spec)
         o = await _get(self._client, SOURCE_COLLECTION, i)
         if o:
@@ -1178,9 +1179,9 @@ class WeaviateSourceRepository(SourceRepository):
         )
 
     async def get_or_create_batch(
-        self, specs: Sequence[GenericSourceCreateRequest]
+        self, specs: Sequence[GenericSourceCreateRequest], *, context: GenericActor
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
-        return [await self.get_or_create(x) for x in specs]
+        return [await self.get_or_create(x, context=context) for x in specs]
 
     async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, SOURCE_COLLECTION, source_id):
