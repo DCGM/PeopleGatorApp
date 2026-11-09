@@ -514,6 +514,26 @@ manual placement; pending focus waits for image readiness and usable bounds,
 and page changes discard it. The added fixture has new stable keys and adds
 missing records/media without rewriting existing reviewer edits or timestamps.
 
+### Dragging from scan boxes (#112)
+
+Open `scan-box-drag` (the **Viewport focus practice** page), zoom in, then press
+inside a face box or OCR-line box and drag: the scan pans as it does from an
+uncovered area, and releasing selects nothing, opens no actions and does not
+refocus. Drag out of a box, or cancel a touch drag, with the same result. A click or
+tap that moves less than 6 CSS pixels still selects the box, a face click still
+opens its actions, and Enter/Space still activate a focused box.
+`scan-box-drag-selected` opens the same page with the upper Ada Novak face selected
+and its actions open. Dragging from the other faces or a line keeps that selection
+and the actions, including when the toolbar is used after a touch drag.
+
+These are report entry points to the existing fixture's three faces and two OCR
+lines; no records, media, assignments or timestamps change. Integration coverage
+checks that both links resolve to that page, that every face and line box has area
+inside the stored page image and that reruns keep the links and face records.
+From `people-gator-app`, `node scripts/check-box-drag.mjs` runs the browser checks
+and captures desktop/mobile evidence against a running, twice-seeded instance;
+set `BOX_DRAG_ORIGIN` and `BOX_DRAG_SEED_LOG` (the second seed run's output).
+
 ## Person sidebar statistics and Last change (#43)
 
 The CLI's `person-last-change` link opens **Ada Review**, reusing the Link state

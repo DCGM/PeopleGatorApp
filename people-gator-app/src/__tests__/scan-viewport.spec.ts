@@ -159,3 +159,116 @@ describe('scan element resource ownership', () => {
     state.scope.stop()
   })
 })
+
+describe('dragging from annotation boxes', () => {
+  function gesture() {
+    const state = setup()
+    const box = document.createElement('button')
+    const selected = vi.fn()
+    box.addEventListener('click', selected)
+    state.initial.viewer.append(box)
+    const pointer = (type: string, x: number, y = 0, pointerId = 1) =>
+      new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId })
+    // Panzoom reports each press it handles; the real library dispatches this on the zoom node.
+    const press = (x: number, pointerId = 1) =>
+      state.initial.zoom.dispatchEvent(
+        new CustomEvent('panzoomstart', {
+          detail: { originalEvent: pointer('pointerdown', x, 0, pointerId) },
+        }),
+      )
+    const move = (x: number, y = 0, pointerId = 1) =>
+      box.dispatchEvent(pointer('pointermove', x, y, pointerId))
+    const release = (type = 'pointerup', pointerId = 1) =>
+      box.dispatchEvent(pointer(type, 0, 0, pointerId))
+    const click = (detail = 1) =>
+      box.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }))
+    return { state, box, selected, press, move, release, click }
+  }
+
+  it('lets a press within the drag threshold click a box', async () => {
+    const { state, selected, press, move, release, click } = gesture()
+    await nextTick()
+    press(10)
+    move(14, 4)
+    release()
+    click()
+    expect(selected).toHaveBeenCalledTimes(1)
+    state.scope.stop()
+  })
+
+  it('suppresses the click that ends a drag, a pinch or a cancelled drag', async () => {
+    vi.useFakeTimers()
+    const { state, selected, press, move, release, click } = gesture()
+    await nextTick()
+    press(10)
+    move(17)
+    release()
+    click()
+    expect(selected).not.toHaveBeenCalled()
+    vi.runAllTimers()
+
+    press(10)
+    press(40, 2)
+    release('pointerup', 2)
+    release()
+    click()
+    expect(selected).not.toHaveBeenCalled()
+    vi.runAllTimers()
+
+    press(10)
+    move(10, 30)
+    release('pointercancel')
+    click()
+    expect(selected).not.toHaveBeenCalled()
+
+    // Later keyboard or pointer activation is unaffected.
+    vi.runAllTimers()
+    click(0)
+    press(10)
+    release()
+    click()
+    expect(selected).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+    state.scope.stop()
+  })
+
+  it('ignores presses Panzoom did not handle and stops listening after cleanup', async () => {
+    vi.useFakeTimers()
+    const { state, selected, move, release, click, press } = gesture()
+    await nextTick()
+    // Toolbar presses stop propagation before Panzoom, so their moves never count as drags.
+    move(50)
+    release()
+    click()
+    expect(selected).toHaveBeenCalledTimes(1)
+    press(0)
+    move(50)
+    state.scope.stop()
+    release()
+    click()
+    expect(selected).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
+  it('keeps the native press on face boxes so they can take focus', async () => {
+    const state = setup()
+    await nextTick()
+    const { handleStartEvent } = vi.mocked(Panzoom).mock.calls[0]![1]!
+    const face = document.createElement('button')
+    face.dataset.regionType = 'face'
+    face.append(document.createElement('span'))
+    const line = document.createElement('button')
+    line.dataset.regionType = 'line'
+    for (const [target, prevented] of [
+      [face.firstChild!, false],
+      [line, true],
+      [state.initial.page, true],
+    ] as const) {
+      const event = new PointerEvent('pointerdown', { cancelable: true })
+      Object.defineProperty(event, 'target', { value: target })
+      handleStartEvent!(event)
+      expect(event.defaultPrevented).toBe(prevented)
+    }
+    state.scope.stop()
+  })
+})
