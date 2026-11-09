@@ -3,7 +3,12 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import { SCAN_ZOOM_STEP, useScanViewport } from '@/composables/scan-viewport'
-import { useWorkspaceSplit, type WorkspacePanel } from '@/composables/workspace-split'
+import {
+  SIDEBAR_WIDTH,
+  useSidebarWidth,
+  useWorkspaceSplit,
+  type WorkspacePanel,
+} from '@/composables/workspace-split'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -82,6 +87,9 @@ const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
 const splitDirection = computed(() => (isWideWorkspace.value ? 'horizontal' : 'vertical'))
 const transcriptionPanel = ref<WorkspacePanel | null>(null)
 const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel)
+// Wide screens size the sidebar beside the workspace; narrow ones stack it below.
+const sidebarPanel = ref<WorkspacePanel | null>(null)
+const sidebarWidth = useSidebarWidth(isWideWorkspace, sidebarPanel)
 const sidebar = useScanSidebarState()
 const sidebarState = sidebar.state
 const libraryId = computed(() => String(route.params.libraryId))
@@ -799,259 +807,283 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="workspace-grid">
-    <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
-    <div class="workspace-split">
-      <ResizablePanelGroup :direction="splitDirection" @layout="workspaceSplit.layoutChanged">
-        <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
-        <ResizablePanel
-          ref="transcriptionPanel"
-          :default-size="workspaceSplit.defaultSize"
-          :min-size="15"
-          :max-size="70"
-        >
-          <section
-            class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
-            aria-labelledby="page-transcription-title"
-          >
-            <DocumentTeleprompter
-              ref="teleprompter"
-              v-model:line-visibility="lineVisibility"
-              v-model:annotation-highlight="annotationHighlight"
-              class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
-              :transcription="transcription"
-              :selected-line-index="selectedLineIndex"
-              :selected-entity-key="selectedEntityKey"
-              :related-entity-id="selectedPersonId"
-              :entity-names="entityNames"
-              :included="includedLines"
-              :is-translation-open="isTranslationOpen"
-              :selected-language="selectedLanguage"
-              :current-translation="currentTranslation"
-              :translation-loading="translationLoading"
-              @select-line="selectLine"
-              @select-entity="selectEntity"
-              @expand="expandContext"
-            />
-          </section>
-        </ResizablePanel>
-        <!-- Above scan overlays and toolbars, which would otherwise capture drags at the edge. -->
-        <ResizableHandle
-          with-handle
-          aria-label="Resize transcription panel"
-          class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
-        />
-        <ResizablePanel
-          :default-size="100 - workspaceSplit.defaultSize"
-          class="flex min-h-0 min-w-0 flex-col"
-        >
-          <section
-            ref="viewerElement"
-            class="workspace-viewer bg-viewer relative min-h-0 flex-1 overflow-hidden"
-            aria-label="Pan and zoom document page"
-            tabindex="-1"
-          >
-            <PagePosition
-              class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
-              :number="page?.page_number"
-              :total="page?.registered_page_count"
-            />
-            <DocumentControls
-              class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
-              @pointerdown.stop
-              @wheel.stop
-              @keydown.stop
-              v-model:link-states="linkStates"
-              :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
-              :line-count="visibleLineIndices.length"
-              :selected-face-index="selectedFaceIndex"
-              :face-count="faces.length"
-              :zoom-percent="zoomPercent"
-              :minimum-zoom-percent="minimumZoomPercent"
-              :maximum-zoom-percent="maximumZoomPercent"
-              :translation-options="translationOptions"
-              :is-translation-open="isTranslationOpen"
-              :selected-language="selectedLanguage"
-              :show-badge-names="showBadgeNames"
-              @previous-line="previousLine"
-              @next-line="nextLine"
-              @previous-face="previousFace"
-              @next-face="nextFace"
-              @set-zoom="setZoom"
-              @reset-view="resetView"
-              @select-translation="selectTranslation"
-              @toggle-badge-names="showBadgeNames = !showBadgeNames"
-            />
-            <div
-              ref="zoomElement"
-              class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
-            >
-              <div
-                ref="pageElement"
-                class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
-                :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
-              >
-                <LoadableImage
-                  :src="pageImageUrl"
-                  :loading="pageImageLoading"
-                  :alt="`Scan ${pageId}`"
-                  class="absolute inset-0 size-full"
-                  image-class="object-contain"
-                  @load="pageImageLoaded"
-                >
-                  <template #fallback>
-                    <div class="flex size-full items-center justify-center text-muted-foreground">
-                      <span v-if="error || pageImageError">Could not load scan</span
-                      ><span v-else>Loading scan…</span>
-                    </div>
-                  </template>
-                </LoadableImage>
-              </div>
-            </div>
-            <DocumentPageOverlay
-              :page-bounds="pageBounds"
-              :viewer="viewerElement"
-              :actions-enabled="!deletionTarget"
-              :transcription="transcription"
-              :faces="overlayFaces"
-              :selected-line-index="selectedLineIndex"
-              :selected-face-id="selectedFace?.id ?? null"
-              :selected-person-id="selectedPersonId"
-              :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
-              :show-badge-names="showBadgeNames"
-              @select-line="selectLine"
-              @select-face="selectFace"
-              @clear-face="clearFace"
-            >
-              <template #card="{ face }">
-                <SelectedFaceItem
-                  :face="face"
-                  :assignment-pending="actionBusy"
-                  :can-annotate="canAnnotate"
-                  :can-delete="canDelete"
-                  :action-error="actionError"
-                  @find-profile="focusPeopleSearch"
-                  @search-face="searchByFace(face)"
-                  @create-profile="createSimilarPerson"
-                  @unassign="unassignSelectedFace"
-                  @delete="requestDeletion(face)"
-                >
-                  <template #actions>
-                    <UiTooltip
-                      v-if="face.personId && face.linkState !== 'verified'"
-                      text="Verify this link"
-                    >
-                      <Button
-                        variant="outline"
-                        size="icon-xs"
-                        class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
-                        :disabled="actionBusy"
-                        aria-label="Verify this link"
-                        @click="verifyFace(face)"
-                        ><BadgeCheck aria-hidden="true"
-                      /></Button>
-                    </UiTooltip>
-                  </template>
-                </SelectedFaceItem>
-              </template>
-            </DocumentPageOverlay>
-          </section>
-
-          <DocumentPageGallery
-            class="workspace-gallery shrink-0 border-t"
-            :document-url="documentQuery.data.value?.url"
-            :items="gallery.items.value"
-            :total-count="gallery.totalCount.value"
-            :loading="gallery.isLoading.value"
-            :error="Boolean(gallery.error.value)"
-            :has-next-page="gallery.hasNextPage.value"
-            :is-fetching-next-page="gallery.isFetchingNextPage.value"
-            :location="galleryLocation"
-            v-model:sort="gallerySort"
-            :sort-options="GALLERY_SORTS"
-            @load-more="gallery.loadMore()"
-            @retry="gallery.retry()"
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
-
-    <Tabs
-      ref="sidebarTabs"
-      class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
-      :model-value="sidebarState.tab"
-      @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
+    <ResizablePanelGroup
+      direction="horizontal"
+      class="workspace-layout"
+      @layout="sidebarWidth.layoutChanged"
     >
-      <div class="shrink-0 border-b p-3">
-        <TabsList aria-label="Page sidebar" class="w-full">
-          <TabsTrigger value="people">People</TabsTrigger>
-          <TabsTrigger value="faces">Faces</TabsTrigger>
-          <TabsTrigger value="mentions">Mentions</TabsTrigger>
-          <TabsTrigger value="info">Info</TabsTrigger>
-        </TabsList>
-      </div>
-      <TabsContent value="people" class="mt-0 flex min-h-0 flex-1 flex-col">
-        <ScanPeoplePanel
-          ref="peoplePanel"
-          v-model:text="peopleText"
-          v-model:scope="peopleScope"
-          v-model:order="peopleOrder"
-          :people="people.people"
-          :scored="peopleScored"
-          :loading="people.loading"
-          :total-count="people.totalCount"
-          :has-next-page="people.hasNextPage"
-          :is-fetching="people.isFetching"
-          :error="people.error"
-          :search-face-id="searchFaceId"
-          :face-models="searchFaceModels"
-          :face-model="searchModel"
-          @update:face-model="(model) => sidebar.update({ searchModel: model })"
-          :selected-face="selectedFace ?? null"
-          :viewed-person-id="selectedPersonId"
-          :assignment-pending="actionBusy"
-          :load-more="people.loadMore"
-          :retry="people.retry"
-          @remove-face="removeSearchFace"
-          @attach-selected-face="selectedFace && searchByFace(selectedFace)"
-          @preview="previewSimilarPerson"
-          @assign="assignSimilarPerson"
-        />
-      </TabsContent>
-      <TabsContent value="faces" class="mt-0 flex min-h-0 flex-1 flex-col">
-        <ScanFacesPanel
-          v-model:scope="faceScope"
-          v-model:view="faceView"
-          v-model:sort="faceSort"
-          :items="scanFaces.items"
-          :groups="scanFaces.groups"
-          :loading="scanFaces.loading"
-          :has-next-page="scanFaces.hasNextPage"
-          :is-fetching="scanFaces.isFetching"
-          :error="scanFaces.error"
-          :total-count="scanFaces.totalCount"
-          :selected-face-id="selectedFace?.id ?? null"
-          :filtered="linkStates.length > 0"
-          :load-more="scanFaces.loadMore"
-          :retry="scanFaces.retry"
-          @select="selectFace"
-          @reset-filters="linkStates = []"
-        />
-      </TabsContent>
-      <TabsContent value="mentions" class="mt-0 flex min-h-0 flex-1 flex-col">
-        <ScanMentionsPanel
-          v-model:scope="mentionScope"
-          v-model:view="mentionView"
-          v-model:sort="mentionSort"
-          v-model:group-sort="mentionGroupSort"
-          :sources="sources"
-          :link-states="linkStates"
-          @reset-filters="linkStates = []"
-        />
-      </TabsContent>
-      <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">
-        <ScanInfoPanel v-model:direction="activityDirection" :page="page" />
-      </TabsContent>
-    </Tabs>
+      <ResizablePanel :min-size="50" class="workspace-main">
+        <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
+        <div class="workspace-split">
+          <ResizablePanelGroup :direction="splitDirection" @layout="workspaceSplit.layoutChanged">
+            <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
+            <ResizablePanel
+              ref="transcriptionPanel"
+              :default-size="workspaceSplit.defaultSize"
+              :min-size="15"
+              :max-size="70"
+            >
+              <section
+                class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
+                aria-labelledby="page-transcription-title"
+              >
+                <DocumentTeleprompter
+                  ref="teleprompter"
+                  v-model:line-visibility="lineVisibility"
+                  v-model:annotation-highlight="annotationHighlight"
+                  class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
+                  :transcription="transcription"
+                  :selected-line-index="selectedLineIndex"
+                  :selected-entity-key="selectedEntityKey"
+                  :related-entity-id="selectedPersonId"
+                  :entity-names="entityNames"
+                  :included="includedLines"
+                  :is-translation-open="isTranslationOpen"
+                  :selected-language="selectedLanguage"
+                  :current-translation="currentTranslation"
+                  :translation-loading="translationLoading"
+                  @select-line="selectLine"
+                  @select-entity="selectEntity"
+                  @expand="expandContext"
+                />
+              </section>
+            </ResizablePanel>
+            <!-- Above scan overlays and toolbars, which would otherwise capture drags at the edge. -->
+            <ResizableHandle
+              with-handle
+              aria-label="Resize transcription panel"
+              class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
+            />
+            <ResizablePanel
+              :default-size="100 - workspaceSplit.defaultSize"
+              class="flex min-h-0 min-w-0 flex-col"
+            >
+              <section
+                ref="viewerElement"
+                class="workspace-viewer bg-viewer relative min-h-0 flex-1 overflow-hidden"
+                aria-label="Pan and zoom document page"
+                tabindex="-1"
+              >
+                <PagePosition
+                  class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
+                  :number="page?.page_number"
+                  :total="page?.registered_page_count"
+                />
+                <DocumentControls
+                  class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
+                  @pointerdown.stop
+                  @wheel.stop
+                  @keydown.stop
+                  v-model:link-states="linkStates"
+                  :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
+                  :line-count="visibleLineIndices.length"
+                  :selected-face-index="selectedFaceIndex"
+                  :face-count="faces.length"
+                  :zoom-percent="zoomPercent"
+                  :minimum-zoom-percent="minimumZoomPercent"
+                  :maximum-zoom-percent="maximumZoomPercent"
+                  :translation-options="translationOptions"
+                  :is-translation-open="isTranslationOpen"
+                  :selected-language="selectedLanguage"
+                  :show-badge-names="showBadgeNames"
+                  @previous-line="previousLine"
+                  @next-line="nextLine"
+                  @previous-face="previousFace"
+                  @next-face="nextFace"
+                  @set-zoom="setZoom"
+                  @reset-view="resetView"
+                  @select-translation="selectTranslation"
+                  @toggle-badge-names="showBadgeNames = !showBadgeNames"
+                />
+                <div
+                  ref="zoomElement"
+                  class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
+                >
+                  <div
+                    ref="pageElement"
+                    class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
+                    :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
+                  >
+                    <LoadableImage
+                      :src="pageImageUrl"
+                      :loading="pageImageLoading"
+                      :alt="`Scan ${pageId}`"
+                      class="absolute inset-0 size-full"
+                      image-class="object-contain"
+                      @load="pageImageLoaded"
+                    >
+                      <template #fallback>
+                        <div
+                          class="flex size-full items-center justify-center text-muted-foreground"
+                        >
+                          <span v-if="error || pageImageError">Could not load scan</span
+                          ><span v-else>Loading scan…</span>
+                        </div>
+                      </template>
+                    </LoadableImage>
+                  </div>
+                </div>
+                <DocumentPageOverlay
+                  :page-bounds="pageBounds"
+                  :viewer="viewerElement"
+                  :actions-enabled="!deletionTarget"
+                  :transcription="transcription"
+                  :faces="overlayFaces"
+                  :selected-line-index="selectedLineIndex"
+                  :selected-face-id="selectedFace?.id ?? null"
+                  :selected-person-id="selectedPersonId"
+                  :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+                  :show-badge-names="showBadgeNames"
+                  @select-line="selectLine"
+                  @select-face="selectFace"
+                  @clear-face="clearFace"
+                >
+                  <template #card="{ face }">
+                    <SelectedFaceItem
+                      :face="face"
+                      :assignment-pending="actionBusy"
+                      :can-annotate="canAnnotate"
+                      :can-delete="canDelete"
+                      :action-error="actionError"
+                      @find-profile="focusPeopleSearch"
+                      @search-face="searchByFace(face)"
+                      @create-profile="createSimilarPerson"
+                      @unassign="unassignSelectedFace"
+                      @delete="requestDeletion(face)"
+                    >
+                      <template #actions>
+                        <UiTooltip
+                          v-if="face.personId && face.linkState !== 'verified'"
+                          text="Verify this link"
+                        >
+                          <Button
+                            variant="outline"
+                            size="icon-xs"
+                            class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+                            :disabled="actionBusy"
+                            aria-label="Verify this link"
+                            @click="verifyFace(face)"
+                            ><BadgeCheck aria-hidden="true"
+                          /></Button>
+                        </UiTooltip>
+                      </template>
+                    </SelectedFaceItem>
+                  </template>
+                </DocumentPageOverlay>
+              </section>
+
+              <DocumentPageGallery
+                class="workspace-gallery shrink-0 border-t"
+                :document-url="documentQuery.data.value?.url"
+                :items="gallery.items.value"
+                :total-count="gallery.totalCount.value"
+                :loading="gallery.isLoading.value"
+                :error="Boolean(gallery.error.value)"
+                :has-next-page="gallery.hasNextPage.value"
+                :is-fetching-next-page="gallery.isFetchingNextPage.value"
+                :location="galleryLocation"
+                v-model:sort="gallerySort"
+                :sort-options="GALLERY_SORTS"
+                @load-more="gallery.loadMore()"
+                @retry="gallery.retry()"
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+      </ResizablePanel>
+      <ResizableHandle
+        v-if="isWideWorkspace"
+        with-handle
+        aria-label="Resize sidebar"
+        class="z-30 after:w-3"
+      />
+      <ResizablePanel
+        ref="sidebarPanel"
+        size-unit="px"
+        :default-size="sidebarWidth.defaultSize"
+        :min-size="isWideWorkspace ? SIDEBAR_WIDTH.min : 0"
+        :max-size="SIDEBAR_WIDTH.max"
+        class="workspace-aside"
+      >
+        <Tabs
+          ref="sidebarTabs"
+          class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
+          :model-value="sidebarState.tab"
+          @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
+        >
+          <div class="shrink-0 border-b p-3">
+            <TabsList aria-label="Page sidebar" class="w-full">
+              <TabsTrigger value="people">People</TabsTrigger>
+              <TabsTrigger value="faces">Faces</TabsTrigger>
+              <TabsTrigger value="mentions">Mentions</TabsTrigger>
+              <TabsTrigger value="info">Info</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="people" class="mt-0 flex min-h-0 flex-1 flex-col">
+            <ScanPeoplePanel
+              ref="peoplePanel"
+              v-model:text="peopleText"
+              v-model:scope="peopleScope"
+              v-model:order="peopleOrder"
+              :people="people.people"
+              :scored="peopleScored"
+              :loading="people.loading"
+              :total-count="people.totalCount"
+              :has-next-page="people.hasNextPage"
+              :is-fetching="people.isFetching"
+              :error="people.error"
+              :search-face-id="searchFaceId"
+              :face-models="searchFaceModels"
+              :face-model="searchModel"
+              @update:face-model="(model) => sidebar.update({ searchModel: model })"
+              :selected-face="selectedFace ?? null"
+              :viewed-person-id="selectedPersonId"
+              :assignment-pending="actionBusy"
+              :load-more="people.loadMore"
+              :retry="people.retry"
+              @remove-face="removeSearchFace"
+              @attach-selected-face="selectedFace && searchByFace(selectedFace)"
+              @preview="previewSimilarPerson"
+              @assign="assignSimilarPerson"
+            />
+          </TabsContent>
+          <TabsContent value="faces" class="mt-0 flex min-h-0 flex-1 flex-col">
+            <ScanFacesPanel
+              v-model:scope="faceScope"
+              v-model:view="faceView"
+              v-model:sort="faceSort"
+              :items="scanFaces.items"
+              :groups="scanFaces.groups"
+              :loading="scanFaces.loading"
+              :has-next-page="scanFaces.hasNextPage"
+              :is-fetching="scanFaces.isFetching"
+              :error="scanFaces.error"
+              :total-count="scanFaces.totalCount"
+              :selected-face-id="selectedFace?.id ?? null"
+              :filtered="linkStates.length > 0"
+              :load-more="scanFaces.loadMore"
+              :retry="scanFaces.retry"
+              @select="selectFace"
+              @reset-filters="linkStates = []"
+            />
+          </TabsContent>
+          <TabsContent value="mentions" class="mt-0 flex min-h-0 flex-1 flex-col">
+            <ScanMentionsPanel
+              v-model:scope="mentionScope"
+              v-model:view="mentionView"
+              v-model:sort="mentionSort"
+              v-model:group-sort="mentionGroupSort"
+              :sources="sources"
+              :link-states="linkStates"
+              @reset-filters="linkStates = []"
+            />
+          </TabsContent>
+          <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">
+            <ScanInfoPanel v-model:direction="activityDirection" :page="page" />
+          </TabsContent>
+        </Tabs>
+      </ResizablePanel>
+    </ResizablePanelGroup>
     <AlertDialog :open="Boolean(deletionTarget)" @update:open="closeDeletion">
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -1087,7 +1119,21 @@ onBeforeUnmount(() => {
 }
 
 /* Narrow screens: the sidebar sits below the workspace and grows with its
-   content, so its lists scroll with the page instead of an inner container. */
+   content, so its lists scroll with the page instead of an inner container.
+   The sidebar splitter stays mounted, so its inline flex layout is undone here. */
+@media (max-width: 1023.98px) {
+  .workspace-layout {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .workspace-main,
+  .workspace-aside {
+    overflow: visible !important;
+  }
+}
+
 .workspace-sidebar {
   height: auto;
   overflow: visible;
@@ -1120,19 +1166,18 @@ onBeforeUnmount(() => {
 @media (min-width: 1024px) {
   .workspace-grid {
     height: calc(100vh - 3.25rem);
-    grid-template-columns: minmax(0, 1fr) 25rem;
   }
 
   .workspace-split {
-    height: auto;
+    height: 100%;
     min-height: 0;
   }
 
+  /* The resize handle draws the border between the workspace and the sidebar. */
   .workspace-sidebar {
-    height: auto;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
-    border-left-width: 1px;
     border-top-width: 0;
   }
 }

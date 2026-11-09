@@ -1363,7 +1363,8 @@ and a renamed person.
 The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
 has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
 unassigned face, Hana's repeated phrase (automatic, verified and one unlinked
-occurrence) and a text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
+occurrence), a four-line mention of Hana with long context (#121) and a
+text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
 faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 21 further Hana occurrences, so document scope exceeds the 30-face and
 20-occurrence sidebar batches.
@@ -1380,7 +1381,7 @@ faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
   **Unassigned** last. Scroll to load the next batch; faces on other pages open
   their page with the face selected.
 - Open `scan-sidebar-mentions` for document mentions grouped by phrase. Hana's
-  group lists 24 occurrences, including the unlinked one, and loads further
+  group lists 25 occurrences, including the unlinked one, and loads further
   occurrences while scrolling. Switch **View** to **Group by person** for Hana, Tomas and
   **Unlinked**, or to **Flat** for one list.
   Select a mention's text to select it in the transcription and on the scan;
@@ -1394,3 +1395,26 @@ Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
 combined name/face search within the document, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
+
+## Resizable scan sidebar and wrapping mention context (#121)
+
+`scan-sidebar-1` also holds `sidebar-hana-long`: an automatic mention of Hana
+Sidebar whose context spans four OCR lines and ends with the unbroken token
+`ParishLedgerBaptismMarginNoteGodparentsCeremony1888`.
+
+- Open `scan-sidebar-mentions` on a screen at least 1024px wide and choose
+  **This page**. The long context wraps over several lines, and the long token
+  breaks instead of overflowing the panel. Select the text to select Hana's line
+  in the transcription.
+- Drag the handle between the workspace and the sidebar, or focus it with Tab
+  and use the arrow keys. The sidebar is 400px wide by default, between 320px
+  and 800px, and the workspace keeps at least half the width. The width is
+  remembered in this browser. The transcription/scan handle still works.
+- Below 1024px the sidebar stays below the workspace without a handle.
+
+Retained previews gain the mention through its stable key. Their stored
+`scan-sidebar-1` image and layout are replaced only while they exactly match the
+media generated before #121, so the new lines appear on the scan and in the
+transcription; replaced media is kept. Integration tests check the stored
+context, its layout lines, Hana's highlight, the media upgrade, preservation of
+replaced media and rerun stability.

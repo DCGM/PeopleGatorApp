@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from dataclasses import replace
 from uuid import UUID
 from urllib.parse import urlencode
 
@@ -42,7 +43,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -283,16 +284,24 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 edit.complete = True
                 await checkpoint_upgrades()
         pages[page.key] = source.source_id
+        # Narrow #121 upgrade: replace scan-sidebar-1 media only while it is the
+        # exact synthetic media generated before the long mention was added.
+        legacy = (replace(page, mentions=page.mentions[:SIDEBAR_LEGACY_MENTIONS])
+                  if page.key == "scan-sidebar-1" else None)
         image_key = page_image_key(document.library, document.document_id, page.page_id)
-        if page.has_image and await _read_optional(filesystem, image_key) is None:
-            await filesystem.write_bytes(image_key, page_image(page, document))
+        if page.has_image:
+            stored = await _read_optional(filesystem, image_key)
+            if stored is None or (legacy and stored == page_image(legacy, document)):
+                await filesystem.write_bytes(image_key, page_image(page, document))
         layout_key = page_layout_key(
             document.library, document.document_id, page.page_id
         )
-        if page.has_layout and await _read_optional(filesystem, layout_key) is None:
-            await filesystem.write_bytes(
-                layout_key, page_layout(page).model_dump_json().encode()
-            )
+        if page.has_layout:
+            stored = await _read_optional(filesystem, layout_key)
+            if stored is None or (legacy and stored == page_layout(legacy).model_dump_json().encode()):
+                await filesystem.write_bytes(
+                    layout_key, page_layout(page).model_dump_json().encode()
+                )
 
         saved_faces = (
             await database.faces.list(
