@@ -33,8 +33,8 @@ export function pageGalleryLabel(pageId: string, number?: number | null) {
 
 /**
  * Registered pages of exactly one library/document in the selected API order:
- * stored page number (default), unknowns last. Evidence filters do not apply:
- * every registered page stays reachable.
+ * stored page number (default), unknowns last. Sidebar evidence filters do not
+ * apply; only the explicit strip person setting narrows the registered pages.
  */
 export function useDocumentPageGallery(
   library: MaybeRefOrGetter<string>,
@@ -70,8 +70,8 @@ export function useDocumentPageGallery(
     pages.value.some((page) => page.page_id === toValue(currentPageId)),
   )
 
-  // Load further batches until the current page is present so it can be marked
-  // and scrolled into view, including pages outside the first batch.
+  // In the unfiltered strip, locate the current page across batches. A person
+  // filter may exclude it, so filtered lists load further batches only on demand.
   watch(
     () => [
       currentLoaded.value,
