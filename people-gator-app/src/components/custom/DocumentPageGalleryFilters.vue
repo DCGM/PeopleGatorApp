@@ -48,7 +48,7 @@ const tags = computed(() =>
 )
 function select(value: unknown) {
   if (typeof value === 'string') {
-    personId.value = value
+    personId.value = value === '__all__' ? '' : value
     open.value = false
   }
 }
@@ -63,7 +63,7 @@ function select(value: unknown) {
       class="min-w-0 max-w-full flex-none"
       @update:model-value="select"
     >
-      <ComboboxAnchor as-child>
+      <ComboboxAnchor as-child class="w-auto max-w-full">
         <ComboboxTrigger as-child aria-label="Filter pages by person">
           <Button type="button" variant="outline" class="max-w-full justify-between">
             <span class="min-w-0 truncate">Person: {{ personId ? personLabel : 'All' }}</span>
@@ -71,10 +71,15 @@ function select(value: unknown) {
           </Button>
         </ComboboxTrigger>
       </ComboboxAnchor>
-      <ComboboxList align="start" :collision-padding="12" aria-label="People">
+      <ComboboxList
+        align="start"
+        :collision-padding="12"
+        class="max-w-(--reka-combobox-content-available-width)"
+        aria-label="People"
+      >
         <ComboboxInput v-model="search" aria-label="Search people" placeholder="Search people…" />
         <ComboboxViewport>
-          <ComboboxItem value="" text-value="All people">All people</ComboboxItem>
+          <ComboboxItem value="__all__" text-value="All people">All people</ComboboxItem>
           <p v-if="people.isPending.value" role="status">Loading people…</p>
           <div v-else-if="people.isError.value" role="alert">
             Could not load people.

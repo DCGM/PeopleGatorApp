@@ -31,6 +31,7 @@ const media = (desktop: boolean) =>
     })),
   )
 beforeEach(() => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   state.missing = false
   media(true)
 })
@@ -43,6 +44,9 @@ const mountFilters = (personId = '') =>
 describe('page strip person filter', () => {
   it('selects one person and exposes an individually removable tag', async () => {
     const wrapper = mountFilters()
+    await wrapper.get('[aria-label="Filter pages by person"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(Combobox).props('open')).toBe(true)
     wrapper.getComponent(Combobox).vm.$emit('update:modelValue', 'nora')
     expect(wrapper.emitted('update:personId')).toEqual([['nora']])
     await wrapper.setProps({ personId: 'nora' })
