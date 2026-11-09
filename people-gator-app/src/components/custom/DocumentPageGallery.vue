@@ -7,6 +7,8 @@ import type { RouteLocationRaw } from 'vue-router'
 import ArchiveLink from './ArchiveLink.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Badge } from '@/components/ui/badge'
+import { Toggle } from '@/components/ui/toggle'
+import PagePosition from './PagePosition.vue'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PageGalleryItem } from '@/viewmodels/document-page-gallery'
@@ -16,6 +18,11 @@ import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
   items: PageGalleryItem[]
+  documentName?: string | null
+  pageNumber?: number | null
+  documentPageCount?: number | null
+  selectedPersonId?: string | null
+  selectedPersonName?: string | null
   documentUrl?: string
   totalCount: number | null
   loading?: boolean
@@ -25,6 +32,7 @@ const props = defineProps<{
   location: (item: PageGalleryItem) => RouteLocationRaw
   sortOptions?: SortOption<PageSortField>[]
 }>()
+const personOnly = defineModel<boolean>('personOnly', { default: false })
 const sort = defineModel<SortState<PageSortField>>('sort')
 
 const emit = defineEmits<{
@@ -68,33 +76,61 @@ useIntersectionObserver(sentinel, ([entry]) => {
 <template>
   <nav
     class="document-page-gallery min-w-0 bg-background"
-    aria-labelledby="document-pages-title"
+    aria-label="Document pages"
     @keydown.stop
   >
     <div class="px-3 pt-2 sm:px-5">
-      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <div class="flex flex-wrap items-center gap-2">
-          <h2
-            id="document-pages-title"
-            class="font-mono text-xs font-semibold uppercase text-secondary"
-          >
-            Document pages
-            <span v-if="props.totalCount !== null" class="font-normal text-muted-foreground">
-              · {{ props.totalCount }} {{ props.totalCount === 1 ? 'page' : 'pages' }}
-            </span>
-          </h2>
-          <ArchiveLink :url="documentUrl" kind="document" />
+      <div class="w-full overflow-x-auto">
+        <div
+          class="gallery-header flex w-full min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
+        >
+          <div class="flex min-w-0 items-center gap-2">
+            <h2
+              id="document-pages-title"
+              class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
+              :title="props.documentName || 'Document pages'"
+            >
+              {{ props.documentName || 'Document pages' }}
+            </h2>
+            <template v-if="documentUrl">
+              <span aria-hidden="true">·</span>
+              <ArchiveLink :url="documentUrl" kind="document" />
+            </template>
+            <span aria-hidden="true">·</span>
+            <PagePosition
+              class="shrink-0"
+              :number="pageNumber"
+              :total="documentPageCount ?? totalCount"
+            />
+          </div>
+          <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
+            <Toggle
+              :model-value="personOnly && Boolean(selectedPersonId)"
+              variant="outline"
+              size="sm"
+              class="w-36 min-w-0"
+              :disabled="!selectedPersonId"
+              :aria-label="
+                selectedPersonId
+                  ? `${selectedPersonName || 'Selected person'} only`
+                  : 'Select a person in the right panel to filter pages'
+              "
+              :title="
+                selectedPersonId
+                  ? `${selectedPersonName || 'Selected person'} only`
+                  : 'Select a person in the right panel to filter pages'
+              "
+              @update:model-value="personOnly = $event"
+              ><span class="truncate">{{
+                selectedPersonId ? `${selectedPersonName || 'Selected person'} only` : 'Person only'
+              }}</span></Toggle
+            >
+            <div v-if="sort && sortOptions" class="w-44 min-w-0">
+              <SortControl v-model="sort" :options="sortOptions" label="Sort pages" size="sm" />
+            </div>
+          </div>
         </div>
       </div>
-      <slot name="filters">
-        <SortControl
-          v-if="sort && sortOptions"
-          v-model="sort"
-          :options="sortOptions"
-          label="Sort pages"
-          size="sm"
-        />
-      </slot>
       <p v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
         No matching pages.
       </p>

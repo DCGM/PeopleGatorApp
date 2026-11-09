@@ -490,11 +490,22 @@ independently of sidebar filters and the selected person. Unverified assigned
 faces and unassigned mentions do not trigger it. With no strip filter, empty
 pages remain available.
 
-Use **Person** in the strip settings to show pages with an assigned face **or**
-a linked text mention for that person. The filter stays within the current
-library/document and runs before pagination/counting. Its `gallery_person` URL
-field is independent of sidebar selections and survives page-strip navigation,
-reload and browser history, alongside `gallery_sort` / `gallery_dir`. On mobile,
-open the sliders button; active person tags remain accessible when collapsed.
-Removing the tag or clearing filters restores all document pages. A filtered-out
-current scan stays open; the strip does not fetch every batch trying to find it.
+Select a person in the viewer's right panel, then enable **[Person name] only**
+in the strip header to show pages with an assigned face **or** a linked text
+mention for that person. The sidebar owns the identity; the strip has no person
+selector or active-filter tags. While enabled, the toggle follows changes to the
+selected person. Turn it off to restore all pages. Without a selected person it
+is disabled.
+
+The header stays on one line: document name · NDK · current/total page position,
+then the person-only toggle and Sort. It scrolls horizontally in narrow panes
+instead of wrapping or adding mobile filter rows. The position uses the stored
+page number and complete registered-page count, even while filtering.
+
+The filter stays within the current library/document and runs before pagination
+and counting. `selectedPerson` identifies the sidebar selection and
+`gallery_person_only=on` enables the strip scope; both survive page-strip
+navigation, reload and history alongside `gallery_sort` / `gallery_dir`.
+Earlier `gallery_person=<id>` links restore that person in the sidebar with the
+scope enabled. A filtered-out current scan stays open; the strip does not fetch
+every batch trying to find it.

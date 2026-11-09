@@ -31,10 +31,14 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import type { Face } from '@/viewmodels/document-workspace.types'
+import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
-import DocumentPageGalleryFilters from '@/components/custom/DocumentPageGalleryFilters.vue'
-import { GALLERY_PERSON_KEY, useGalleryPerson } from '@/viewmodels/gallery-person'
+import {
+  GALLERY_PERSON_KEY,
+  LEGACY_GALLERY_PERSON_KEY,
+  useGalleryPerson,
+} from '@/viewmodels/gallery-person'
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
@@ -52,7 +56,6 @@ import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
-import PagePosition from '@/components/custom/PagePosition.vue'
 import { useRouteSort } from '@/lib/sorting'
 import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
@@ -103,7 +106,11 @@ const selectedFaceId = ref<string | null>(
   typeof route.query.person === 'string' ? route.query.person : null,
 )
 const selectedPersonId = ref<string | null>(
-  typeof route.query.selectedPerson === 'string' ? route.query.selectedPerson : null,
+  typeof route.query.selectedPerson === 'string'
+    ? route.query.selectedPerson
+    : typeof route.query[LEGACY_GALLERY_PERSON_KEY] === 'string'
+      ? route.query[LEGACY_GALLERY_PERSON_KEY]
+      : null,
 )
 // Sidebar settings live in the URL; each change is a history entry.
 function setting<Key extends keyof ScanSidebarState>(key: Key) {
@@ -127,7 +134,8 @@ const activityDirection = setting('activityDirection')
 const peopleScope = setting('peopleScope')
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
-const galleryPerson = useGalleryPerson()
+const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
+const gallerySelectedPerson = useEntityQuery(computed(() => selectedPersonId.value || ''))
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
 const {
   page,
@@ -165,7 +173,8 @@ function galleryLocation(item: PageGalleryItem) {
     name: 'document-page',
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
     query: {
-      [GALLERY_PERSON_KEY]: galleryPerson.value || undefined,
+      [GALLERY_PERSON_KEY]: galleryPersonOnly.value ? 'on' : undefined,
+      selectedPerson: selectedPersonId.value || undefined,
       [GALLERY_SORT_KEYS.field]: route.query[GALLERY_SORT_KEYS.field],
       [GALLERY_SORT_KEYS.direction]: route.query[GALLERY_SORT_KEYS.direction],
     },
@@ -873,11 +882,6 @@ onBeforeUnmount(() => {
                 aria-label="Pan and zoom document page"
                 tabindex="-1"
               >
-                <PagePosition
-                  class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
-                  :number="page?.page_number"
-                  :total="page?.registered_page_count"
-                />
                 <DocumentControls
                   class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
                   @pointerdown.stop
@@ -983,6 +987,12 @@ onBeforeUnmount(() => {
 
               <DocumentPageGallery
                 class="workspace-gallery shrink-0 border-t"
+                :document-name="documentQuery.data.value?.name || documentId"
+                :page-number="page?.page_number"
+                :document-page-count="page?.registered_page_count"
+                :selected-person-id="selectedPersonId"
+                :selected-person-name="gallerySelectedPerson.data.value?.name"
+                v-model:person-only="galleryPersonOnly"
                 :document-url="documentQuery.data.value?.url"
                 :items="gallery.items.value"
                 :total-count="gallery.totalCount.value"
@@ -995,15 +1005,7 @@ onBeforeUnmount(() => {
                 :sort-options="GALLERY_SORTS"
                 @load-more="gallery.loadMore()"
                 @retry="gallery.retry()"
-              >
-                <template #filters>
-                  <DocumentPageGalleryFilters
-                    v-model:person-id="galleryPerson"
-                    v-model:sort="gallerySort"
-                    :sort-options="GALLERY_SORTS"
-                  />
-                </template>
-              </DocumentPageGallery>
+              />
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
