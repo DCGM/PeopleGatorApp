@@ -509,6 +509,28 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(directory.exists())
         self.assertIn("--volumes", self.controller.command.call_args.args[0])
 
+    def test_removal_falls_back_to_project_labels_when_compose_cannot_tear_down_an_old_stack(self):
+        directory = self.seed_preview()
+        (directory / "compose.env").write_text("DATABASE_NETWORK='people-gator-preview-db'\n")  # saved under old conventions
+        self.controller.api.side_effect = lambda endpoint: (
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else pull_request(state="closed"))
+        def command(args, **kwargs):
+            if "down" in args:
+                raise DeployError("network people-gator-preview-db declared as external, but could not be found")
+            if args[:2] == ["docker", "ps"]:
+                return "c1\nc2\n"
+            if args[:3] == ["docker", "volume", "ls"]:
+                return "people-gator-pr-123_api-data\n"
+            return ""
+        self.controller.command.side_effect = command
+        self.assertTrue(self.controller.cleanup(123))
+        calls = [call.args[0] for call in self.controller.command.call_args_list]
+        self.assertIn(["docker", "rm", "-f", "c1", "c2"], calls)
+        self.assertIn(["docker", "volume", "rm", "-f", "people-gator-pr-123_api-data"], calls)
+        self.assertTrue(all("label=com.docker.compose.project=people-gator-pr-123" in call for call in calls if "--filter" in call))
+        self.assertIn("DROP DATABASE IF EXISTS preview_pr_123", self.controller.sql.call_args.args[0])
+        self.assertFalse(directory.exists())
+
     def test_reconciliation_does_not_infer_closure_from_api_errors(self):
         directory = self.seed_preview()
         self.controller.api.side_effect = OSError("API unavailable")

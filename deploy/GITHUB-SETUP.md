@@ -38,6 +38,7 @@ repository's demo users (`people-gator-api/example.users.json`); add a
 ```
 
 Staging shares the preview PostgreSQL and keeps its own database generation;
+`storage` is required for staging and production (`s3` or `local`), and
 `backup_source` is the read-only bucket of production dumps used by the manual
 `snapshot-init` / `refresh` runs. Users and keys live in the S3 bucket.
 
@@ -71,10 +72,15 @@ gh secret set PRODUCTION_CONFIG < production.json
 
 - **Shared PostgreSQL and pgAdmin** on the preview/staging host, once:
   `docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans`
-  with a copy of [`deploy/infrastructure/example.env`](infrastructure/example.env).
-  Any PostgreSQL 16 with pgvector works instead, attached to the `people-gator-db`
-  network (`docker network connect people-gator-db <container>`), including the
-  production database.
+  with a copy of [`deploy/infrastructure/example.env`](infrastructure/example.env)
+  (keep that file: it holds the PostgreSQL and pgAdmin passwords, the pgAdmin
+  login and host). Any PostgreSQL 16 with pgvector works instead, attached to
+  the `people-gator-db` network (`docker network connect people-gator-db <container>`),
+  including the production database. Hosts upgraded from earlier releases reuse
+  their existing env file; previews and staging deployed before the upgrade keep
+  working if the recreated server is also attached to their old network:
+  `docker network connect --alias preview-postgres people-gator-preview-db people-gator-postgres`
+  (drop it once they have been redeployed or closed).
 - **Traefik** on the `web` network with the `websecure` entrypoint and the
   `tlschallenge` resolver, and DNS for `*.<preview host>`, the staging host, the
   production host and pgAdmin pointing at it.

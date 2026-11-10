@@ -133,11 +133,12 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual((root / "runtime.env").read_text(), 'PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         self.assertIn("PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT=http://lgtm:4318/v1/logs", (root / "telemetry.env").read_text())
         self.assertFalse((root / "owned.json").exists())
-        # Without otel the logging network is not required.
+        # Without otel no telemetry file is rendered (a stale one is removed); the
+        # stacks still declare the logging network, so it is still checked.
         self.configure(otel=None)
         environment = self.environment()
         environment.preflight()
-        self.assertNotIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
+        self.assertIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
         self.assertFalse((environment.root / "telemetry.env").exists())
 
     def test_unreachable_database_fails_before_any_compose_command(self):
@@ -207,7 +208,6 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(result["database"]["database"], "db.internal:5432/people as app")
         self.assertEqual(result["migration_database"]["database"], "db.internal:5432/people as migrator")
         self.assertIn(["docker", "network", "inspect", "people-gator-db"], environment.docker.calls)
-        self.assertNotIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
         passwords = [env.get("PGPASSWORD") for env in environment.docker.environments if env]
         self.assertEqual(passwords, ["app-pw", "mig-pw"])
         root = environment.root

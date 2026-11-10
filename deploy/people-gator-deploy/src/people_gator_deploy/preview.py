@@ -217,8 +217,20 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         if not env_file.exists():
             env_file = directory / "candidate.env"
         if env_file.exists():
-            self.command(self.compose(number, env_file, "--profile", "tools",
-                                      "down", "--volumes", "--remove-orphans", "--timeout", "30"))
+            try:
+                self.command(self.compose(number, env_file, "--profile", "tools",
+                                          "down", "--volumes", "--remove-orphans", "--timeout", "30"))
+            except DeployError:
+                # A stack saved under earlier conventions (for example a database
+                # network that no longer exists) cannot be torn down by Compose;
+                # remove its containers and volumes by project label instead.
+                project = f"label=com.docker.compose.project=people-gator-pr-{number}"
+                containers = self.command(["docker", "ps", "-aq", "--filter", project]).split()
+                if containers:
+                    self.command(["docker", "rm", "-f", *containers])
+                volumes = self.command(["docker", "volume", "ls", "-q", "--filter", project]).split()
+                if volumes:
+                    self.command(["docker", "volume", "rm", "-f", *volumes])
         # PostgreSQL 16 FORCE disconnects the stopped preview's remaining sessions.
         self.sql(f"DROP DATABASE IF EXISTS preview_pr_{number} WITH (FORCE);\n"
                  f"DROP ROLE IF EXISTS preview_pr_{number};\n")

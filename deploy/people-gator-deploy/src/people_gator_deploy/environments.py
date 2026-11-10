@@ -70,8 +70,8 @@ class Environment:
         numbers = re.match(r"(\d+)\.(\d+)", version)
         if not numbers or tuple(map(int, numbers.groups())) < (2, 32):
             raise DeployError("Docker Compose 2.32+ is required")
-        networks = ["web_network", "database_network", *(["otel_network"] if "otel" in self.settings else [])]
-        for key in networks:
+        # The application stacks always declare all three networks as external.
+        for key in ("web_network", "database_network", "otel_network"):
             try:
                 self.docker.run(["docker", "network", "inspect", self.settings[key]], timeout=30)
             except DeployError:
