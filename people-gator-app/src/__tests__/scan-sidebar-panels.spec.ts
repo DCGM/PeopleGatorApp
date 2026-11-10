@@ -147,10 +147,8 @@ describe('People panel (#103)', () => {
     // Below it: attachments, then the scope and model with the count at the end.
     const context = form.get('[aria-label="Search context"]')
     const options = form.get('[aria-label="Search options"]')
-    const order = [group, context, options].map((part) =>
-      [...form.element.children].indexOf(part.element as Element),
-    )
-    expect(order).toEqual([...order].sort((left, right) => left - right))
+    expect(group.element.compareDocumentPosition(context.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.element.compareDocumentPosition(options.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(context.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
     expect(context.get('button').attributes('aria-label')).toBe('Add search context')
     expect(options.get('[aria-label="Scope: All people"]').text()).toBe('All people')

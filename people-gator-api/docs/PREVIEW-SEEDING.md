@@ -1453,10 +1453,10 @@ The API accepts `filter.created_from`, `filter.created_to`,
 `filter.created_by_user_id` and `filter.created_by_api_key_id`.
 
 Use `documents-created-by`, `documents-created-key` and `documents-created-range`
-for the three synthetic creation documents. The date example uses the stored
-reviewer document's exact timestamp as both inclusive bounds. Unknown legacy
+for the three synthetic creation documents. The date example uses a fixed inclusive 2000–2100 interval, showing both known
+creations without inventing historical dates. Unknown legacy
 creation does not match an active date or creator criterion. `scans-created-range`
-uses the corresponding page's own timestamp. `people-created-by`,
+uses pages' own creation times in the same interval. `people-created-by`,
 `faces-created-by` and `mentions-created-by` open populated people/annotation
 examples, including creation attributed to an importer despite later review edits.
 These example links and the underlying records survive reruns unchanged.

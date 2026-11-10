@@ -176,40 +176,37 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
               ><SlidersHorizontal aria-hidden="true" /></Button
           ></CollapsibleTrigger>
         </div>
+        <!-- Always present at a fixed height, so attaching context never shifts results. -->
+        <div
+          class="flex h-8 min-w-0 basis-full flex-row flex-nowrap items-center gap-2 overflow-x-auto"
+          role="group"
+          aria-label="Search context"
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button
+                type="button"
+                variant="outline"
+                class="rounded-full"
+                size="icon-xs"
+                aria-label="Add search context"
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+              <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
+                <ScanFace aria-hidden="true" />Selected face
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <SearchFaceAttachment
+            v-if="searchFaceId"
+            :face-id="searchFaceId"
+            @remove="emit('removeFace')"
+          />
+        </div>
         <CollapsibleContent class="contents">
-          <!-- Always present at a fixed height, so attaching context never shifts results. -->
-          <div
-            class="flex h-8 min-w-0 basis-full flex-row flex-nowrap items-center gap-2 overflow-x-auto"
-            role="group"
-            aria-label="Search context"
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button
-                  type="button"
-                  variant="outline"
-                  class="rounded-full"
-                  size="icon-xs"
-                  aria-label="Add search context"
-                >
-                  <Plus aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
-                <DropdownMenuItem
-                  :disabled="!canAttachSelected"
-                  @select="emit('attachSelectedFace')"
-                >
-                  <ScanFace aria-hidden="true" />Selected face
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <SearchFaceAttachment
-              v-if="searchFaceId"
-              :face-id="searchFaceId"
-              @remove="emit('removeFace')"
-            />
-          </div>
           <div
             class="flex min-w-0 basis-full flex-row flex-wrap items-center gap-1"
             aria-label="Search options"

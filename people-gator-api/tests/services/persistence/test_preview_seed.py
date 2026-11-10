@@ -5059,14 +5059,15 @@ async def test_shared_creation_filter_examples_work_and_survive_seed_reruns(seed
             **({'created_from': query['created_from'][0], 'created_to': query['created_to'][0]} if 'created_from' in query else {}),
         )
         found = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=filters))
-        assert len(found.items) == 1
-        assert found.items[0].source_id == seeded.documents['creation-key' if 'created_key' in query else 'creation-user']
+        expected = ({seeded.documents['creation-user'], seeded.documents['creation-key']} if 'created_from' in query else
+                    {seeded.documents['creation-key' if 'created_key' in query else 'creation-user']})
+        assert {item.source_id for item in found.items} == expected
         assert seeded.documents['creation-legacy'] not in {item.source_id for item in found.items}
     query = parse_qs(urlsplit(seeded.filter_examples['scans-created-range']).query)
     pages = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
         library=query['library'], created_from=query['created_from'][0], created_to=query['created_to'][0],
     )))
-    assert [item.source_id for item in pages.items] == [seeded.pages['creation-user-1']]
+    assert {item.source_id for item in pages.items} == {seeded.pages['creation-user-1'], seeded.pages['creation-key-1']}
     ada = seeded.entities['ada']
     people = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
         entity_id=[ada], created_by_user_id=[seeded.users['reviewer']],

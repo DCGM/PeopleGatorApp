@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCreationFilters } from '@/viewmodels/shared-filters'
+import { CREATION_KEYS, useCreationFilters } from '@/viewmodels/shared-filters'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
@@ -12,7 +12,7 @@ import {
 } from '@/composables/workspace-split'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
@@ -82,6 +82,7 @@ import {
 const minimumZoomPercent = MINIMUM_ZOOM * 100
 const maximumZoomPercent = MAXIMUM_ZOOM * 100
 const route = useRoute()
+const router = useRouter()
 // The transcription panel is always left of the scan on wide screens and above
 // it on narrow ones; each layout remembers its own user-resized split.
 const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
@@ -98,8 +99,10 @@ const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
 const creation = useCreationFilters()
 function resetEvidenceFilters() {
-  linkStates.value = []
-  creation.clear()
+  const cleared = new Set<string>([...CREATION_KEYS, 'page_link_state', 'cursor', 'page_cursor'])
+  void router.push({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => !cleared.has(key))),
+  })
 }
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
