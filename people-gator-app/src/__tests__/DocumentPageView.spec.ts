@@ -1000,6 +1000,9 @@ describe('face search with an unusable reference (#134)', () => {
     await settleFocus()
 
     expect(mocks.searchEntities).toHaveBeenCalledTimes(1)
+    // The fallback replaces the Search entry, so Back leaves the page.
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(mocks.replace).toHaveBeenCalled()
     expect(route.query.candidate_face).toBeUndefined()
     expect(route.query.candidate_sort).toBeUndefined()
     const scopes = mocks.listEntities.mock.calls.map(([{ query }]) => query)
