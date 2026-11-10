@@ -83,10 +83,12 @@ async def discovery(migrated_postgres):
             )
 
         refs = [await face(f"reference-{i}", [1.0, i / 100]) for i in range(12)]
-        zero_reference = await face("zero-reference", [0.0, 0.0])
+        # The API and database refuse zero vectors (#134), so former zero-vector
+        # faces have no embedding.
+        zero_reference = await face("zero-reference", None)
         missing_reference = await face("missing-reference", None)
         useful = await face("useful", [1.0, 0.0], candidate)
-        zero_candidate = await face("zero-candidate", [0.0, 0.0], candidate)
+        zero_candidate = await face("zero-candidate", None, candidate)
         yield (
             db,
             reference,
@@ -132,8 +134,8 @@ async def test_explicit_unusable_reference_is_strict(discovery, endpoint):
     db, _, _, _, refs, zero, missing, *_ = discovery
     request_type = SearchFacesRequest if endpoint == "faces" else SearchEntitiesRequest
     repository = getattr(db, endpoint)
-    for face, message in ((zero, "unusable cosine"), (missing, "lacks embedding")):
-        with pytest.raises(ValueError, match=message):
+    for face in (zero, missing):
+        with pytest.raises(ValueError, match="lacks embedding"):
             await repository.search(
                 request_type(
                     limit=50,
@@ -143,6 +145,26 @@ async def test_explicit_unusable_reference_is_strict(discovery, endpoint):
                     ),
                 )
             )
+
+
+@pytest.mark.asyncio
+async def test_database_refuses_zero_vector_that_bypasses_validation(discovery):
+    """#134: the nonzero check constraint backs up request validation."""
+    from sqlalchemy.exc import IntegrityError
+
+    db, *_, actor, page = discovery
+    with pytest.raises(IntegrityError, match="ck_pg_demo_face_embedding_nonzero"):
+        await db.faces.create(
+            FaceCreateRequest(
+                identifier="zero",
+                bounding_box=BoundingBox(x=1, y=1, width=10, height=10),
+                confidence=0.9,
+                keypoints=[Keypoint(type=t, x=2, y=2) for t in FaceKeypointType],
+                source_id=page.source_id,
+                embeddings=[FaceEmbedding.model_construct(model_identifier=MODEL, vector=[0.0, 0.0])],
+            ),
+            actor,
+        )
 
 
 @pytest.mark.asyncio
