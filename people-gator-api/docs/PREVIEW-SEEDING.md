@@ -79,7 +79,6 @@ This does not automatically seed the actual staging environment.
 | No evidence | Lenka Vesela, ready for manual linking |
 | Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
 | Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, one missing, one other-model and one zero vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a zero-vector candidate exercise finite scoring and assignment recovery. All ten practice scans have local media. |
-| Unusable face search (#134) | Open `scan-face-search-unusable`: the zero-vector face cannot be searched, so People falls back to this page's people, then the document and everyone else. See [Face search with an unusable face](#face-search-with-an-unusable-face-134). |
 | Identity discovery and merging | Open Ada Novak's Faces tab; A. Novak appears under Similar people |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
@@ -1419,21 +1418,3 @@ media generated before #121, so the new lines appear on the scan and in the
 transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
-
-## Face search with an unusable face (#134)
-
-The API now rejects all-zero face embeddings, because cosine similarity is
-undefined for them. Faces stored before this change can still hold one. The
-seed keeps two such legacy faces, `discovery-zero-reference` and
-`discovery-zero-candidate`. It creates them through the face repository; only
-their zero vector skips request validation.
-
-- Open `scan-face-search-unusable`. It opens practice scan 8 of **Entity
-  discovery practice** with `discovery-zero-reference` attached to People
-  search. Search answers `422 invalid_search` once, without retries. The face
-  chip is removed, and People lists **Zora Cartographer** and **Orion Portrait**
-  from this page, then the rest of the document and everyone else by name.
-- Search by face on **Orion Portrait**'s face on the same page still ranks people.
-
-Reruns keep both legacy faces and add no records. Integration tests check the
-link, the rejected search, the page-tier fallback list and the face geometry.

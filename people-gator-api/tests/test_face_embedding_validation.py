@@ -9,7 +9,8 @@ from pydantic import ValidationError
 import pytest
 
 from people_gator_api.routes.v1.annotations import router
-from people_gator_api.schemas.faces import FaceEmbedding, FacePatchRequest
+from people_gator_api.schemas.faces import FaceCreateRequest, FaceEmbedding, FacePatchRequest
+from people_gator_api.schemas.missing import MISSING
 from people_gator_api.services.auth_service import get_auth_context
 from people_gator_api.services.database_service import get_database
 
@@ -38,6 +39,25 @@ def test_patch_rejects_zero_vector() -> None:
         FacePatchRequest.model_validate(
             {"embeddings": [{"model_identifier": MODEL, "vector": [0.0, 0.0]}]}
         )
+
+
+def _face(**changes: object) -> dict[str, object]:
+    return {
+        "identifier": "face",
+        "source_id": str(uuid.uuid4()),
+        "bounding_box": {"x": 1, "y": 1, "width": 10, "height": 10},
+        "confidence": 0.9,
+        "keypoints": [{"type": kind, "x": 2, "y": 2} for kind in (
+            "left_eye", "right_eye", "nose", "right_mouth_corner", "left_mouth_corner")],
+        **changes,
+    }
+
+
+@pytest.mark.parametrize("changes", [{}, {"embeddings": None}])
+def test_face_without_a_usable_vector_omits_or_nulls_embeddings(changes) -> None:
+    # A detector with no usable vector sends null or nothing, never zeros.
+    assert FaceCreateRequest.model_validate(_face(**changes)).embeddings is MISSING
+    assert FacePatchRequest.model_validate(changes).embeddings is MISSING
 
 
 def test_face_create_route_rejects_zero_vector_before_storage() -> None:
