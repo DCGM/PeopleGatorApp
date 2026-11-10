@@ -193,15 +193,14 @@ Each deploy job checks out its own commit, installs
 temporary directory, runs `<environment> preflight`, then one operation with
 `--sha <tested commit>`, then sets superseded GitHub Deployments inactive. A PR
 therefore deploys with the deploy code of its own branch; staging uses `main`
-and releases the tagged commit. Settings come from GitHub: repository variables `PREVIEW_*` and the `preview`
-environment's secrets for the preview host, the `staging` and `production`
-environments' `DEPLOY_*` variables and secrets for the others (see the
-[configuration reference](../deploy/people-gator-deploy/README.md#configuration)
-and the step-by-step [GitHub setup](../deploy/GITHUB-SETUP.md));
-hosts keep only state directories and the self-hosted runners' [job-started
+and releases the tagged commit. Each environment is configured by one repository
+secret with a JSON document (`PREVIEW_CONFIG`, `STAGING_CONFIG`,
+`PRODUCTION_CONFIG`: host, database, storage, OTel, RUM, users), described with
+examples in [GitHub setup](../deploy/GITHUB-SETUP.md); everything else is a
+convention. Hosts keep only state directories and the self-hosted runners' [job-started
 guard](../deploy/runner/job-started.sh), which admits only this repository's
 events for the runner's environment and refuses fork pull requests
-(see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners-and-tokens)).
+(see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners)).
 
 The utility verifies repository/open-PR/current-head identity, pulls the
 tested commit's images with temporary registry credentials, verifies their
@@ -226,8 +225,7 @@ preview whose PR is no longer open. Shared PostgreSQL, pgAdmin and logging
 remain running. A failed migration has no automatic schema rollback.
 
 The shared PostgreSQL and pgAdmin are an operator-run Compose stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
-([one-time host setup](../deploy/people-gator-deploy/README.md#one-time-host-setup));
-the utility installs nothing and every operation first checks that the stack,
+([hosts](../deploy/GITHUB-SETUP.md#hosts)); the utility installs nothing and every operation first checks that the stack,
 networks and Docker are up, failing with the remedy otherwise. GHCR image
 names are derived from the repository. Provision the documented DNS, Traefik,
 logging network, runner isolation, GitHub Environments and token permissions

@@ -26,10 +26,11 @@ class FakeRelease(release.Release):
             path = private / name
             path.write_text("".join(f"PEOPLE_GATOR_API__{key}\n" for key in keys))
             path.chmod(0o600)
+        postgres = {"host": "db.internal", "port": 5432, "user": "runtime", "password": "pw", "database": "people"}
         super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "state"),
                           "docker_context": "rootless", "host": "people.example.invalid", "web_network": "web",
-                          "database_network": "production-db", "runtime_file": str(private / "runtime.env"),
-                          "migration_file": str(private / "migration.env")})
+                          "database_network": "production-db", "postgres": postgres, "migration": {**postgres, "user": "migrator"},
+                          "runtime_file": str(private / "runtime.env"), "migration_file": str(private / "migration.env")})
         self.root.mkdir(parents=True)
         self.tags = {"v1.0.0": {"type": "commit", "sha": FIRST},
                      "v1.1.0": {"type": "tag", "sha": "a" * 40},
@@ -261,25 +262,6 @@ class ReleaseTests(unittest.TestCase):
                     self.assertFalse((controller.root / "activation.json").exists())
                     if not committed:
                         self.assertEqual(controller.recover()["tag"], "v0.9.0")
-
-    def test_private_inputs_keep_roles_separate_and_cannot_override_production_settings(self):
-        runtime = Path(self.release.config["runtime_file"])
-        original = runtime.read_text()
-        for content, mode, message in (
-                (original, 0o644, "mode-600"),
-                (original + "PEOPLE_GATOR_API__DEBUG=true\n", 0o600, "DEBUG"),
-                (original + "PEOPLE_GATOR_API__RELOAD=true\n", 0o600, "RELOAD"),
-                ("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=runtime\n", 0o600, "STORAGE"),
-                ("export AWS_SECRET_ACCESS_KEY=ambient\n", 0o600, "only PEOPLE_GATOR_API")):
-            runtime.write_text(content)
-            runtime.chmod(mode)
-            with self.subTest(message=message), self.assertRaisesRegex(DeployError, message):
-                self.release.validate_inputs()
-        runtime.write_text(original)
-        runtime.chmod(0o600)
-        self.release.config["migration_file"] = str(runtime)
-        with self.assertRaisesRegex(DeployError, "separate"):
-            self.release.validate_inputs()
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_production_stack_has_no_development_mounts_and_separates_roles(self):

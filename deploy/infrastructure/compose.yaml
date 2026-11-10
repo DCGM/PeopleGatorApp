@@ -1,4 +1,4 @@
-# Shared PostgreSQL and pgAdmin for PR previews and staging.
+# Shared PostgreSQL and pgAdmin for PR previews and staging (deploy/GITHUB-SETUP.md).
 # An operator runs this stack once per host and keeps it running; the deploy
 # jobs only check it (see deploy/people-gator-deploy/HOSTS.md):
 #
@@ -10,9 +10,10 @@ name: people-gator-preview-infra
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    # The deploy utility provisions per-PR and staging databases through
-    # `docker exec` into this container (DEPLOY_POSTGRES_CONTAINER).
-    container_name: ${POSTGRES_CONTAINER:-people-gator-postgres}
+    # Reachable as people-gator-postgres on the people-gator-db network; the
+    # deploy utility provisions per-PR and staging databases through the admin
+    # URL in PREVIEW_CONFIG / STAGING_CONFIG.
+    container_name: people-gator-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: preview_admin
@@ -58,13 +59,13 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - traefik.docker.network=${WEB_NETWORK:-web}
-      - traefik.http.routers.pg-${INFRA_ID:-preview}-pgadmin.entrypoints=websecure
-      - 'traefik.http.routers.pg-${INFRA_ID:-preview}-pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)'
-      - traefik.http.routers.pg-${INFRA_ID:-preview}-pgadmin.service=pg-${INFRA_ID:-preview}-pgadmin
-      - traefik.http.routers.pg-${INFRA_ID:-preview}-pgadmin.tls=true
-      - traefik.http.routers.pg-${INFRA_ID:-preview}-pgadmin.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
-      - traefik.http.services.pg-${INFRA_ID:-preview}-pgadmin.loadbalancer.server.port=5050
+      - traefik.docker.network=web
+      - traefik.http.routers.pg-preview-pgadmin.entrypoints=websecure
+      - 'traefik.http.routers.pg-preview-pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)'
+      - traefik.http.routers.pg-preview-pgadmin.service=pg-preview-pgadmin
+      - traefik.http.routers.pg-preview-pgadmin.tls=true
+      - traefik.http.routers.pg-preview-pgadmin.tls.certresolver=tlschallenge
+      - traefik.http.services.pg-preview-pgadmin.loadbalancer.server.port=5050
 
 volumes:
   pgadmin-data:
@@ -72,8 +73,8 @@ volumes:
 
 networks:
   database:
-    name: ${DATABASE_NETWORK:-people-gator-preview-db}
+    name: people-gator-db
     internal: true
   web:
     external: true
-    name: ${WEB_NETWORK:-web}
+    name: web

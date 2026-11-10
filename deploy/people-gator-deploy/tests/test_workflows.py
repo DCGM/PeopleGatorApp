@@ -27,14 +27,13 @@ DEPLOY_JOBS = {
 }
 FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository"
 SHA = "a" * 40
-SAMPLES = {"DOCKER_CONTEXT": "rootless", "DOMAIN": "preview.example.invalid", "HOST": "app.example.invalid",
-           "STATE_DIR": "/srv/state/env", "POSTGRES_CONTAINER": "people-gator-postgres", "POSTGRES_ADMIN_USER": "preview_admin",
-           "DATABASE_NETWORK": "db", "WEB_NETWORK": "web", "CERTIFICATE_RESOLVER": "none", "OTEL_NETWORK": "logging",
-           "OTEL_ENABLED": "true", "OTEL_HTTP_ENDPOINT": "http://lgtm:4318", "PROJECT": "project", "BACKEND_MEMORY": "4g", "ACCESS_REVIEWED": "true",
-           "USERS_JSON": "{}", "TELEMETRY_ENV": "PEOPLE_GATOR_API__RUM__ENABLED=true", "RUNTIME_ENV": "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data",
-           "MIGRATION_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator", "SNAPSHOT_SOURCE": json.dumps({
-               "endpoint_url": "https://s3.example.invalid", "region": "r", "bucket": "backups", "prefix": "p/",
-               "access_key_id": "reader", "secret_access_key": "reader-secret"})}
+SECRETS = {"pr": "PREVIEW_CONFIG", "staging": "STAGING_CONFIG", "release": "PRODUCTION_CONFIG"}
+SETUP_PAGE = REPOSITORY / "deploy/GITHUB-SETUP.md"
+
+
+def example(secret):
+    section = SETUP_PAGE.read_text().split(f"## `{secret}`", 1)[1]
+    return section.split("```json\n", 1)[1].split("```", 1)[0]
 
 
 def workflow():
@@ -63,9 +62,8 @@ class WorkflowStructureTests(unittest.TestCase):
         for forbidden in ("workflow_run", "pull_request_target", "install.py", "sudo", "workflow_sha", "run-id", " install",
                           "versions/", "docker/login-action@v3\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - uses: ./.github"):
             self.assertNotIn(forbidden, text)
-        self.assertEqual(set(re.findall(r"secrets\.([A-Za-z_]+)", text)),
-                         {"GITHUB_TOKEN", *{"PREVIEW_" + name for name in config.SECRETS["pr"]},
-                          *{"DEPLOY_" + name for environment in ("staging", "release") for name in config.SECRETS[environment]}})
+        self.assertEqual(set(re.findall(r"secrets\.([A-Za-z_]+)", text)), {"GITHUB_TOKEN", *SECRETS.values()})
+        self.assertNotIn("vars.", text)  # one JSON secret per environment, no variables
         self.assertEqual(document["permissions"], {"contents": "read"})
 
     def test_pipeline_concurrency_isolates_events_and_pull_requests(self):
@@ -120,7 +118,10 @@ class WorkflowStructureTests(unittest.TestCase):
                 self.assertEqual(checkout["with"]["persist-credentials"], False)
                 self.assertNotIn("docker/login-action", " ".join(uses))  # the utility logs in with a disposable config
                 self.assertEqual(job["env"]["GH_TOKEN"], "${{ secrets.GITHUB_TOKEN }}")
-        self.assertEqual(jobs["deploy-preview"]["environment"]["url"], "https://pr-${{ github.event.number }}.${{ vars.PREVIEW_DOMAIN }}")
+        self.assertEqual(jobs["deploy-preview"]["environment"]["url"], "https://pr-${{ github.event.number }}.${{ steps.preflight.outputs.host }}")
+        for name in ("deploy-staging", "deploy-release"):
+            self.assertEqual(jobs[name]["environment"]["url"], "https://${{ steps.preflight.outputs.host }}")
+            self.assertEqual(next(step["id"] for step in jobs[name]["steps"] if step.get("name", "").startswith("Check ")), "preflight")
         for name in ("deploy-preview", "remove-preview"):
             self.assertIn(FORK_GUARD, jobs[name]["if"])
             self.assertIn("github.event_name == 'pull_request'", jobs[name]["if"])
@@ -143,41 +144,19 @@ class WorkflowStructureTests(unittest.TestCase):
         configured = yaml.safe_load((REPOSITORY / ".github/actionlint.yaml").read_text())["self-hosted-runner"]["labels"]
         self.assertEqual(sorted(configured), sorted({label for label, _, _ in DEPLOY_JOBS.values()}))
 
-    def test_deploy_jobs_pass_every_setting_the_utility_reads(self):
+    def test_each_deploy_job_passes_exactly_its_environment_configuration_secret(self):
         jobs = workflow()["jobs"]
         for name, (_, github_environment, environment) in DEPLOY_JOBS.items():
             job = jobs[name]
             with self.subTest(job=name):
-                passed = {}
-                for key, value in job["env"].items():
-                    if not key.startswith("DEPLOY_"):
-                        continue
-                    setting = key[len("DEPLOY_"):]
-                    source = "secrets" if setting in config.SECRETS[environment] else "vars"
-                    # Preview jobs run with and without `environment: preview`, and
-                    # environment-scoped variables are invisible without it: the
-                    # preview host's settings are repository variables PREVIEW_*.
-                    github_name = f"PREVIEW_{setting.removeprefix('PREVIEW_')}" if environment == "pr" else key
-                    self.assertEqual(value, f"${{{{ {source}.{github_name} }}}}", key)
-                    passed[key] = SAMPLES[setting]
-                if github_environment is None:
-                    self.assertFalse(any(value.startswith("${{ secrets.") and value != "${{ secrets.GITHUB_TOKEN }}"
-                                         for value in job["env"].values()), "environment secrets need `environment:`")
-                    self.assertTrue(all("vars.PREVIEW_" in value for value in job["env"].values() if "vars." in value))
-                # Exactly the passed names, with plausible values, configure the environment.
-                settings = config.load(environment, {**passed, "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"})
-                self.assertEqual(settings["environment"], environment)
+                settings = {key: value for key, value in job["env"].items() if key.startswith("DEPLOY_")}
+                self.assertEqual(settings, {"DEPLOY_CONFIG": f"${{{{ secrets.{SECRETS[environment]} }}}}"})
+                self.assertEqual(job["env"]["GH_TOKEN"], "${{ secrets.GITHUB_TOKEN }}")
                 if name.startswith("deploy-"):
-                    self.assertTrue(config.secrets(environment, settings, passed))
                     self.assertEqual(job["env"]["GH_ACTOR"], "${{ github.actor }}")
-        # Cleanup jobs see the same preview host settings as the deploy job.
-        variables = lambda job: {k: v for k, v in jobs[job]["env"].items() if "vars." in v}
-        self.assertEqual(variables("remove-preview"), {k: v for k, v in variables("deploy-preview").items() if k in variables("remove-preview")})
-        self.assertEqual(variables("prune-previews"), variables("remove-preview"))
-        for job in ("remove-preview", "prune-previews"):
-            self.assertTrue({"DEPLOY_DOCKER_CONTEXT", "DEPLOY_DOMAIN", "DEPLOY_STATE_DIR", "DEPLOY_POSTGRES_CONTAINER"} <= set(variables(job)))
-        self.assertIn("DEPLOY_SNAPSHOT_SOURCE", jobs["deploy-staging"]["env"])
-        self.assertNotIn("DEPLOY_SNAPSHOT", jobs["deploy-staging"]["env"])  # local archives are an operator-only option
+                # The setup page's example for that secret configures the environment as is.
+                loaded = config.load(environment, {"DEPLOY_CONFIG": example(SECRETS[environment]), "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"})
+                self.assertEqual(loaded["environment"], environment)
 
     def test_deploy_tools_action_installs_only_into_the_job_temporary_directory(self):
         action = yaml.safe_load((REPOSITORY / ".github/actions/deploy-tools/action.yml").read_text())

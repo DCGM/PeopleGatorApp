@@ -219,7 +219,7 @@ jobs:
       deployments: write
     environment:
       name: preview
-      url: https://pr-${{ github.event.number }}.${{ vars.PREVIEW_DOMAIN }}
+      url: https://pr-${{ github.event.number }}.${{ steps.preflight.outputs.host }}
     # Never cancel a running deployment of this PR; the closing run waits for it.
     concurrency:
       group: deploy-preview-${{ github.event.number }}
@@ -229,19 +229,7 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
-      DEPLOY_POSTGRES_CONTAINER: ${{ vars.PREVIEW_POSTGRES_CONTAINER }}
-      DEPLOY_POSTGRES_ADMIN_USER: ${{ vars.PREVIEW_POSTGRES_ADMIN_USER }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
-      DEPLOY_CERTIFICATE_RESOLVER: ${{ vars.PREVIEW_CERTIFICATE_RESOLVER }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
-      DEPLOY_OTEL_ENABLED: ${{ vars.PREVIEW_OTEL_ENABLED }}
-      DEPLOY_OTEL_HTTP_ENDPOINT: ${{ vars.PREVIEW_OTEL_HTTP_ENDPOINT }}
-      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
-      DEPLOY_TELEMETRY_ENV: ${{ secrets.PREVIEW_TELEMETRY_ENV }}
+      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -249,6 +237,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/deploy-tools
       - name: Check preview configuration and prerequisites
+        id: preflight
         run: people-gator-deploy pr preflight
       - name: Deploy preview
         run: people-gator-deploy pr update --pr "$PR_NUMBER" --sha "$COMMIT_SHA"
@@ -271,14 +260,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
-      DEPLOY_POSTGRES_CONTAINER: ${{ vars.PREVIEW_POSTGRES_CONTAINER }}
-      DEPLOY_POSTGRES_ADMIN_USER: ${{ vars.PREVIEW_POSTGRES_ADMIN_USER }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
+      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -302,7 +284,7 @@ jobs:
       deployments: write
     environment:
       name: staging
-      url: https://${{ vars.DEPLOY_HOST }}
+      url: https://${{ steps.preflight.outputs.host }}
     # Never cancel a running migration or snapshot restore.
     concurrency:
       group: deploy-staging
@@ -312,27 +294,14 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       OPERATION: ${{ inputs.operation || 'update' }}
       BACKUP_RECORD: ${{ inputs.backup_record }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.DEPLOY_DOCKER_CONTEXT }}
-      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-      DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
-      DEPLOY_STATE_DIR: ${{ vars.DEPLOY_STATE_DIR }}
-      DEPLOY_POSTGRES_CONTAINER: ${{ vars.DEPLOY_POSTGRES_CONTAINER }}
-      DEPLOY_POSTGRES_ADMIN_USER: ${{ vars.DEPLOY_POSTGRES_ADMIN_USER }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.DEPLOY_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.DEPLOY_WEB_NETWORK }}
-      DEPLOY_CERTIFICATE_RESOLVER: ${{ vars.DEPLOY_CERTIFICATE_RESOLVER }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.DEPLOY_OTEL_NETWORK }}
-      DEPLOY_OTEL_ENABLED: ${{ vars.DEPLOY_OTEL_ENABLED }}
-      DEPLOY_OTEL_HTTP_ENDPOINT: ${{ vars.DEPLOY_OTEL_HTTP_ENDPOINT }}
-      DEPLOY_RUNTIME_ENV: ${{ secrets.DEPLOY_RUNTIME_ENV }}
-      DEPLOY_SNAPSHOT_SOURCE: ${{ secrets.DEPLOY_SNAPSHOT_SOURCE }}
-      DEPLOY_TELEMETRY_ENV: ${{ secrets.DEPLOY_TELEMETRY_ENV }}
+      DEPLOY_CONFIG: ${{ secrets.STAGING_CONFIG }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: ./.github/actions/deploy-tools
       - name: Check staging configuration and prerequisites
+        id: preflight
         run: people-gator-deploy staging preflight
       - name: Deploy staging
         run: |
@@ -362,14 +331,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.PREVIEW_DOCKER_CONTEXT }}
-      DEPLOY_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
-      DEPLOY_STATE_DIR: ${{ vars.PREVIEW_STATE_DIR }}
-      DEPLOY_POSTGRES_CONTAINER: ${{ vars.PREVIEW_POSTGRES_CONTAINER }}
-      DEPLOY_POSTGRES_ADMIN_USER: ${{ vars.PREVIEW_POSTGRES_ADMIN_USER }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.PREVIEW_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.PREVIEW_WEB_NETWORK }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.PREVIEW_OTEL_NETWORK }}
+      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -392,7 +354,7 @@ jobs:
       deployments: write
     environment:
       name: production
-      url: https://${{ vars.DEPLOY_HOST }}
+      url: https://${{ steps.preflight.outputs.host }}
     # Never cancel a running migration or activation.
     concurrency:
       group: deploy-release
@@ -402,19 +364,7 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       RELEASE_TAG: ${{ github.ref_name }}
       BACKUP_RECORD: ${{ inputs.backup_record }}
-      DEPLOY_DOCKER_CONTEXT: ${{ vars.DEPLOY_DOCKER_CONTEXT }}
-      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-      DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT }}
-      DEPLOY_STATE_DIR: ${{ vars.DEPLOY_STATE_DIR }}
-      DEPLOY_DATABASE_NETWORK: ${{ vars.DEPLOY_DATABASE_NETWORK }}
-      DEPLOY_WEB_NETWORK: ${{ vars.DEPLOY_WEB_NETWORK }}
-      DEPLOY_CERTIFICATE_RESOLVER: ${{ vars.DEPLOY_CERTIFICATE_RESOLVER }}
-      DEPLOY_OTEL_NETWORK: ${{ vars.DEPLOY_OTEL_NETWORK }}
-      DEPLOY_BACKEND_MEMORY: ${{ vars.DEPLOY_BACKEND_MEMORY }}
-      DEPLOY_ACCESS_REVIEWED: ${{ vars.DEPLOY_ACCESS_REVIEWED }}
-      DEPLOY_RUNTIME_ENV: ${{ secrets.DEPLOY_RUNTIME_ENV }}
-      DEPLOY_MIGRATION_ENV: ${{ secrets.DEPLOY_MIGRATION_ENV }}
-      DEPLOY_TELEMETRY_ENV: ${{ secrets.DEPLOY_TELEMETRY_ENV }}
+      DEPLOY_CONFIG: ${{ secrets.PRODUCTION_CONFIG }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -424,6 +374,7 @@ jobs:
         run: git merge-base --is-ancestor "$COMMIT_SHA" origin/main || { echo "::error::Tag $RELEASE_TAG ($COMMIT_SHA) is not on main"; exit 1; }
       - uses: ./.github/actions/deploy-tools
       - name: Check release configuration and prerequisites
+        id: preflight
         run: people-gator-deploy release preflight
       - name: Deliver release
         run: |

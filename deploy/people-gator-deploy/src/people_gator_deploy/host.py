@@ -137,7 +137,7 @@ class Host:
 
     def __init__(self, config: dict):
         self.config = config
-        self.docker = Docker(config.get("docker_context", "default"))
+        self.docker = Docker(config.get("docker_context"))
         self.repository = config["repository"]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repository):
             raise DeployError("Invalid GitHub repository")
@@ -180,18 +180,29 @@ class Host:
     def diagnostic_path(self) -> Path | None:
         return None
 
-    def command(self, args: list[str], *, sql: str | None = None) -> str:
+    def command(self, args: list[str], *, sql: str | None = None, env: dict | None = None) -> str:
         # psql error messages can echo a statement containing a password.
         return self.docker.run(args, input=sql, diagnostic=self.diagnostic_path(),
-                               echo=self.echo_output and sql is None)
+                               echo=self.echo_output and sql is None, extra_env=env)
 
-    def postgres(self, tool: str, *args: str) -> list[str]:
-        """Run a PostgreSQL client tool inside the operator-run shared PostgreSQL container."""
-        return ["docker", "exec", "-i", self.config["postgres_container"], tool, *args]
+    def postgres(self, tool: str, *args: str, role: str = "postgres") -> list[str]:
+        """A PostgreSQL client tool in a throwaway container on the database network.
 
-    def sql(self, statements: str, database: str = "postgres") -> str:
+        ``role`` selects the ``postgres`` (admin) or ``migration`` connection. The
+        password travels through the environment (``-e PGPASSWORD``), never argv.
+        """
+        connection = self.config[role]
+        return ["docker", "run", "--rm", "-i", "--network", self.config.get("database_network", "people-gator-db"),
+                "-e", "PGPASSWORD", self.config.get("postgres_image", "pgvector/pgvector:pg16"), tool,
+                "-h", connection["host"], "-p", str(connection["port"]), "-U", connection["user"], *args]
+
+    def postgres_env(self, role: str = "postgres") -> dict[str, str]:
+        return {"PGPASSWORD": self.config[role]["password"]}
+
+    def sql(self, statements: str, database: str | None = None) -> str:
         return self.command(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
-                                          "-U", self.config["postgres_admin_user"], "-d", database), sql=statements)
+                                          "-d", database or self.config["postgres"]["database"]),
+                            sql=statements, env=self.postgres_env())
 
     @staticmethod
     def dotenv(values: dict[str, str]) -> str:
@@ -200,33 +211,18 @@ class Host:
             raise DeployError("Invalid character in Compose configuration")
         return "".join(f"{key}='{value}'\n" for key, value in values.items())
 
-    def check_infrastructure(self) -> dict:
-        """The shared PostgreSQL must already be up; nothing is created here.
-
-        Previews and staging connect to ``preview-postgres`` on the database network.
-        """
-        container = self.config["postgres_container"]
-        network = self.config["database_network"]
-        remedy = ("start it with docker compose -f deploy/infrastructure/compose.yaml --env-file <private env> up -d "
-                  "or set DEPLOY_POSTGRES_CONTAINER")
+    def check_database(self, role: str = "postgres") -> dict:
+        """The configured database must answer from the database network; nothing is created here."""
+        connection = self.config[role]
+        where = f"{connection['host']}:{connection['port']}/{connection['database']} as {connection['user']}"
         try:
-            inspected = json.loads(self.command(["docker", "container", "inspect", container]))[0]
+            self.command(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-d", connection["database"], role=role),
+                         sql="SELECT 1;", env=self.postgres_env(role))
         except DeployError:
-            raise DeployError(f"Shared PostgreSQL container {container!r} does not exist; {remedy}") from None
-        if not inspected.get("State", {}).get("Running"):
-            raise DeployError(f"Shared PostgreSQL container {container!r} is not running; {remedy}")
-        attached = inspected.get("NetworkSettings", {}).get("Networks", {}).get(network) or {}
-        # Engine 25+ reports user aliases in DNSNames and deprecates Aliases.
-        names = {*(attached.get("Aliases") or []), *(attached.get("DNSNames") or [])}
-        if not attached or "preview-postgres" not in names:
-            raise DeployError(f"Shared PostgreSQL container {container!r} must join network {network!r} with the alias "
-                              "preview-postgres (DEPLOY_DATABASE_NETWORK / deploy/infrastructure/compose.yaml)")
-        try:
-            self.sql("SELECT 1;")
-        except DeployError:
-            raise DeployError(f"psql as {self.config['postgres_admin_user']!r} failed inside {container!r}; check the "
-                              "container's PostgreSQL and DEPLOY_POSTGRES_ADMIN_USER") from None
-        return {"postgres_container": container, "database_network": network}
+            raise DeployError(f"Cannot connect to {where} from the {self.config.get('database_network', 'people-gator-db')} "
+                              f"network; check the database URL and that the server joins that network "
+                              "(deploy/GITHUB-SETUP.md)") from None
+        return {"database": where, "network": self.config.get("database_network", "people-gator-db")}
 
     def image(self, component: str, run: dict) -> str:
         """Pull the tested commit's tag and return its digest after verifying the revision label."""

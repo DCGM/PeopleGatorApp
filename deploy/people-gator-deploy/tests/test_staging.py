@@ -26,9 +26,10 @@ class FakeStaging(staging.Staging):
         archive = root / "snapshot.dump"
         archive.write_bytes(b"PGDMP synthetic original database")
         archive.chmod(0o600)
-        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"),
-                          "host": "staging.peoplegator.dev", "postgres_container": "people-gator-postgres",
-                          "postgres_admin_user": "preview_admin", "database_network": "people-gator-preview-db",
+        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"), "docker_context": "rootless",
+                          "host": "staging.peoplegator.dev", "database_network": "people-gator-db",
+                          "postgres": {"host": "people-gator-postgres", "port": 5432, "user": "preview_admin",
+                                       "password": "admin-pw", "database": "postgres"},
                           "runtime_file": str(runtime), "snapshot": {"path": str(archive),
                               "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA}})
         self.staging_root.mkdir()
@@ -67,7 +68,7 @@ class FakeStaging(staging.Staging):
             raise RuntimeError("Injected command failure")
         return ""
 
-    def private_command(self, args, *, input_text=None, input_file=None, progress=None):
+    def private_command(self, args, *, input_text=None, input_file=None, progress=None, env=None):
         return self.command(args, sql=input_text)
 
     def worker(self, action, values, directory, **kwargs):
@@ -268,7 +269,7 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         self.assertNotIn("prepare", controller.events)
         controller.events.clear()
-        with self.assertRaisesRegex(DeployError, "snapshot-init/refresh need the DEPLOY_SNAPSHOT_SOURCE secret"):
+        with self.assertRaisesRegex(DeployError, "backup_source in STAGING_CONFIG"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
 
@@ -310,13 +311,6 @@ class StagingTests(unittest.TestCase):
             with self.assertRaisesRegex(DeployError, "databases only"):
                 controller.worker(unsupported, values, controller.staging_root)
 
-    def test_external_runtime_file_cannot_override_database_ownership(self):
-        controller = self.controller
-        Path(controller.config["runtime_file"]).write_text("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE=external\n")
-        with self.assertRaisesRegex(DeployError, "persistence settings are managed"):
-            controller.deploy(refresh=True)
-        self.assertEqual(controller.events, [])
-
     def test_disposable_ci_workers_are_outside_live_staging_recovery_scope(self):
         controller = self.controller
         other_root = self.root / "ci-fixture"
@@ -337,11 +331,12 @@ class StagingTests(unittest.TestCase):
         self.assertEqual((controller.staging_root / "last-error.log").stat().st_mode & 0o777, 0o600)
 
     def test_missing_staging_settings_report_safe_guidance_before_github_or_docker(self):
+        controller = self.controller
+        del controller.config["snapshot"]
         with self.assertRaises(staging.StagingConfigurationError) as raised:
-            staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root), "host": "staging.example.invalid",
-                             "private_operator_value": "private-sentinel"})
-        self.assertIn("DEPLOY_RUNTIME_ENV", str(raised.exception))
-        self.assertNotIn("private-sentinel", str(raised.exception))
+            controller.deploy(refresh=True)
+        self.assertIn("backup_source in STAGING_CONFIG", str(raised.exception))
+        self.assertNotIn("admin-pw", str(raised.exception))
 
 
 if __name__ == "__main__":

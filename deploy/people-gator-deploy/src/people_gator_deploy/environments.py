@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import re
 
@@ -30,7 +31,7 @@ class Environment:
         self.name = name
         self.settings = config.load(name)
         self.root = Path(self.settings["state_dir"])
-        self.docker = Docker(self.settings["docker_context"])
+        self.docker = Docker(self.settings.get("docker_context"))
 
     def command(self, operation):
         return f"people-gator-deploy {self.name} {operation}"
@@ -62,27 +63,29 @@ class Environment:
     def prerequisites(self, *, private=True):
         """Publish secret files and check the operator-run infrastructure, without changing it."""
         if private:
-            files = config.secrets(self.name, self.settings)
             self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
-            config.materialize(files)
+            config.materialize(config.files(self.name, self.settings), self.root)
         self.docker.run(["docker", "info", "--format", "{{.Name}}"], timeout=30)
         version = self.docker.run(["docker", "compose", "version", "--short"], timeout=30).strip().lstrip("v")
         numbers = re.match(r"(\d+)\.(\d+)", version)
         if not numbers or tuple(map(int, numbers.groups())) < (2, 32):
             raise DeployError("Docker Compose 2.32+ is required")
-        for key in ("web_network", "otel_network", "database_network"):
+        networks = ["web_network", "database_network", *(["otel_network"] if "otel" in self.settings else [])]
+        for key in networks:
             try:
                 self.docker.run(["docker", "network", "inspect", self.settings[key]], timeout=30)
             except DeployError:
-                raise DeployError(f"{self.name}: Docker network {self.settings[key]!r} ({key}) is unavailable "
-                                  f"in context {self.settings['docker_context']!r}; create it or change "
-                                  f"DEPLOY_{key.upper()}") from None
+                raise DeployError(f"{self.name}: Docker network {self.settings[key]!r} does not exist in context "
+                                  f"{self.docker.context!r}; create it (deploy/GITHUB-SETUP.md)") from None
         controller = self.controller()
-        result = {"environment": self.name, "state_dir": str(self.root), "configured": True}
-        if self.name != "release":
-            result["infrastructure"] = controller.check_infrastructure()
-        if private and self.name != "pr":
-            controller.validate_inputs()
+        host = self.settings.get("domain") or self.settings["host"]
+        result = {"environment": self.name, "state_dir": str(self.root), "host": host, "configured": True,
+                  "database": controller.check_database()}
+        if self.name == "release" and self.settings["migration"] != self.settings["postgres"]:
+            result["migration_database"] = controller.check_database("migration")
+        if os.environ.get("GITHUB_OUTPUT"):
+            with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                output.write(f"host={host}\n")
         return result
 
     def instance(self, controller, pr):
@@ -184,12 +187,12 @@ class Environment:
             return  # deploy_pr removes the selected PR's old containers before redeployment.
         if (self.root / "compose.env").exists() or (self.root / "activation.json").exists():
             return  # Retained applications and interrupted activations are ours.
-        project = self.settings.get("project", "people-gator-" + self.name)
+        project = "people-gator-" + self.name
         resources = self.docker.run(["docker", "ps", "-aq", "--filter",
                                      "label=com.docker.compose.project=" + project])
         if resources.strip():
             raise DeployError(f"Containers of Compose project {project} already exist without owned application "
-                              f"state; set another DEPLOY_PROJECT before {self.command('update')}")
+                              f"state; remove them before {self.command('update')}")
 
     def update(self, *, sha=None, pr=None, tag=None, backup_record=None):
         """Deploy the images built for ``sha``."""

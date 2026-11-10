@@ -172,9 +172,9 @@ Do not put backup credentials in root `.env`: live-preview's API imports that
 entire file. No backup operation inherits the app's storage settings or AWS
 credentials.
 
-For staging initialization/refresh, set the `staging` GitHub Environment's
-`DEPLOY_SNAPSHOT_SOURCE` secret once to the restore-reader storage settings
-(endpoint, region, bucket, prefix and read-only credentials only). The
+For staging initialization/refresh, put the restore-reader storage settings
+(endpoint, region, bucket, prefix and read-only credentials only) in
+`backup_source` of the `STAGING_CONFIG` secret once. The
 deployment utility automatically lists all pages, selects the latest dated
 archive and performs a private, conditional, verified download before restoring
 a separate candidate database. No dated path/checksum/revision edits are

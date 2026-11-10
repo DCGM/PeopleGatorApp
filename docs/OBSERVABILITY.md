@@ -10,10 +10,10 @@ Health is available at `/api/v1/health` after lifespan initialization succeeds.
 It returns `status: ok`; it is not a continuous audit of every storage/external
 service or a metrics endpoint.
 
-In PR previews and staging the backend's OpenTelemetry SDK is enabled by the
-deployment and sends application logs, traces and metrics **directly** to the
-operator-provided OTLP HTTP collector (`DEPLOY_OTEL_HTTP_ENDPOINT`, default
-`http://lgtm:4318`, on the `logging` network). There is no Docker log driver or
+With `otel` configured in an environment's secret, the deployment enables the
+backend's OpenTelemetry SDK, which sends application logs, traces and metrics
+**directly** to the operator-provided OTLP HTTP collector (`otel.endpoint`, on
+the `logging` network). There is no Docker log driver or
 intermediate collector: container stdout/stderr stays on the host in rotating
 `json-file` logs for `docker logs`, which still covers frontend nginx output and
 the one-shot storage-init/migrate/seed containers.
@@ -33,11 +33,12 @@ docker compose -f compose.dev.yaml ps
 docker compose -f compose.dev.yaml logs --tail 100 backend frontend db
 ```
 
-On the preview host, as the deployment account, with the `preview`
-environment's `DEPLOY_*` values exported ([operator commands](../deploy/people-gator-deploy/README.md#one-time-host-setup)),
+On the preview host, as the deployment account, with the preview configuration
+in a private file ([operator commands](../deploy/people-gator-deploy/README.md#operator-commands)),
 use the actual PR number:
 
 ```sh
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_CONFIG_FILE=/private/preview.json
 PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr status --pr 123
 PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr logs --pr 123 --tail 100
 ```
@@ -75,11 +76,9 @@ archive. Preserve maintenance outcomes separately.
 
 ## Direct backend OTLP traces, metrics and logs
 
-The SDK is disabled by default in the application; the preview and staging
-stacks enable it and point it at `DEPLOY_OTEL_HTTP_ENDPOINT` (set
-`DEPLOY_OTEL_ENABLED=false` to turn it off), and reject these keys in their
-telemetry secret. Releases enable it through their runtime or telemetry secret
-when the API can reach the OTLP HTTP receiver:
+The SDK is disabled by default in the application; the deployment enables it
+when the environment's configuration has an `otel` object, rendering these
+settings (omit `otel` to turn it off):
 
 ```dotenv
 PEOPLE_GATOR_API__OTEL__ENABLED=true

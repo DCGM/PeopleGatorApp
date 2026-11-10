@@ -67,8 +67,8 @@ class RuntimeTests(unittest.TestCase):
             ["docker", "context", "show"], text=True).strip()
         controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(state),
             "host": "staging-fixture.example.invalid", "docker_context": context,
-            "postgres_container": os.environ["STAGING_TEST_POSTGRES_CONTAINER"],
-            "postgres_admin_user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
+            "postgres": {"host": "preview-postgres", "port": 5432, "user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
+                         "password": os.environ.get("STAGING_TEST_DATABASE_PASSWORD", "ci"), "database": "ci"},
             "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
                 "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40}})

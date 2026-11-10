@@ -8,21 +8,22 @@ configuration and the database validator ship inside the package.
 
 The [CI workflow](../../.github/workflows/ci.yml) runs it **from the checkout of
 the commit being deployed**: a PR preview uses the PR's own deploy code, staging
-uses `main`, a release uses the tagged commit. The utility installs and
-provisions nothing: the shared PostgreSQL and pgAdmin are an
-operator-run Compose stack ([`deploy/infrastructure`](../infrastructure/compose.yaml))
-that every operation only **checks**, and the application stacks are plain
-frontend + backend Compose files. Settings live in GitHub and reach the utility
-as `DEPLOY_*` variables.
+uses `main`, a release uses the tagged commit. Each environment is configured by
+one JSON secret ([`deploy/GITHUB-SETUP.md`](../GITHUB-SETUP.md)); everything else
+is a convention. The utility installs and provisions nothing: the shared
+PostgreSQL and pgAdmin are an operator-run Compose stack
+([`deploy/infrastructure`](../infrastructure/compose.yaml)) that every operation
+only **checks**, and the application stacks are plain frontend + backend Compose
+files.
 
 **Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker
-Engine and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
-[HOSTS.md](HOSTS.md). Each deploy job builds the package into a job-local
-virtual environment, which downloads `setuptools` and the pinned S3 client
-dependencies from the configured package index. Database restore uses the
-infrastructure PostgreSQL 16 tools and database validation runs in
-operation-scoped backend containers. Candidate application code never selects
-backups or receives backup credentials.
+Engine and Docker Compose v2.32+, plus the proxy, DNS, runners and database in
+[GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts). Each deploy job builds the package
+into a job-local virtual environment, which downloads `setuptools` and the pinned
+S3 client dependencies from the configured package index. Database clients run
+in throwaway `pgvector/pgvector:pg16` containers on the database network and
+database validation runs in operation-scoped backend containers. Candidate
+application code never selects backups or receives backup credentials.
 
 ## How deployments run
 
@@ -41,17 +42,14 @@ Every deploy job checks out its commit, installs this package into
 runs `<env> preflight`, then one lifecycle operation, then `deployments supersede`
 (see [GitHub Deployments](#github-deployments)). Forks get tests and a local image
 build only; no fork event reaches a self-hosted runner (the
-[runner guard](HOSTS.md#github-runners-and-tokens) enforces this too).
+[runner guard](HOSTS.md#github-runners) enforces this too).
 
 **Prerequisite checks.** `preflight` and every operation first verify the
-Docker context, Compose 2.32+, the `web`, OTel and database networks, and (for
-previews and staging) the shared PostgreSQL container: it must exist, run, join
-`DEPLOY_DATABASE_NETWORK` with the alias `preview-postgres` the application stacks
-connect to, and answer `psql` as the admin user. Failures name the setting or
-the `docker compose -f deploy/infrastructure/compose.yaml … up -d` remedy before
-any Compose command runs. The backend exports its own logs, traces and metrics
-to `DEPLOY_OTEL_HTTP_ENDPOINT`; container output stays in local rotating
-`json-file` logs ([Observability](../../docs/OBSERVABILITY.md)).
+Docker context, Compose 2.32+, the `web`, `people-gator-db` and (with `otel`)
+`logging` networks, and that the configured database answers `SELECT 1` from the
+database network (both roles for production). Failures name the secret, the
+field or the missing network before any Compose command runs. Secret values are
+never printed.
 
 **Build identity.** The `images` job labels each image with the tested commit and
 tags it `sha-<commit>`. `--sha` names that commit; the utility pulls the tag,
@@ -71,96 +69,27 @@ runners on one host stay consistent.
 
 ## Configuration
 
-[GITHUB-SETUP.md](../GITHUB-SETUP.md) walks through creating everything below
-with `gh` commands. Create GitHub Environments **`preview`**, **`staging`** and
-**`production`** (Settings → Environments). Add deployment branch/tag policies: `staging` only
-`main`, `production` only `v*` tags; `preview` may stay open to all branches
-(it runs for pull requests). Required reviewers on `production` add a manual
-gate before a release job starts.
+One repository secret per environment, `PREVIEW_CONFIG`, `STAGING_CONFIG` and
+`PRODUCTION_CONFIG`, holds a JSON document with `host`, `database`, `storage`,
+optional `otel`, `rum`, `extra_env` and, per environment, `users` (previews),
+`backup_source` (staging) or `migration_database` (production). The deploy jobs
+pass it as `DEPLOY_CONFIG`; the utility validates it (unknown fields are
+rejected, errors name the secret and field) and renders the files the Compose
+stacks read into the environment's private state directory: `runtime.env`
+(storage, token issuer/audience, production persistence, `extra_env`),
+`telemetry.env` (OTel endpoints and headers, RUM) for the API container only,
+`migration.env` (production migration role), `users.json` (previews) and
+`snapshot-source.json` (staging). Unchanged files are left alone; files for
+settings that were removed are deleted. The examples and the conventions table
+are in [GITHUB-SETUP.md](../GITHUB-SETUP.md).
 
-The utility reads `DEPLOY_<SETTING>` from its process environment. The
-`deploy-staging` and `deploy-release` jobs pass the `staging`/`production`
-environment's variables and secrets under those same names. The preview jobs
-are different: `remove-preview` and `prune-previews` have no `environment:`
-(a job with one records a new Deployment), and environment-scoped variables are
-invisible without it, so the preview host's non-secret settings are
-**repository variables** named `PREVIEW_<SETTING>` (Settings → Secrets and
-variables → Actions → Variables) and only its secrets live in the `preview`
-environment, as `PREVIEW_USERS_JSON` and `PREVIEW_TELEMETRY_ENV`. An undefined
-variable arrives empty and keeps its default.
+## Operator commands
 
-### Variables (not secret)
-
-| Setting (`DEPLOY_…`) | GitHub name | Environments | Default | Meaning |
-| --- | --- | --- | --- | --- |
-| `DOCKER_CONTEXT` | `PREVIEW_DOCKER_CONTEXT` (repository), `DEPLOY_DOCKER_CONTEXT` | all | required | Docker context the utility names on every call, for example `rootless` |
-| `DOMAIN` | `PREVIEW_DOMAIN` (repository) | preview | required | Previews are `https://pr-<N>.<domain>` |
-| `HOST` | `DEPLOY_HOST` | staging, production | required | Application hostname |
-| `STATE_DIR` | `PREVIEW_STATE_DIR` (repository), `DEPLOY_STATE_DIR` | all | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` | Private host state: per-PR state and passwords, generations, journals, generated secret files |
-| `POSTGRES_CONTAINER` | `PREVIEW_POSTGRES_CONTAINER` (repository), `DEPLOY_POSTGRES_CONTAINER` | preview, staging | `people-gator-postgres` | Container of the operator-run shared PostgreSQL; databases are provisioned through `docker exec` into it |
-| `POSTGRES_ADMIN_USER` | `PREVIEW_POSTGRES_ADMIN_USER` (repository), `DEPLOY_POSTGRES_ADMIN_USER` | preview, staging | `preview_admin` | Superuser role inside that container (local socket, no password) |
-| `DATABASE_NETWORK` | `PREVIEW_DATABASE_NETWORK` (repository), `DEPLOY_DATABASE_NETWORK` | all | `people-gator-preview-db`; required for production | Docker network of the shared (preview/staging) or external (production) PostgreSQL |
-| `WEB_NETWORK` | `PREVIEW_WEB_NETWORK` (repository), `DEPLOY_WEB_NETWORK` | all | `web` | External Traefik network |
-| `CERTIFICATE_RESOLVER` | `PREVIEW_CERTIFICATE_RESOLVER` (repository), `DEPLOY_CERTIFICATE_RESOLVER` | all | `tlschallenge` | Traefik resolver; `none` reuses an existing wildcard certificate |
-| `OTEL_NETWORK` | `PREVIEW_OTEL_NETWORK` (repository), `DEPLOY_OTEL_NETWORK` | all | `logging` | Network of the OTLP backend; the backend container joins it |
-| `OTEL_HTTP_ENDPOINT` | `PREVIEW_OTEL_HTTP_ENDPOINT` (repository), `DEPLOY_OTEL_HTTP_ENDPOINT` | preview, staging | `http://lgtm:4318` | OTLP HTTP base URL the backend sends logs, traces and metrics to (`/v1/{logs,traces,metrics}` appended) |
-| `OTEL_ENABLED` | `PREVIEW_OTEL_ENABLED` (repository), `DEPLOY_OTEL_ENABLED` | preview, staging | `true` | Set `false` to run the backend without the OpenTelemetry SDK |
-| `PROJECT` | `DEPLOY_PROJECT` | staging, production | `people-gator-staging`, `people-gator-release` | Application Compose project |
-| `BACKEND_MEMORY` | `DEPLOY_BACKEND_MEMORY` | production | `4g` | Backend memory limit |
-| `ACCESS_REVIEWED` | `DEPLOY_ACCESS_REVIEWED` | production | required `true` | Confirms the [access boundary](#release-access-boundary) |
-| `REPOSITORY` | — | all | `GITHUB_REPOSITORY` | Only for operator commands outside Actions |
-
-### Secrets
-
-Secret values are file contents. Before each operation the utility writes them
-to private files in the state directory (mode 600; the users file 644 so the
-unprivileged backend container can read its bind mount) and references those
-paths from Compose. Unchanged contents are left alone.
-
-| Setting (`DEPLOY_…`) | GitHub secret | Environment | File | Contents |
-| --- | --- | --- | --- | --- |
-| `USERS_JSON` | `PREVIEW_USERS_JSON` | preview (required) | `users.json` | Users JSON with Argon2 hashes; `people-gator-api/example.users.json` supplies the demo `test` / `test` account |
-| `RUNTIME_ENV` | `DEPLOY_RUNTIME_ENV` | staging (required), production (required) | `runtime.env` | `PEOPLE_GATOR_API__*` lines for the backend: storage, JWK, auth; staging must not set persistence (it generates its database connection) |
-| `MIGRATION_ENV` | `DEPLOY_MIGRATION_ENV` | production (required) | `migration.env` | The migration role's `PEOPLE_GATOR_API__PERSISTENCE__*` lines |
-| `SNAPSHOT_SOURCE` | `DEPLOY_SNAPSHOT_SOURCE` | staging | `snapshot-source.json` | Read-only backup source, exactly the six fields of [the example](examples/staging-backup-source.example.json); read only by `snapshot-init`/`refresh` |
-| `TELEMETRY_ENV` | `PREVIEW_TELEMETRY_ENV`, `DEPLOY_TELEMETRY_ENV` | all | `telemetry.env` | Optional RUM settings and OTLP headers for the API runtime container only; previews/staging reject OTel enable/endpoint keys here (the deployment sets them); see [OpenObserve RUM](../../docs/OPENOBSERVE-RUM.md) |
-
-Operators may additionally set `DEPLOY_SNAPSHOT` (JSON `path`, `sha256`,
-`application_revision` of a private local custom-format dump) for an explicit
-local restore; the workflow does not pass it. Invalid or missing settings fail
-the job before any Docker call with the variable name and environment, for
-example `staging configuration: DEPLOY_HOST: missing or invalid hostname; set it
-as a GitHub Environment variable or secret`.
-
-## One-time host setup
-
-Prepare the hosts, runners and guard from [HOSTS.md](HOSTS.md). The only thing
-to run on the preview/staging host is the shared stack, as the deployment
-account, from a checkout of `main`:
+Any operation can run on the host as the deployment account from a checkout of
+the deployed commit, with the same JSON in a private file:
 
 ```sh
-git clone https://github.com/DCGM/PeopleGatorApp.git && cd PeopleGatorApp
-cp deploy/infrastructure/example.env /private/infrastructure.env   # edit, chmod 600, keep
-docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
-```
-
-It starts PostgreSQL (container `people-gator-postgres`, alias `preview-postgres`
-on the database network) and pgAdmin behind Traefik. Rerun the same command after editing the file or pulling a newer
-`main` to upgrade it; passwords and volumes are kept. Release hosts need only
-their external PostgreSQL, Traefik and networks.
-
-Nothing else is installed. Staging data is initialized by the CI workflow: run it
-manually on `main` with `operation=snapshot-init`. The first `deploy-preview`,
-`deploy-staging` or `deploy-release` job then creates the state directory, writes
-the secret files and deploys.
-
-**Operator commands.** The utility reads the same `DEPLOY_*` names from the
-process environment, so any operation can also run on the host by exporting the
-GitHub values (secrets as file contents):
-
-```sh
-export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_DOCKER_CONTEXT=rootless DEPLOY_DOMAIN=preview.peoplegator.dev
-export DEPLOY_USERS_JSON="$(cat /private/preview-users.json)"
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_CONFIG_FILE=/private/preview.json
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr preflight
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr status --pr 123
 ```
@@ -169,37 +98,29 @@ Snapshot operations need boto3: use the backend environment (`uv run --locked`
 from `people-gator-api` with `PYTHONPATH=../deploy/people-gator-deploy/src`) or a
 venv with `pip install deploy/people-gator-deploy`. GitHub-reading operations
 (`update`, `cleanup`, `reconcile`, `check`, `deployments`) need `GH_TOKEN`;
-`update` also needs `GH_ACTOR` for the temporary GHCR login.
+`update` also needs `GH_ACTOR` for the temporary GHCR login. State lives in
+`~/.local/opt/people-gator-deploy/state/<pr|staging|release>` (`DEPLOY_STATE_DIR`
+overrides it for unusual hosts).
 
 **Upgrading from descriptor-based hosts.** State directories keep their
-locations (`~/.local/opt/people-gator-deploy/state/<env>` for user-scope
-installations; set `DEPLOY_STATE_DIR` for other prefixes or system scope), and
-databases, media, passwords and generations are untouched. The former managed
-infrastructure is the same Compose project (`people-gator-preview-infra`, same
-volumes): use `~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env`
-as the stack's `--env-file` (its `KEY='value'` lines are read as-is, and
-PostgreSQL only applies the password at first initialization; its stale
-`OTEL_*`/`PREVIEW_LOG_PORT` keys are ignored) and run the command above once:
-Compose recreates the PostgreSQL container with the fixed name
-`people-gator-postgres` and `--remove-orphans` removes the former Fluent
-Forward collector, whose `people-gator-preview-infra_otel-data` volume can be
-deleted. Alternatively set `PREVIEW_POSTGRES_CONTAINER` to the current name
-(`people-gator-preview-infra-postgres-1`). Strip `PEOPLE_GATOR_API__OTEL__ENABLED`
-and `OTEL_EXPORTER_OTLP_*_ENDPOINT` lines from the old telemetry file before
-storing it as the preview and staging telemetry secrets; the deployment sets
-them now. Copy each
-descriptor's values into the GitHub variables above, put the
-users/runtime/migration/telemetry/backup-source file contents into the secrets,
-install the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each
-runner's `.env`, then delete the descriptors
-(`~/.local/opt/people-gator-deploy/environments`), the versioned installations
-(`~/.local/lib/people-gator-deploy`), `~/.local/bin/people-gator-deploy` and the
-now inert `owned.json`/`infrastructure-owned.json` markers. Keep the old
-users/runtime/migration/telemetry files in place until each environment's first
-successful deploy through the new workflow: the saved `compose.env` files still
-reference their paths, and `start`, recovery and preview cleanup read that saved
-environment. Rerun open PRs' CI to redeploy their previews through the new
-workflow.
+locations, and databases, media, passwords and generations are untouched. Run
+the shared stack once with the old
+`~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env` as
+its `--env-file` ([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)): Compose recreates
+PostgreSQL as `people-gator-postgres` on the `people-gator-db` network and
+`--remove-orphans` removes the former Fluent Forward collector (its
+`people-gator-preview-infra_otel-data` volume can be deleted; stale keys in the
+env file are ignored). Build the three JSON secrets from the old descriptors and
+env files (the admin password is `POSTGRES_ADMIN_PASSWORD` from that env file;
+storage, RUM and OTLP headers come from the old runtime/telemetry files), install
+the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's
+`.env`, run `docker context use rootless` once as the deployment account, then
+delete the descriptors (`~/.local/opt/people-gator-deploy/environments`), the
+versioned installations (`~/.local/lib/people-gator-deploy`),
+`~/.local/bin/people-gator-deploy`, the old `owned.json` markers and the old
+users/runtime/migration/telemetry files once each environment has deployed
+successfully through the new workflow (their saved `compose.env` files reference
+them until then). Rerun open PRs' CI to redeploy their previews.
 
 ## Operations
 
@@ -223,8 +144,8 @@ usage, `130` cancelled. Secret values and raw service output are never printed;
 failed service output is kept in the environment's private `last-error.log`.
 
 **State and locks.** Each environment owns one private state directory. A first
-staging or release deployment refuses an existing Compose project it did not
-create (`DEPLOY_PROJECT`). PR updates remove the selected PR project's previous
+staging or release deployment refuses an existing `people-gator-staging` /
+`people-gator-release` Compose project it did not create. PR updates remove the selected PR project's previous
 containers before redeployment, even when local per-PR state is unavailable;
 databases and volumes are retained. Operations take the environment's
 `environment.lock`, so previews, staging and releases never block each other
@@ -281,7 +202,7 @@ Application S3 storage and all media/authentication objects are managed
 externally. Staging does not provision buckets/users/keys, copy or validate
 media, change storage generations, or impose S3 migration requirements. Missing
 media does not reject a database snapshot. Supply the running application's
-external settings through `DEPLOY_RUNTIME_ENV`; application startup and routed
+storage through `storage` in `STAGING_CONFIG`; application startup and routed
 readiness remain required. Normal updates and database refreshes leave that
 configuration and external storage untouched.
 
@@ -293,15 +214,14 @@ Use the [restore-reader policy example](../backup/restore-policy.example.json).
 It needs no production database access, writes, deletes or application storage
 permissions. Keep the backup publisher's identity separate.
 
-Fill [staging-backup-source.example.json](examples/staging-backup-source.example.json)
-with an explicit HTTPS endpoint, region, bucket, prefix and the reader
+Put the explicit HTTPS endpoint, region, bucket, prefix and the reader
 credentials — exactly those six fields, no restore database or target settings —
-and store it as the `staging` environment's `DEPLOY_SNAPSHOT_SOURCE` secret.
+in `backup_source` of `STAGING_CONFIG` ([example](../GITHUB-SETUP.md#staging_config)).
 Use system-trusted TLS; a private CA can be supplied through `AWS_CA_BUNDLE`. No
 ambient AWS credentials, application settings or instance profile fill missing
-values. Do not put backup credentials in `DEPLOY_RUNTIME_ENV` or workflow inputs.
+values. Do not put backup credentials in `storage` or workflow inputs.
 
-Changing the secret does **not** refresh the running database. The next explicit
+Changing `backup_source` does **not** refresh the running database. The next explicit
 `snapshot-init` or guarded `refresh` uses the source. Ordinary `update`,
 including automatic successful-main deployments, keeps staging edits and never
 reads the source or contacts the backup bucket. Existing initialization, refresh
@@ -373,8 +293,8 @@ The production stack has no reload, debug, seed or development mounts, but the
 current frontend build embeds demo auto-login credentials
 ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled credentials are not
 private authentication: place the release behind a reviewed access boundary (for
-example, proxy authentication or a private network) before setting
-`DEPLOY_ACCESS_REVIEWED=true`.
+example, proxy authentication or a private network) before creating
+`PRODUCTION_CONFIG`.
 
 ## Development
 
@@ -418,8 +338,8 @@ boto3 and application dependencies; no real operator source is read.
 ## Browser RUM and API trace correlation
 
 See [OpenObserve runtime configuration](../../docs/OPENOBSERVE-RUM.md) for the
-`DEPLOY_TELEMETRY_ENV` secret shared by the PR, staging and release environments,
-collector networking, credential boundaries and rollout. The browser receives a
+`otel` and `rum` fields of each environment's configuration, collector
+networking, credential boundaries and rollout. The browser receives a
 dedicated RUM client token through the API; backend OTLP authorization stays
 server-side. No frontend build secrets are required.
 

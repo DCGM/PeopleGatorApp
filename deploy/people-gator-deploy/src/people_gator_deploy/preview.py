@@ -36,7 +36,7 @@ class Preview(Host):
     def __init__(self, config: dict):
         super().__init__(config)
         self.previews = self.root
-        self.domain = config.get("domain", "preview.peoplegator.dev")
+        self.domain = config["domain"]
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.domain):
             raise DeployError("Invalid preview domain")
 
@@ -107,17 +107,16 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         values = {
             "STANDALONE_AUTH": "1" if standalone_auth else "0",
             "COMMIT_SHA": sha,
+            "RUNTIME_FILE": self.config["runtime_file"],
             "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-            "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web")),
-            "OTEL_ENABLED": "true" if self.config.get("otel_enabled", True) else "false",
-            "OTEL_HTTP_ENDPOINT": self.config.get("otel_http_endpoint", "http://lgtm:4318"),
+            "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", "logging"),
             "PR_NUMBER": str(number), "PREVIEW_HOST": f"pr-{number}.{self.domain}",
             "CORS_ORIGIN_REGEX": f"^https://{re.escape(f'pr-{number}.{self.domain}')}$",
+            "DB_HOST": self.config["postgres"]["host"], "DB_PORT": str(self.config["postgres"]["port"]),
             "DB_NAME": f"preview_pr_{number}", "DB_USER": f"preview_pr_{number}",
             "DB_PASSWORD": state["password"],
-            "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),
+            "DATABASE_NETWORK": self.config.get("database_network", "people-gator-db"),
             "WEB_NETWORK": self.config.get("web_network", "web"),
-            "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
             "USERS_FILE": self.config["users_file"],
             "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"],
         }

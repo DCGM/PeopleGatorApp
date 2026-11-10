@@ -19,12 +19,6 @@ from .host import INSTALL_DIR, Host, routed_readiness, summary, write_private
 from . import config
 
 TAG = re.compile(r"v[0-9]+(?:\.[0-9]+){0,3}(?:[-+][0-9A-Za-z.-]{1,64})?")
-FIXED = {"PEOPLE_GATOR_API__HOST", "PEOPLE_GATOR_API__PORT", "PEOPLE_GATOR_API__DEBUG", "PEOPLE_GATOR_API__RELOAD",
-         "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE", "PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX"}
-
-
-def env_keys(path: Path) -> set[str]:
-    return config.env_keys(path.read_text(), source=str(path))
 
 
 class Release(Host):
@@ -41,25 +35,6 @@ class Release(Host):
     def compose_release(self, env_file: Path, *args: str) -> list[str]:
         return ["docker", "compose", "--project-name", self.project, "--env-file", str(env_file),
                 "-f", str(INSTALL_DIR / "compose.release.yaml"), *args]
-
-    # Inputs -------------------------------------------------------------
-
-    def validate_inputs(self):
-        runtime, migration = Path(self.config["runtime_file"]), Path(self.config["migration_file"])
-        if runtime.resolve() == migration.resolve():
-            raise DeployError("runtime_file and migration_file must be separate private files")
-        for path in (runtime, migration):
-            if not config.private_file(path):
-                raise DeployError(f"{path}: needs an owned mode-600 API environment file")
-            overridden = env_keys(path) & FIXED
-            if overridden:
-                raise DeployError(f"{path}: remove deployment-fixed settings {', '.join(sorted(overridden))}")
-        if not any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in env_keys(migration)):
-            raise DeployError(f"{migration}: define the migration role's PostgreSQL connection")
-        keys = env_keys(runtime)
-        for prefix in ("PEOPLE_GATOR_API__PERSISTENCE", "PEOPLE_GATOR_API__STORAGE"):
-            if not any(key.startswith(prefix) for key in keys):
-                raise DeployError(f"{runtime}: define {prefix}* for the runtime role and private storage")
 
     # Provenance ---------------------------------------------------------
 
@@ -94,12 +69,12 @@ class Release(Host):
         return {"RELEASE_TAG": tag, "COMMIT_SHA": commit, "RELEASE_HOST": self.host,
                 "BACKEND_IMAGE": images["backend"], "FRONTEND_IMAGE": images["frontend"],
                 "RUNTIME_FILE": self.config["runtime_file"], "MIGRATION_FILE": self.config["migration_file"],
-                "DATABASE_NETWORK": self.config["database_network"], "WEB_NETWORK": self.config["web_network"],
-                "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
+                "DATABASE_NETWORK": self.config.get("database_network", "people-gator-db"),
+                "WEB_NETWORK": self.config.get("web_network", "web"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
                 "BACKEND_MEMORY": self.config.get("backend_memory", "4g"),
                 "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web"))}
+                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", "logging")}
 
     def state(self, name="state.json"):
         path = self.root / name
@@ -168,7 +143,6 @@ class Release(Host):
         self.finish_activation(pending)
 
     def deploy(self, tag: str, *, sha: str | None = None, backup_record=None) -> dict:
-        self.validate_inputs()
         self.reconcile_activation()
         journal = self.root / "activation.json"
         if journal.exists() and self.pending_activation()["record"]["tag"] != tag:
@@ -212,7 +186,6 @@ class Release(Host):
         Changing images never undoes migrations: an older image whose check
         rejects the current schema is refused, and no downgrade is attempted.
         """
-        self.validate_inputs()
         self.reconcile_activation()
         pending = self.pending_activation()
         if pending and pending["record"].get("recovered"):

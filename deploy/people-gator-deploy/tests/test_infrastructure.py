@@ -20,10 +20,10 @@ class InfrastructureStackTests(unittest.TestCase):
         example = {line.split("=", 1)[0] for line in (INFRASTRUCTURE / "example.env").read_text().splitlines()
                    if line and not line.startswith("#")}
         self.assertEqual(interpolated, example)
-        self.assertIn("POSTGRES_CONTAINER=people-gator-postgres", (INFRASTRUCTURE / "example.env").read_text())
         document = yaml.safe_load(compose)
         self.assertEqual(document["name"], "people-gator-preview-infra")  # existing volumes keep matching
-        self.assertEqual(document["services"]["postgres"]["container_name"], "${POSTGRES_CONTAINER:-people-gator-postgres}")
+        self.assertEqual(document["services"]["postgres"]["container_name"], "people-gator-postgres")
+        self.assertEqual(document["networks"]["database"]["name"], "people-gator-db")
         self.assertEqual(document["services"]["postgres"]["networks"]["database"]["aliases"], ["preview-postgres"])
         self.assertNotIn("otel-collector", compose)  # the backend exports telemetry itself
         self.assertEqual(json.loads((INFRASTRUCTURE / "pgadmin-servers.json").read_text())["Servers"]["1"]["Host"], "preview-postgres")

@@ -24,6 +24,10 @@ IMAGES = {
 RUN = {"id": 100, "run_attempt": 1, "head_sha": SHA}  # this workflow run's build identity
 
 
+CONFIG = {"repository": "DCGM/PeopleGatorApp", "domain": "preview.peoplegator.dev", "docker_context": "rootless",
+          "postgres": {"host": "people-gator-postgres", "port": 5432, "user": "preview_admin", "password": "admin-pw", "database": "postgres"}}
+
+
 def pull_request(*, state="open", sha=SHA, repository="DCGM/PeopleGatorApp"):
     return {"number": 123, "state": state, "head": {
         "sha": sha, "repo": {"full_name": repository},
@@ -44,7 +48,7 @@ class GitHubAccessTests(unittest.TestCase):
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
-        self.config = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root)}
+        self.config = {**CONFIG, "state_dir": str(self.root)}
         self.controller = preview.Preview(self.config)
         self.controller.command = Mock()
         self.controller.sql = Mock()
@@ -185,10 +189,8 @@ class LifecycleTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.users = self.root / "users.json"
         self.users.write_text("{}")
-        self.controller = preview.Preview({
-            "repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
-            "users_file": str(self.users),
-        })
+        self.controller = preview.Preview({**CONFIG, "state_dir": str(self.root), "users_file": str(self.users),
+                                           "runtime_file": str(self.root / "runtime.env")})
         self.controller.command = Mock(return_value="")
         self.controller.sql = Mock(return_value="")
         self.controller.readiness = Mock()
@@ -436,6 +438,7 @@ class LifecycleTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_standalone_auth_recipe_has_private_alias_and_separate_credentials(self):
         env_file = self.root / "auth.env"
+        (self.root / "runtime.env").write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         preview.write_private(env_file, self.controller.env(123, {"password": "c" * 64}, IMAGES, standalone_auth=True))
         result = subprocess.run(self.controller.compose(123, env_file, "--profile", "tools", "config", "--format", "json"),
                                 text=True, capture_output=True, check=True)
@@ -517,6 +520,7 @@ class LifecycleTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_compose_resolves_unique_router_names_and_uses_shared_database(self):
         env_file = self.root / "compose.env"
+        (self.root / "runtime.env").write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         preview.write_private(env_file, self.controller.env(123, {"password": "c" * 64}, IMAGES))
         # Use the real CLI, not the mocked command executor.
         result = subprocess.run(self.controller.compose(123, env_file,
@@ -540,17 +544,19 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(service["logging"]["driver"], "json-file")  # container output stays local
             self.assertEqual(service["labels"]["people-gator.preview.pr"], "123")
         backend = config["services"]["backend"]["environment"]
-        self.assertEqual(backend["PEOPLE_GATOR_API__OTEL__ENABLED"], "true")
-        self.assertEqual(backend["PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT"], "http://lgtm:4318/v1/logs")
         self.assertEqual(backend["PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER"], "123")
-        self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", config["services"]["seed"]["environment"])
+        self.assertEqual(backend["PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST"], "people-gator-postgres")
+        self.assertEqual(backend["PEOPLE_GATOR_API__STORAGE"], '{"local": {"root": "/data"}, "s3": null}')
+        self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", backend)  # telemetry comes only from the rendered file
 
-    def test_config_controls_direct_otlp_export(self):
-        self.controller.config.update(otel_enabled=False, otel_http_endpoint="https://otel.example.test:4318")
+    def test_compose_environment_points_at_the_configured_database_and_rendered_files(self):
+        self.controller.config.update(telemetry_file=str(self.root / "telemetry.env"))
         environment = self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA)
-        self.assertIn("OTEL_ENABLED='false'", environment)
-        self.assertIn("OTEL_HTTP_ENDPOINT='https://otel.example.test:4318'", environment)
-        self.assertNotIn("PREVIEW_LOG_ADDRESS", environment)
+        for line in ("DB_HOST='people-gator-postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='people-gator-db'",
+                     f"RUNTIME_FILE='{self.root / 'runtime.env'}'", f"TELEMETRY_FILE='{self.root / 'telemetry.env'}'",
+                     "PREVIEW_HOST='pr-123.preview.peoplegator.dev'"):
+            self.assertIn(line, environment)
+        self.assertNotIn("admin-pw", environment)  # the admin password never enters a preview stack
 
 
 @unittest.skipUnless(os.environ.get("PREVIEW_TEST_POSTGRES_CONTAINER"), "requires disposable PostgreSQL container")
@@ -559,30 +565,22 @@ class DatabaseIsolationTests(unittest.TestCase):
         container = os.environ["PREVIEW_TEST_POSTGRES_CONTAINER"]
         admin = os.environ.get("PREVIEW_TEST_POSTGRES_USER", "ci")
         with tempfile.TemporaryDirectory() as root:
-            # The fixture lives in the caller's active context; the adapter never guesses one.
             context = os.environ.get("PREVIEW_TEST_DOCKER_CONTEXT") or subprocess.check_output(
                 ["docker", "context", "show"], text=True).strip()
-            # The shared PostgreSQL is an operator-run container the utility addresses by name.
-            controller = preview.Preview({"repository": "DCGM/PeopleGatorApp", "state_dir": root,
-                                          "docker_context": context, "postgres_container": container,
-                                          "postgres_admin_user": admin})
+            network = "people-gator-test-" + secrets.token_hex(4)
+            alias = "pg-" + secrets.token_hex(4)
+            subprocess.run(["docker", "network", "create", "--internal", network], check=True, capture_output=True)
+            # The utility reaches the database through its URL from a throwaway client container on the database network.
+            controller = preview.Preview({**CONFIG, "state_dir": root, "docker_context": context, "database_network": network,
+                                          "postgres": {"host": alias, "port": 5432, "user": admin,
+                                                       "password": os.environ.get("PREVIEW_TEST_POSTGRES_PASSWORD", "ci"), "database": "ci"}})
             sql = controller.sql
             numbers = (900001, 900002)
-            network = "people-gator-test-" + secrets.token_hex(4)
-            subprocess.run(["docker", "network", "create", "--internal", network], check=True, capture_output=True)
             try:
-                # The real daemon's inspect output must expose the alias the check looks for.
-                controller.config["database_network"] = network
-                with self.assertRaisesRegex(DeployError, "alias preview-postgres"):
-                    controller.check_infrastructure()
-                subprocess.run(["docker", "network", "connect", "--alias", "preview-postgres", network, container],
-                               check=True, capture_output=True)
-                checked = controller.check_infrastructure()
-                self.assertEqual(checked, {"postgres_container": container, "database_network": network})
-                controller.config["postgres_container"] = "people-gator-missing-" + secrets.token_hex(4)
-                with self.assertRaisesRegex(DeployError, "does not exist"):
-                    controller.check_infrastructure()
-                controller.config["postgres_container"] = container
+                with self.assertRaisesRegex(DeployError, f"Cannot connect to {alias}:5432/ci as {admin}"):
+                    controller.check_database()
+                subprocess.run(["docker", "network", "connect", "--alias", alias, network, container], check=True, capture_output=True)
+                self.assertEqual(controller.check_database(), {"database": f"{alias}:5432/ci as {admin}", "network": network})
                 for number in numbers:
                     controller.provision_database(number, "c" * 64)
                     controller.provision_database(number, "c" * 64)

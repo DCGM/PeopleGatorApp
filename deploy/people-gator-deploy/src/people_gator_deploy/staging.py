@@ -22,7 +22,6 @@ from . import snapshots
 
 from .core import DeployError
 from .config import private_file
-from .release import env_keys
 from .host import INSTALL_DIR, Host, IneligibleRun, positive_int, routed_readiness, summary, write_private
 
 def validate_snapshot(value, *, inputs=False):
@@ -45,10 +44,6 @@ class StagingConfigurationError(DeployError):
 class Staging(Host):
     def __init__(self, config: dict):
         super().__init__(config)
-        if not config.get("runtime_file"):
-            raise StagingConfigurationError(
-                "Missing staging settings; set DEPLOY_HOST and the DEPLOY_RUNTIME_ENV secret for the staging environment."
-            )
         self.staging_root = self.root
         self.host = config.get("host", "staging.peoplegator.dev")
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.host):
@@ -59,23 +54,12 @@ class Staging(Host):
         # Raw diagnostics remain outside Actions, collectors and utility installations.
         return self.staging_root / "last-error.log"
 
-    def validate_inputs(self):
-        runtime = Path(self.config.get("runtime_file", ""))
-        if not runtime.is_absolute() or not private_file(runtime):
-            raise StagingConfigurationError("runtime_file must name an owned private API environment file; "
-                                           "set the DEPLOY_RUNTIME_ENV secret for the staging environment")
-        # Storage settings are opaque external application configuration. Only
-        # database ownership and fixed deployment settings belong to this tool.
-        keys = env_keys(runtime)
-        if any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in keys):
-            raise DeployError(f"{runtime}: persistence settings are managed by staging; remove them from runtime_file")
-
     def snapshot_input(self):
         if "snapshot_source_file" in self.config:
             return snapshots.read_source(self.config["snapshot_source_file"])
         if "snapshot" not in self.config:
-            raise StagingConfigurationError("snapshot-init/refresh need the DEPLOY_SNAPSHOT_SOURCE secret (or a local "
-                                           "DEPLOY_SNAPSHOT archive) for the staging environment")
+            raise StagingConfigurationError("snapshot-init/refresh need backup_source in STAGING_CONFIG "
+                                           "(deploy/GITHUB-SETUP.md)")
         return validate_snapshot(self.config["snapshot"], inputs=True)
 
     def runtime_environment(self, values):
@@ -83,7 +67,7 @@ class Staging(Host):
         # authentication configuration is passed to this operation-scoped worker.
         return {
             "PEOPLE_GATOR_API__PERSISTENCE": json.dumps({"postgres": {
-                "host": "preview-postgres", "port": 5432, "user": values["DB_USER"],
+                "host": values["DB_HOST"], "port": int(values["DB_PORT"]), "user": values["DB_USER"],
                 "password": values["DB_PASSWORD"], "database": values["DB_NAME"], "schema_mode": "validate"}, "weaviate": None}),
             "PEOPLE_GATOR_API__OTEL__ENABLED": "false",
             # API settings require a storage selection even for SQL-only work.
@@ -95,11 +79,11 @@ class Staging(Host):
         return ["docker", "compose", "--project-name", self.config.get("project", "people-gator-staging"), "--env-file", str(env_file),
                 "-f", str(INSTALL_DIR / "compose.staging.yaml"), *args]
 
-    def private_command(self, args, *, input_text=None, input_file=None, progress=None):
+    def private_command(self, args, *, input_text=None, input_file=None, progress=None, env=None):
         # Staging commands may process private source data. Never relay subprocess
         # output (migrations, restore, Compose interpolation); keep it private.
         return self.docker.run(args, input=input_text, stdin=input_file, timeout=7200,
-                               diagnostic=self.diagnostic_path(), progress=progress)
+                               diagnostic=self.diagnostic_path(), progress=progress, extra_env=env)
 
     def eligible_main(self, sha: str):
         """Only the current main commit is deployable; a newer push wins over an older queued run."""
@@ -124,17 +108,15 @@ class Staging(Host):
         if not re.fullmatch(r"[a-f0-9]{16}", identity) or not re.fullmatch(r"[a-f0-9]{64}", generation["password"]):
             raise DeployError("Invalid staging generation state")
         return {"COMMIT_SHA": sha, "STAGING_HOST": self.host,
-                "OTEL_ENABLED": "true" if self.config.get("otel_enabled", True) else "false",
-                "OTEL_HTTP_ENDPOINT": self.config.get("otel_http_endpoint", "http://lgtm:4318"),
+                "DB_HOST": self.config["postgres"]["host"], "DB_PORT": str(self.config["postgres"]["port"]),
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
                 "DB_PASSWORD": generation["password"], "RUNTIME_FILE": self.config["runtime_file"],
-                "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),
+                "DATABASE_NETWORK": self.config.get("database_network", "people-gator-db"),
                 "WEB_NETWORK": self.config.get("web_network", "web"),
-                "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
                 "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"],
                 "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web"))}
+                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", "logging")}
 
     def provision(self, values):
         name, password = values["DB_NAME"], values["DB_PASSWORD"]
@@ -210,12 +192,12 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             if hashlib.file_digest(stream, "sha256").hexdigest() != snapshot["sha256"]:
                 raise DeployError("Snapshot SHA-256 does not match the expected checksum")
             stream.seek(0)
-            self.private_command(self.postgres("pg_restore", "--list"), input_file=stream)
+            self.private_command(self.postgres("pg_restore", "--list"), input_file=stream, env=self.postgres_env())
             stream.seek(0)
             self.provision(values)
             self.private_command(self.postgres("pg_restore", "--exit-on-error",
                 "--single-transaction", "--no-owner", "--no-privileges", "--no-comments", "--no-security-labels",
-                "-U", self.config["postgres_admin_user"], "--role", values["DB_USER"], "-d", values["DB_NAME"]), input_file=stream)
+                "--role", values["DB_USER"], "-d", values["DB_NAME"]), input_file=stream, env=self.postgres_env())
             after = os.fstat(stream.fileno())
             if any(getattr(before, key) != getattr(after, key) for key in ("st_size", "st_mtime_ns", "st_ctime_ns")):
                 raise DeployError("Snapshot changed during verification or restore")
@@ -261,7 +243,6 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             self.command(["docker", "rm", "-f", *ids])
 
     def deploy(self, sha, *, refresh=False):
-        self.validate_inputs()
         if refresh:
             self.snapshot_input()
         self.staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)

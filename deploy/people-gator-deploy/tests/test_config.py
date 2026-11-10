@@ -1,7 +1,8 @@
-"""Settings come from DEPLOY_* variables; secrets become private files in the state directory."""
+"""One JSON document per environment; the setup page's examples must load as they are."""
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -9,132 +10,149 @@ from unittest.mock import patch
 from people_gator_deploy import config
 from people_gator_deploy.core import DeployError
 
+SETUP_PAGE = Path(__file__).resolve().parents[3] / "deploy/GITHUB-SETUP.md"
+REPOSITORY = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"}
+
+
+def examples():
+    """The JSON documents shown on the setup page, keyed by secret name."""
+    text = SETUP_PAGE.read_text()
+    result = {}
+    for name in config.SECRET_NAMES.values():
+        section = text.split(f"## `{name}`", 1)[1]
+        result[name] = json.loads(section.split("```json\n", 1)[1].split("```", 1)[0])
+    return result
+
 
 class ConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.env = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_DOCKER_CONTEXT": "rootless",
-                    "DEPLOY_DOMAIN": "preview.example.invalid", "DEPLOY_HOST": "staging.example.invalid",
-                    "DEPLOY_STATE_DIR": str(self.root / "state"),
-                    "DEPLOY_USERS_JSON": '{"test": {}}', "DEPLOY_RUNTIME_ENV": "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data",
-                    "DEPLOY_MIGRATION_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n",
-                    "DEPLOY_DATABASE_NETWORK": "production-db", "DEPLOY_ACCESS_REVIEWED": "true"}
 
-    def test_missing_required_variables_name_the_variable_without_side_effects(self):
-        cases = (("pr", "DEPLOY_DOMAIN"), ("staging", "DEPLOY_HOST"), ("release", "DEPLOY_HOST"),
-                 ("pr", "DEPLOY_DOCKER_CONTEXT"), ("release", "DEPLOY_DATABASE_NETWORK"), ("release", "DEPLOY_ACCESS_REVIEWED"))
-        for environment, name in cases:
-            env = {key: value for key, value in self.env.items() if key != name}
-            with self.subTest(environment=environment, name=name), self.assertRaises(DeployError) as raised:
-                config.load(environment, env)
-            self.assertIn(f"{environment} configuration: {name}", str(raised.exception))
-            self.assertIn("GitHub Environment", str(raised.exception))
-        env = {key: value for key, value in self.env.items() if key != "GITHUB_REPOSITORY"}
-        with self.assertRaisesRegex(DeployError, "DEPLOY_REPOSITORY"):
-            config.load("pr", env)
-        self.assertEqual(config.load("pr", {**env, "DEPLOY_REPOSITORY": "Fork/Repo"})["repository"], "Fork/Repo")
-        with self.assertRaisesRegex(DeployError, "Unknown environment"):
-            config.load("production", self.env)
-        self.assertFalse((self.root / "state").exists())
+    def load(self, environment, document, **env):
+        return config.load(environment, {**REPOSITORY, "DEPLOY_STATE_DIR": str(self.root / environment),
+                                         "DEPLOY_CONFIG": json.dumps(document), **env})
 
-    def test_defaults_and_overrides(self):
-        settings = config.load("pr", {k: v for k, v in self.env.items() if k != "DEPLOY_DATABASE_NETWORK"})
-        self.assertEqual((settings["postgres_container"], settings["postgres_admin_user"]), ("people-gator-postgres", "preview_admin"))
-        self.assertEqual((settings["otel_enabled"], settings["otel_http_endpoint"]), (True, "http://lgtm:4318"))
-        self.assertFalse(config.load("pr", {**self.env, "DEPLOY_OTEL_ENABLED": "false", "DEPLOY_OTEL_HTTP_ENDPOINT": "https://otel.example.test:4318"})["otel_enabled"])
-        self.assertEqual((settings["web_network"], settings["otel_network"], settings["database_network"]),
-                         ("web", "logging", "people-gator-preview-db"))
-        self.assertNotIn("infrastructure", settings)
-        self.assertEqual(settings["users_file"], str(self.root / "state/users.json"))
-        self.assertNotIn("telemetry_file", settings)
-        self.assertNotIn("certificate_resolver", settings)
-        # Undefined GitHub variables arrive as empty strings and keep their defaults.
-        empty = config.load("pr", {**self.env, "DEPLOY_OTEL_NETWORK": "", "DEPLOY_STATE_DIR": "", "DEPLOY_TELEMETRY_ENV": ""})
-        self.assertEqual(empty["otel_network"], "logging")
-        self.assertNotIn("telemetry_file", empty)
-        self.assertEqual(config.load("pr", {**self.env, "DEPLOY_CERTIFICATE_RESOLVER": "letsencrypt"})["certificate_resolver"], "letsencrypt")
-        staging = config.load("staging", {**self.env, "DEPLOY_CERTIFICATE_RESOLVER": "none", "DEPLOY_PROJECT": "stage-2",
-                                          "DEPLOY_SNAPSHOT_SOURCE": "{}", "DEPLOY_TELEMETRY_ENV": "x",
-                                          "DEPLOY_POSTGRES_CONTAINER": "shared-pg", "DEPLOY_POSTGRES_ADMIN_USER": "admin"})
-        self.assertEqual((staging["postgres_container"], staging["postgres_admin_user"]), ("shared-pg", "admin"))
-        self.assertEqual((staging["project"], staging["certificate_resolver"]), ("stage-2", ""))
-        self.assertEqual(staging["snapshot_source_file"], str(self.root / "state/snapshot-source.json"))
-        self.assertEqual(staging["telemetry_file"], str(self.root / "state/telemetry.env"))
-        release = config.load("release", self.env)
-        self.assertEqual((release["project"], release["backend_memory"], release["database_network"]),
-                         ("people-gator-release", "4g", "production-db"))
-        self.assertNotIn("postgres_container", release)
-        self.assertNotIn("otel_http_endpoint", release)  # releases configure OTel through their runtime/telemetry secrets
+    def test_setup_page_examples_load_for_every_environment(self):
+        documents = examples()
+        for environment, secret in config.SECRET_NAMES.items():
+            with self.subTest(secret=secret):
+                settings = self.load(environment, documents[secret])
+                self.assertEqual(settings["environment"], environment)
+                self.assertEqual(settings["postgres"]["host"], "people-gator-postgres")
+                self.assertEqual(settings["otel"]["endpoint"], "http://lgtm:4318")
+                self.assertEqual(settings["rum"]["client_token"], "RUM_TOKEN")
+                files = {path.name: content for path, content, _ in config.files(environment, settings)}
+                self.assertIn("PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT=http://lgtm:4318/v1/logs\n", files["telemetry.env"])
+                self.assertIn("PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=RUM_TOKEN\n", files["telemetry.env"])
+        preview = self.load("pr", documents["PREVIEW_CONFIG"])
+        self.assertEqual(preview["domain"], "preview.peoplegator.dev")
+        self.assertEqual(preview["storage"], {"local": {"root": "/data"}})
+        self.assertIn("test", preview["users"])  # the repository's demo users by default
+        staging = self.load("staging", documents["STAGING_CONFIG"])
+        self.assertEqual(staging["backup_source"]["bucket"], "peoplegator-db-backup")
+        self.assertEqual(staging["snapshot_source_file"], str(self.root / "staging/snapshot-source.json"))
+        production = self.load("release", documents["PRODUCTION_CONFIG"])
+        self.assertEqual(production["migration"], production["postgres"])  # one role unless migration_database is given
+        self.assertIn("Authorization=Basic", production["otel"]["headers"])
+
+    def test_conventions_are_fixed_and_not_configurable(self):
+        settings = self.load("staging", examples()["STAGING_CONFIG"])
+        self.assertEqual((settings["web_network"], settings["database_network"], settings["otel_network"]),
+                         ("web", "people-gator-db", "logging"))
+        self.assertEqual(settings["project"], "people-gator-staging")
+        self.assertEqual(settings["postgres_image"], "pgvector/pgvector:pg16")
+        with self.assertRaisesRegex(DeployError, "docker_context: unknown field"):
+            self.load("staging", {**examples()["STAGING_CONFIG"], "docker_context": "rootless"})
         with patch.dict(os.environ, {"HOME": str(self.root / "home")}):
-            implicit = config.load("staging", {k: v for k, v in self.env.items() if "STATE_DIR" not in k})
-        self.assertEqual(implicit["state_dir"], str(self.root / "home/.local/opt/people-gator-deploy/state/staging"))
+            implicit = config.load("pr", {**REPOSITORY, "DEPLOY_CONFIG": json.dumps(examples()["PREVIEW_CONFIG"])})
+        self.assertEqual(implicit["state_dir"], str(self.root / "home/.local/opt/people-gator-deploy/state/pr"))
+        self.assertEqual(implicit["users_file"], str(self.root / "home/.local/opt/people-gator-deploy/state/pr/users.json"))
+        # Operators may point at a private file instead of passing the JSON text.
+        private = self.root / "preview.json"
+        private.write_text(json.dumps(examples()["PREVIEW_CONFIG"]))
+        self.assertEqual(config.load("pr", {**REPOSITORY, "DEPLOY_CONFIG_FILE": str(private)})["domain"], "preview.peoplegator.dev")
 
-    def test_invalid_values_are_rejected(self):
-        cases = {"DEPLOY_DOMAIN": "Preview.Example", "DEPLOY_DOCKER_CONTEXT": "root less", "DEPLOY_STATE_DIR": "relative/state",
-                 "DEPLOY_OTEL_HTTP_ENDPOINT": "lgtm:4318/v1/logs", "DEPLOY_OTEL_ENABLED": "yes", "DEPLOY_POSTGRES_CONTAINER": "pg container",
-                 "DEPLOY_POSTGRES_ADMIN_USER": "Admin;"}
-        for name, value in cases.items():
-            with self.subTest(name=name), self.assertRaisesRegex(DeployError, name):
-                config.load("pr", {**self.env, name: value})
-        with self.assertRaisesRegex(DeployError, "DEPLOY_SNAPSHOT"):
-            config.load("staging", {**self.env, "DEPLOY_SNAPSHOT": '{"path": "/private/snapshot.dump"}'})
-        snapshot = {"path": "/private/snapshot.dump", "sha256": "a" * 64, "application_revision": "b" * 40}
-        self.assertEqual(config.load("staging", {**self.env, "DEPLOY_SNAPSHOT": json.dumps(snapshot)})["snapshot"], snapshot)
-        with self.assertRaisesRegex(DeployError, "not both"):
-            config.load("staging", {**self.env, "DEPLOY_SNAPSHOT": json.dumps(snapshot), "DEPLOY_SNAPSHOT_SOURCE": "{}"})
-        with self.assertRaisesRegex(DeployError, "DEPLOY_ACCESS_REVIEWED"):
-            config.load("release", {**self.env, "DEPLOY_ACCESS_REVIEWED": "yes"})
-
-    def test_secret_contents_are_validated_before_anything_is_written(self):
-        settings = config.load("staging", {**self.env, "DEPLOY_SNAPSHOT_SOURCE": "{}"})
+    def test_missing_or_invalid_documents_name_the_secret_and_field(self):
+        with self.assertRaisesRegex(DeployError, "STAGING_CONFIG is missing"):
+            config.load("staging", REPOSITORY)
+        with self.assertRaisesRegex(DeployError, "PREVIEW_CONFIG: document: is not valid JSON"):
+            config.load("pr", {**REPOSITORY, "DEPLOY_CONFIG": "{"})
+        with self.assertRaisesRegex(DeployError, "GITHUB_REPOSITORY"):
+            config.load("pr", {"DEPLOY_CONFIG": json.dumps(examples()["PREVIEW_CONFIG"])})
+        base = examples()["STAGING_CONFIG"]
         cases = (
-            ({"DEPLOY_RUNTIME_ENV": "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE=external"}, "persistence settings are managed"),
-            ({"DEPLOY_RUNTIME_ENV": "export AWS_SECRET_ACCESS_KEY=ambient"}, "only PEOPLE_GATOR_API"),
-            ({"DEPLOY_RUNTIME_ENV": "   "}, "missing secret contents"),
-            ({"DEPLOY_SNAPSHOT_SOURCE": "{}"}, "DEPLOY_SNAPSHOT_SOURCE"),
+            ({**base, "host": "Staging.Example"}, "host: must be a lowercase hostname"),
+            ({**base, "database": "mysql://a:b@c/d"}, "database: must be postgresql://"),
+            ({**base, "database": "postgresql://user@host/db"}, "database: must be postgresql://"),
+            ({**base, "database": "postgresql://user:pw@host:notaport/db"}, "database: invalid port"),
+            ({k: v for k, v in base.items() if k != "storage"}, "storage: is required"),
+            ({**base, "storage": {"local": {"root": "relative"}}}, "storage.local"),
+            ({**base, "storage": {"s3": {"bucket_name": "b"}}}, "storage.s3: needs region"),
+            ({**base, "storage": {"local": {"root": "/data"}, "s3": None}}, "storage: must be"),
+            ({**base, "otel": {"endpoint": "lgtm:4318/v1/logs"}}, "otel.endpoint"),
+            ({**base, "otel": {"endpoint": "http://lgtm:4318", "exporter": "x"}}, "otel: must be"),
+            ({**base, "rum": {"site": "x"}}, "rum: must be"),
+            ({**base, "rum": {"client_token": "t", "session_sample_rate": 150}}, "rum.session_sample_rate"),
+            ({**base, "backup_source": {"bucket": "b"}}, "backup_source: needs exactly"),
+            ({**base, "extra_env": {"PEOPLE_GATOR_API__STORAGE": "x"}}, "extra_env.PEOPLE_GATOR_API__STORAGE"),
+            ({**base, "extra_env": {"AWS_SECRET": "x"}}, "extra_env.AWS_SECRET"),
+            ({**base, "extra_env": {"PEOPLE_GATOR_API__OPENROUTER__API_KEY": "two\nlines"}}, "extra_env.PEOPLE_GATOR_API__OPENROUTER__API_KEY"),
+            ({**base, "users": {}}, "users: unknown field"),
         )
-        for changes, message in cases:
-            with self.subTest(message=message), self.assertRaisesRegex(DeployError, message) as raised:
-                config.secrets("staging", settings, {**self.env, **changes})
-            self.assertNotIn("external", str(raised.exception))
-        env = {key: value for key, value in self.env.items() if key != "DEPLOY_RUNTIME_ENV"}
-        with self.assertRaisesRegex(DeployError, "DEPLOY_RUNTIME_ENV: missing"):
-            config.secrets("staging", config.load("staging", env), env)
-        with self.assertRaisesRegex(DeployError, "DEPLOY_USERS_JSON"):
-            config.secrets("pr", config.load("pr", self.env), {**self.env, "DEPLOY_USERS_JSON": "[]"})
-        self.assertFalse((self.root / "state").exists())
+        for document, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(DeployError, "STAGING_CONFIG: " + re.escape(message)) as raised:
+                self.load("staging", document)
+            self.assertNotIn("READ_ONLY_SECRET", str(raised.exception))  # never the configured values
+            self.assertIn("deploy/GITHUB-SETUP.md", str(raised.exception))
+        with self.assertRaisesRegex(DeployError, "PREVIEW_CONFIG: users: must map"):
+            self.load("pr", {**examples()["PREVIEW_CONFIG"], "users": {"test": "plain"}})
+        with self.assertRaisesRegex(DeployError, "PRODUCTION_CONFIG: migration_database: must be postgresql"):
+            self.load("release", {**examples()["PRODUCTION_CONFIG"], "migration_database": "nope"})
+        self.assertFalse(self.root.exists() and any(self.root.iterdir()))
 
-    def test_materialized_files_have_private_modes_and_are_rewritten_only_on_change(self):
-        source = {"endpoint_url": "https://s3.example.invalid", "region": "us-east-1", "bucket": "backups",
-                  "prefix": "production/db-backups/", "access_key_id": "reader", "secret_access_key": "reader-secret"}
-        env = {**self.env, "DEPLOY_SNAPSHOT_SOURCE": json.dumps(source), "DEPLOY_TELEMETRY_ENV": "PEOPLE_GATOR_API__RUM__ENABLED=true"}
-        settings = config.load("staging", env)
-        files = config.secrets("staging", settings, env)
-        self.assertEqual({path.name for path, _, _ in files}, {"runtime.env", "snapshot-source.json", "telemetry.env"})
+    def test_database_urls_are_decoded_into_persistence_settings(self):
+        document = {**examples()["PRODUCTION_CONFIG"], "database": "postgres://app%40x:p%3Ass%2Fw@db.internal/people",
+                    "migration_database": "postgresql://migrator:m@db.internal:6432/people"}
+        settings = self.load("release", document)
+        self.assertEqual(settings["postgres"], {"host": "db.internal", "port": 5432, "user": "app@x", "password": "p:ss/w", "database": "people"})
+        self.assertEqual(settings["migration"]["port"], 6432)
+        files = {path.name: content for path, content, _ in config.files("release", settings)}
+        self.assertIn("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD=p:ss/w\n", files["runtime.env"])
+        self.assertIn("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n", files["migration.env"])
+        self.assertNotIn("migrator", files["runtime.env"])
+        self.assertIn('PEOPLE_GATOR_API__STORAGE={"local": null, "s3": {', files["runtime.env"])
+        self.assertIn("PEOPLE_GATOR_API__JWK__ISSUER=https://people.example.org\n", files["runtime.env"])
+
+    def test_rendered_files_have_private_modes_and_are_rewritten_only_on_change(self):
+        document = {**examples()["PREVIEW_CONFIG"], "extra_env": {"PEOPLE_GATOR_API__OPENROUTER__API_KEY": "sk-synthetic"}}
+        settings = self.load("pr", document)
+        files = config.files("pr", settings)
+        self.assertEqual({path.name for path, _, _ in files}, {"runtime.env", "telemetry.env", "users.json"})
         config.materialize(files)
         runtime = Path(settings["runtime_file"])
-        self.assertEqual(runtime.read_text(), "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data\n")
-        self.assertTrue(all(path.stat().st_mode & 0o777 == 0o600 for path, _, _ in files))
+        self.assertEqual(runtime.read_text(), 'PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n'
+                                              "PEOPLE_GATOR_API__OPENROUTER__API_KEY=sk-synthetic\n")
+        self.assertEqual(runtime.stat().st_mode & 0o777, 0o600)
+        # The unprivileged backend container reads the users file through a bind mount.
+        users = Path(settings["users_file"])
+        self.assertEqual(users.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(json.loads(users.read_text())["test"]["scopes"][0], "people-gator:browse")
         before = runtime.stat().st_mtime_ns
         config.materialize(files)
         self.assertEqual(runtime.stat().st_mtime_ns, before)
         runtime.chmod(0o644)
         config.materialize(files)
         self.assertEqual(runtime.stat().st_mode & 0o777, 0o600)
-        env["DEPLOY_RUNTIME_ENV"] = "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/other\n"
-        config.materialize(config.secrets("staging", settings, env))
-        self.assertEqual(runtime.read_text(), "PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/other\n")
-        self.assertTrue(config.private_file(Path(settings["snapshot_source_file"])))
-        preview = config.load("pr", self.env)
-        config.materialize(config.secrets("pr", preview, self.env))
-        users = Path(preview["users_file"])
-        # The unprivileged backend container reads the users file through a bind mount.
-        self.assertEqual(users.stat().st_mode & 0o777, 0o644)
-        self.assertTrue(config.protected_file(users))
-        self.assertEqual(json.loads(users.read_text()), {"test": {}})
+        without_telemetry = self.load("pr", {k: v for k, v in document.items() if k not in {"otel", "rum"}})
+        self.assertNotIn("telemetry_file", without_telemetry)
+        self.assertEqual({path.name for path, _, _ in config.files("pr", without_telemetry)}, {"runtime.env", "users.json"})
         self.assertTrue(config.SECRET_FILES >= {"users.json", "runtime.env", "migration.env", "telemetry.env", "snapshot-source.json"})
+
+    def test_bundled_demo_users_match_the_repository_example(self):
+        example = Path(__file__).resolve().parents[3] / "people-gator-api/example.users.json"
+        self.assertEqual(json.loads(config.EXAMPLE_USERS.read_text()), json.loads(example.read_text()))
 
 
 if __name__ == "__main__":

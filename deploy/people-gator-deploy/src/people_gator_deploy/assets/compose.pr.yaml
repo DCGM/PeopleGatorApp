@@ -23,18 +23,20 @@ x-backend: &backend
   tmpfs: ['/tmp:size=128m,mode=1777']
   mem_limit: 2g
   pids_limit: 256
+  env_file:
+    - path: ${RUNTIME_FILE:?required}
+      format: raw
   environment: &preview-environment
     PEOPLE_GATOR_API__HOST: 0.0.0.0
     PEOPLE_GATOR_API__PORT: '8000'
     PEOPLE_GATOR_API__DEBUG: 'false'
     PEOPLE_GATOR_API__RELOAD: 'false'
-    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: preview-postgres
-    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: '5432'
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: ${DB_HOST:-preview-postgres}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: ${DB_PORT:-5432}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${DB_USER:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${DB_PASSWORD:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${DB_NAME:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
-    PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
     PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
     PEOPLE_GATOR_API__JWK__ISSUER: https://${PREVIEW_HOST:?required}
     PEOPLE_GATOR_API__JWK__AUDIENCE: ${PREVIEW_HOST:?required}
@@ -79,6 +81,8 @@ services:
   backend:
     <<: *backend
     env_file:
+      - path: ${RUNTIME_FILE:?required}
+        format: raw
       - path: ${TELEMETRY_FILE:-/dev/null}
         format: raw
     restart: unless-stopped
@@ -90,11 +94,6 @@ services:
       PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${COMMIT_SHA:-unknown}
       PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
       PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER: "${PR_NUMBER:?required}"
-      # Direct OTLP export to the operator's collector on the telemetry network.
-      PEOPLE_GATOR_API__OTEL__ENABLED: ${OTEL_ENABLED:-true}
-      PEOPLE_GATOR_API__OTEL__TRACES_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/traces
-      PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/logs
-      PEOPLE_GATOR_API__OTEL__METRICS_ENDPOINT: ${OTEL_HTTP_ENDPOINT:-http://lgtm:4318}/v1/metrics
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
       interval: 10s
@@ -111,7 +110,7 @@ services:
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.priority=100
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.service=pg-pr-${PR_NUMBER}-api
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls=true
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls.certresolver=tlschallenge
       - traefik.http.services.pg-pr-${PR_NUMBER}-api.loadbalancer.server.port=8000
 
   frontend:
@@ -139,7 +138,7 @@ services:
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.priority=10
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.service=pg-pr-${PR_NUMBER}-app
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls=true
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls.certresolver=tlschallenge
       - traefik.http.services.pg-pr-${PR_NUMBER}-app.loadbalancer.server.port=8080
 
 volumes:
@@ -148,10 +147,10 @@ volumes:
 networks:
   database:
     external: true
-    name: ${DATABASE_NETWORK:-people-gator-preview-db}
+    name: ${DATABASE_NETWORK:-people-gator-db}
   web:
     external: true
     name: ${WEB_NETWORK:-web}
   telemetry:
     external: true
-    name: ${APPLICATION_OTEL_NETWORK:-${WEB_NETWORK:-web}}
+    name: ${APPLICATION_OTEL_NETWORK:-logging}

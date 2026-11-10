@@ -19,7 +19,7 @@ FAKE_DOCKER = textwrap.dedent('''\
     stdin = sys.stdin.read() if 'login' in args else ''
     with open(os.environ['DOCKER_TEST_LOG'], 'a') as log:
         log.write(json.dumps({'args': args, 'config': str(config), 'stdin': stdin,
-                              'environment': sorted(k for k in os.environ if k.startswith(('DB_', 'AWS_', 'PEOPLE_', 'DOCKER_HOST')))}) + '\\n')
+                              'environment': sorted(k for k in os.environ if k.startswith(('DB_', 'AWS_', 'PEOPLE_', 'DOCKER_HOST', 'PGPASSWORD', 'DEPLOY_')))}) + '\\n')
     if os.environ.get('DOCKER_TEST_FAIL') and os.environ['DOCKER_TEST_FAIL'] in ' '.join(args):
         sys.exit(1)
     if args[:1] == ['context']:
@@ -30,6 +30,8 @@ FAKE_DOCKER = textwrap.dedent('''\
         sys.exit('missing explicit context')
     if operation[:2] == ['context', 'use']:
         sys.exit('the host-wide active context must never change')
+    if operation[:2] == ['context', 'show']:
+        print(os.environ['DOCKER_TEST_CONTEXT'])
     if operation[:2] == ['context', 'export']:
         pathlib.Path(operation[3]).write_text('synthetic context')
     elif operation[:2] == ['context', 'import']:
@@ -98,16 +100,22 @@ class DockerAdapterTests(unittest.TestCase):
                     if used is not None:
                         self.assertFalse(Path(used).exists())
 
-    def test_every_command_names_its_context_and_drops_ambient_interpolation(self):
+    def test_every_command_names_the_current_context_and_drops_ambient_secrets(self):
         with self.environment("rootless", DB_PASSWORD="ambient", AWS_SECRET_ACCESS_KEY="ambient",
                               PEOPLE_GATOR_API__STORAGE="ambient", DOCKER_HOST="tcp://ambient:2375",
                               PEOPLE_GATOR_POSTGRES_TEST_URL="postgresql://synthetic:secret@host/test",
                               PEOPLE_GATOR_SCHEMA_TEST_URL="postgresql://synthetic:secret@host/schema",
-                              DEPLOY_USERS_JSON="{}", DEPLOY_DOMAIN="preview.example.invalid"):
-            Docker("rootless").run(["docker", "compose", "--project-name", "p", "ps"])
-        call = self.calls()[0]
-        self.assertEqual(call["args"][:2], ["--context", "rootless"])
-        self.assertEqual(call["environment"], [])
+                              DEPLOY_CONFIG="{}", PGPASSWORD="ambient"):
+            # The account's current context is resolved once and named on every call.
+            docker = Docker()
+            self.assertEqual(docker.context, "rootless")
+            docker.run(["docker", "compose", "--project-name", "p", "ps"])
+            docker.run(["docker", "run", "--rm", "-i", "-e", "PGPASSWORD", "pgvector/pgvector:pg16", "psql"],
+                       extra_env={"PGPASSWORD": "explicit"})
+        calls = [call for call in self.calls() if call["args"][:1] != ["context"]]
+        self.assertEqual(calls[0]["args"][:2], ["--context", "rootless"])
+        self.assertEqual(calls[0]["environment"], [])
+        self.assertEqual(calls[1]["environment"], ["PGPASSWORD"])  # only the explicit pass-through
         with self.assertRaises(DeployError):
             Docker("")
 
