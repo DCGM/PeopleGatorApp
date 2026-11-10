@@ -5,7 +5,7 @@ import type { PageResponse, PageSortField } from '@/client'
 import { listSortParams, type SortState } from '@/lib/sorting'
 import { GALLERY_DEFAULT } from '@/viewmodels/sort-options'
 import { useObjectUrlMap } from '@/composables/object-url'
-import { fetchPageImage, usePageListQuery } from '@/query/media'
+import { fetchPageImage, fetchPages, usePageListQuery } from '@/query/media'
 import { queryKeys } from '@/query/keys'
 
 /** Pages requested per API batch; further batches load on demand. */
@@ -21,6 +21,7 @@ export type PageGalleryItem = {
   label: string
   current: boolean
   unassignedFaces?: number | null
+  matchesSelectedPerson?: boolean | null
   thumbnailUrl: string
   thumbnailLoading: boolean
   thumbnailFailed: boolean
@@ -43,6 +44,7 @@ export function useDocumentPageGallery(
   batchSize = PAGE_GALLERY_BATCH_SIZE,
   sort: MaybeRefOrGetter<SortState<PageSortField>> = GALLERY_DEFAULT,
   personId: MaybeRefOrGetter<string> = '',
+  selectedPersonId: MaybeRefOrGetter<string | null> = personId,
 ) {
   const query = usePageListQuery(
     computed(() => ({
@@ -68,6 +70,44 @@ export function useDocumentPageGallery(
   })
   const currentLoaded = computed(() =>
     pages.value.some((page) => page.page_id === toValue(currentPageId)),
+  )
+
+  // Look up person membership for loaded pages in bounded batches. This also
+  // highlights matches while the strip shows every page, without loading faces
+  // or mentions separately for each thumbnail.
+  const matchChunks = computed(() => {
+    if (!toValue(selectedPersonId) || toValue(personId) === toValue(selectedPersonId)) return []
+    const ids = pages.value.map((page) => page.source_id)
+    return Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) =>
+      ids.slice(i * 100, (i + 1) * 100),
+    )
+  })
+  const matchQueries = useQueries({
+    queries: computed(() =>
+      matchChunks.value.map((ids) => {
+        const params = {
+          'filter.library': [toValue(library)],
+          'filter.document_id': [toValue(documentId)],
+          'filter.entity_id': [toValue(selectedPersonId)!],
+          'filter.source_id': ids,
+          limit: ids.length,
+        }
+        return {
+          queryKey: queryKeys.pages.list(params),
+          queryFn: ({ signal }: { signal: AbortSignal }) => fetchPages(params, signal),
+        }
+      }),
+    ),
+  })
+  const personMatches = computed(
+    () =>
+      new Map(
+        matchChunks.value.flatMap((ids, i) => {
+          const result = matchQueries.value[i]?.data
+          const found = new Set(result?.items.map((page) => page.source_id))
+          return ids.map((id) => [id, result ? found.has(id) : null] as const)
+        }),
+      ),
   )
 
   // In the unfiltered strip, locate the current page across batches. A person
@@ -125,6 +165,11 @@ export function useDocumentPageGallery(
       label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
       unassignedFaces: page.entity_link_stats?.faces?.unassigned ?? null,
+      matchesSelectedPerson: !toValue(selectedPersonId)
+        ? false
+        : toValue(personId) === toValue(selectedPersonId)
+          ? true
+          : (personMatches.value.get(page.source_id) ?? null),
       thumbnailUrl: thumbnailUrls.value.get(page.source_id) ?? '',
       thumbnailLoading: thumbnailQueries.value[index]?.isPending ?? false,
       thumbnailFailed: thumbnailQueries.value[index]?.isError ?? false,
@@ -136,6 +181,8 @@ export function useDocumentPageGallery(
     totalCount: computed(() => query.data.value?.pages[0]?.total_count ?? null),
     isLoading: computed(() => query.isPending.value),
     error: computed(() => query.error.value),
+    highlightError: computed(() => matchQueries.value.some((result) => result.isError)),
+    retryHighlights: () => Promise.all(matchQueries.value.map((result) => result.refetch())),
     hasNextPage: computed(() => query.hasNextPage.value),
     isFetchingNextPage: computed(() => query.isFetchingNextPage.value),
     loadMore: () => {

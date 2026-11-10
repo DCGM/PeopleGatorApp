@@ -167,6 +167,7 @@ const gallery = useDocumentPageGallery(
   PAGE_GALLERY_BATCH_SIZE,
   gallerySort,
   galleryPerson,
+  selectedPersonId,
 )
 function galleryLocation(item: PageGalleryItem) {
   return {
@@ -998,6 +999,8 @@ onBeforeUnmount(() => {
                 :total-count="gallery.totalCount.value"
                 :loading="gallery.isLoading.value"
                 :error="Boolean(gallery.error.value)"
+                :highlight-error="gallery.highlightError.value"
+                @retry-highlights="gallery.retryHighlights()"
                 :has-next-page="gallery.hasNextPage.value"
                 :is-fetching-next-page="gallery.isFetchingNextPage.value"
                 :location="galleryLocation"

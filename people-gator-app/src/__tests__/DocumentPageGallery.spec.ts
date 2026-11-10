@@ -93,14 +93,16 @@ describe('DocumentPageGallery', () => {
     const { wrapper } = await mountGallery({
       items: [
         { ...item(1, true), unassignedFaces: 0 },
-        { ...item(2), unassignedFaces: 2 },
+        { ...item(2), unassignedFaces: 2, matchesSelectedPerson: true },
       ],
     })
     expect(wrapper.findAll('a')[0]!.attributes('aria-label')).not.toContain('unassigned')
     expect(wrapper.findAll('a')[1]!.attributes('aria-label')).toBe(
-      'Page page-2, 2 unassigned faces',
+      'Page page-2, selected person appears on this page, 2 unassigned faces',
     )
-    expect(wrapper.findAll('a')[1]!.text()).toContain('unassigned faces')
+    expect(wrapper.findAll('a')[1]!.get('[data-page-thumbnail]').text()).toContain(
+      'unassigned faces',
+    )
     expect(wrapper.findAll('a')[1]!.attributes('aria-current')).toBeUndefined()
     await wrapper.setProps({ items: [], totalCount: 0 })
     expect(wrapper.get('[role=status]').text()).toBe('No matching pages.')

@@ -27,6 +27,7 @@ const props = defineProps<{
   totalCount: number | null
   loading?: boolean
   error?: boolean
+  highlightError?: boolean
   hasNextPage?: boolean
   isFetchingNextPage?: boolean
   location: (item: PageGalleryItem) => RouteLocationRaw
@@ -38,13 +39,14 @@ const sort = defineModel<SortState<PageSortField>>('sort')
 const emit = defineEmits<{
   'load-more': []
   retry: []
+  retryHighlights: []
 }>()
 
 const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
 
 function itemName(item: PageGalleryItem) {
-  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.unassignedFaces ? `, ${item.unassignedFaces} unassigned ${item.unassignedFaces === 1 ? 'face' : 'faces'}` : ''}`
+  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}${item.unassignedFaces ? `, ${item.unassignedFaces} unassigned ${item.unassignedFaces === 1 ? 'face' : 'faces'}` : ''}`
 }
 
 /** Scroll only the strip, never the window, so the scan stays where it is. */
@@ -154,8 +156,15 @@ useIntersectionObserver(sentinel, ([entry]) => {
       >
         This document has one registered page.
       </p>
+      <div v-if="highlightError" class="flex items-center gap-2" role="alert">
+        Could not check person matches.
+        <Button variant="ghost" size="sm" @click="emit('retryHighlights')">Retry</Button>
+      </div>
       <ScrollArea type="always" orientation="horizontal" class="w-full">
-        <ol ref="list" class="flex min-h-40 w-max min-w-full items-start gap-2 px-1 pb-4 pt-2">
+        <ol
+          ref="list"
+          class="flex min-h-32 sm:min-h-36 w-max min-w-full items-start gap-2 px-1 pb-4 pt-2"
+        >
           <li v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
             No matching pages.
           </li>
@@ -168,43 +177,50 @@ useIntersectionObserver(sentinel, ([entry]) => {
               :title="`Page ${item.pageId}`"
               :data-current="item.current || undefined"
             >
-              <LoadableImage
-                :src="item.thumbnailUrl"
-                :loading="item.thumbnailLoading"
-                alt=""
-                class="aspect-[8/11] w-full rounded-md border-2 bg-muted transition-[border-color] group-hover:border-accent"
+              <div
+                data-page-thumbnail
+                :data-person-match="item.matchesSelectedPerson || undefined"
+                :aria-busy="item.matchesSelectedPerson === null && !highlightError"
+                class="relative aspect-[8/11] w-full rounded-md"
                 :class="
                   item.current
-                    ? 'border-secondary ring-2 ring-secondary ring-offset-2'
-                    : 'border-border'
+                    ? 'border-2 border-secondary ring-2 ring-secondary ring-offset-2'
+                    : item.matchesSelectedPerson
+                      ? 'border-0 p-0.5 ring-2 ring-primary'
+                      : 'border-2 border-border group-hover:border-accent'
                 "
-                image-class="object-cover"
               >
-                <template #fallback>
-                  <span
-                    class="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground"
-                  >
-                    <ImageOff class="size-4" aria-hidden="true" />
-                    <span class="text-[0.625rem] leading-none">No preview</span>
-                  </span>
-                </template>
-              </LoadableImage>
+                <LoadableImage
+                  :src="item.thumbnailUrl"
+                  :loading="item.thumbnailLoading"
+                  alt=""
+                  class="h-full w-full rounded-md bg-muted"
+                  image-class="object-cover"
+                >
+                  <template #fallback>
+                    <span
+                      class="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground"
+                    >
+                      <ImageOff class="size-4" aria-hidden="true" />
+                      <span class="text-[0.625rem] leading-none">No preview</span>
+                    </span>
+                  </template>
+                </LoadableImage>
+                <Badge
+                  v-if="item.unassignedFaces"
+                  class="absolute bottom-1 right-1 max-w-[calc(100%-0.5rem)]"
+                  :title="`${item.unassignedFaces} unassigned faces`"
+                >
+                  <UserRoundSearch aria-hidden="true" />
+                  {{ item.unassignedFaces }}
+                  <span class="sr-only">unassigned faces</span>
+                </Badge>
+              </div>
               <span
                 class="w-full truncate text-center font-mono text-[0.6875rem] leading-tight"
                 :class="item.current ? 'font-semibold text-foreground' : 'text-muted-foreground'"
               >
                 {{ item.label }}
-              </span>
-              <span class="flex h-6 items-center justify-center">
-                <Badge
-                  v-if="item.unassignedFaces"
-                  variant="outline"
-                  :title="`${item.unassignedFaces} unassigned faces`"
-                >
-                  <UserRoundSearch class="size-3" aria-hidden="true" />
-                  {{ item.unassignedFaces }}
-                  <span class="sr-only">unassigned faces</span>
-                </Badge>
               </span>
             </RouterLink>
           </li>

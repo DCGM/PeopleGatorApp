@@ -102,6 +102,8 @@ beforeEach(() => {
     totalCount: ref(null),
     isLoading: ref(false),
     error: ref(null),
+    highlightError: ref(false),
+    retryHighlights: vi.fn(),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
     loadMore: vi.fn(),
@@ -286,7 +288,7 @@ describe('document page gallery navigation', () => {
     expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
     // Only the route document and the gallery's own order; no evidence filters.
     const [, , , , order, person] = mocks.gallery.mock.calls[0]!
-    expect(mocks.gallery.mock.calls[0]).toHaveLength(6)
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(7)
     expect(person.value).toBe('')
     expect(order.value).toEqual({ field: 'page_number', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
