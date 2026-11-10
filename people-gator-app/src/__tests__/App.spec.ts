@@ -166,7 +166,7 @@ describe('App', () => {
     },
   )
 
-  it('renders floating document controls inside the viewer', async () => {
+  it('renders document controls in the viewer header above the image', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
     await router.isReady()
 
@@ -176,7 +176,7 @@ describe('App', () => {
 
     expect(topBar.text()).not.toContain('People Gator')
     expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(false)
-    const tools = wrapper.get('.workspace-viewer [aria-label="Scan tools"]')
+    const tools = wrapper.get('header.viewer-tools [aria-label="Scan tools"]')
     expect(tools.find('[aria-label="Previous line"]').exists()).toBe(true)
     expect(wrapper.get('.panzoom-layer').find('[aria-label="Scan tools"]').exists()).toBe(false)
 

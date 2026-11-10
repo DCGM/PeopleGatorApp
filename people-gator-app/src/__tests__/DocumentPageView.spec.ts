@@ -1028,6 +1028,12 @@ describe('independent panel visibility (#139)', () => {
     await nextTick()
     expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
     expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    // The splitter may expand internally as responsive constraints change; only
+    // an explicit reopen action should reveal the user's hidden content.
+    wrapper.findAllComponents({ name: 'ResizablePanel' }).forEach((panel) => panel.vm.$emit('expand'))
+    await nextTick()
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
     const bar = wrapper.get('header.viewer-tools')
     expect(bar.find('[aria-label="Open transcription panel"]').exists()).toBe(true)
     expect(bar.find('[aria-label="Open people panel"]').exists()).toBe(true)

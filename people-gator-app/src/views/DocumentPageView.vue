@@ -104,6 +104,7 @@ const sidebarState = sidebar.state
 
 function hidePanel(side: 'left' | 'right') {
   const visible = side === 'left' ? transcriptionVisible : sidebarVisible
+  if (!visible.value) return
   visible.value = false
   const panel = side === 'left' ? transcriptionPanel : sidebarPanel
   panel.value?.collapse?.()
@@ -878,8 +879,7 @@ onBeforeUnmount(() => {
               v-show="transcriptionVisible"
               collapsible
               :collapsed-size="0"
-              @collapse="transcriptionVisible = false"
-              @expand="transcriptionVisible = true"
+              @collapse="hidePanel('left')"
               :default-size="workspaceSplit.defaultSize"
               :min-size="15"
               :max-size="70"
@@ -1117,8 +1117,7 @@ onBeforeUnmount(() => {
         v-show="sidebarVisible"
         collapsible
         :collapsed-size="0"
-        @collapse="sidebarVisible = false"
-        @expand="sidebarVisible = true"
+        @collapse="hidePanel('right')"
         size-unit="px"
         :default-size="sidebarWidth.defaultSize"
         :min-size="isWideWorkspace ? SIDEBAR_WIDTH.min : 0"

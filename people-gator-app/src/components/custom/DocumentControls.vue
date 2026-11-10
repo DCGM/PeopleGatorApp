@@ -51,7 +51,7 @@ defineEmits<{
   <div
     role="toolbar"
     aria-label="Scan tools"
-    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2"
+    class="flex select-none flex-row flex-nowrap items-center justify-start gap-2"
   >
     <ButtonGroup class="shrink-0">
       <Button
