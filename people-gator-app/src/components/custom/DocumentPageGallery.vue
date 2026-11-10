@@ -212,11 +212,11 @@ useAutomaticPagination({
         <ol
           id="document-pages-list"
           ref="list"
-          class="items-start gap-2 px-1 pb-4 pt-2"
+          class="items-start gap-2 pb-4 pt-2"
           :class="
             expanded
-              ? 'grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] w-full'
-              : 'flex min-h-32 sm:min-h-36 w-max min-w-full'
+              ? 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,6rem),1fr))] w-full pl-1 pr-3'
+              : 'flex min-h-32 sm:min-h-36 w-max min-w-full px-1'
           "
         >
           <li
