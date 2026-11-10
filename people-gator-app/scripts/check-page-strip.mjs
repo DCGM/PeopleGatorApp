@@ -55,26 +55,14 @@ try {
         .isDisabled(),
       true,
     )
-    assert.equal(await strip.locator('ol a[aria-label*="unassigned"]').count(), 2)
     assert.ok((await header.innerText()).includes('Page strip review practice'))
     assert.ok((await header.innerText()).includes('1/18'))
     assert.equal(await strip.locator('.search-filter-panel,.active-filters').count(), 0)
-    // Every face counter is inside its thumbnail, never below the page number.
-    const countersInside = await strip
-      .locator('[data-page-thumbnail] [data-slot=badge]')
-      .evaluateAll((badges) =>
-        badges.every((b) => {
-          const count = b.getBoundingClientRect(),
-            image = b.closest('[data-page-thumbnail]').getBoundingClientRect()
-          return (
-            count.left >= image.left &&
-            count.right <= image.right &&
-            count.top >= image.top &&
-            count.bottom <= image.bottom
-          )
-        }),
-      )
-    assert.equal(countersInside, true)
+    assert.equal(
+      await strip.locator('[data-page-thumbnail] [data-slot=badge]').count(),
+      0,
+      'no ambiguous per-page statistics',
+    )
     assert.equal(await strip.locator('[data-page-thumbnail][data-person-match=true]').count(), 0)
     await capture('highlights')
 
@@ -258,7 +246,7 @@ try {
     )
     assert.deepEqual(errors, [])
     console.log(
-      `${label}: counter placement, single outer strokes, unfiltered person highlights, sidebar-only person selection, keyboard toggle, face/mention matches, fixed header height, sorting, URL/history, legacy links, unknown person, long names and dark mode passed`,
+      `${label}: no annotation counters, orange border states, unfiltered person highlights, sidebar-only person selection, keyboard toggle, face/mention matches, fixed header height, sorting, URL/history, legacy links, unknown person, long names and dark mode passed`,
     )
     await context.close()
   }

@@ -13,7 +13,7 @@ PAGE_STRIP_ORIGIN=http://127.0.0.1:5132 node scripts/check-page-strip.mjs
 
 | State | Desktop | Mobile |
 | --- | --- | --- |
-| No selected person; indicators on pages 1 and 4 | [Capture](desktop-highlights.png) | [Capture](mobile-highlights.png) |
+| No selected person; no annotation statistics | [Capture](desktop-highlights.png) | [Capture](mobile-highlights.png) |
 | Nora selected; matches highlighted while all pages remain | [Capture](desktop-person-highlights.png) | [Capture](mobile-person-highlights.png) |
 | Nora selected; person-only enabled | [Capture](desktop-person-filter.png) | [Capture](mobile-person-filter.png) |
 | Current page with a person match: double border retained | [Capture](desktop-current-assigned.png), [strip](desktop-current-assigned-strip.png) | [Capture](mobile-current-assigned.png), [strip](mobile-current-assigned-strip.png) |
@@ -21,10 +21,10 @@ PAGE_STRIP_ORIGIN=http://127.0.0.1:5132 node scripts/check-page-strip.mjs
 | Unknown selected person; empty results | [Capture](desktop-empty.png) | [Capture](mobile-empty.png) |
 | Dark theme | [Capture](desktop-dark.png) | [Capture](mobile-dark.png) |
 
-Unassigned-face counters sit inside their thumbnails. Pages containing the
-selected person have a single outer stroke; the actual current page retains its
-double border, including when it is also a person match. Highlight membership
-uses the same face-or-mention predicate with the person-only toggle on or off.
+The strip shows no face/mention statistics. Noncurrent pages containing the
+selected person have a single orange outer border; the current page keeps its
+double orange border. Membership uses assigned faces OR linked text mentions,
+with the person-only toggle on or off.
 
 The one-line header shows the orange document name, NDK link, document-wide page
 position, person-only toggle and Sort. Narrow panes scroll horizontally instead
@@ -33,7 +33,7 @@ selector, applied-filter tags or mobile expansion panel.
 
 The browser script selects Nora Page and Otto Page through the right panel and
 checks highlights with the filter off, the keyboard toggle, mention-only page
-navigation, reload and history. It checks counters inside thumbnails, outer-only
+navigation, reload and history. It checks the absence of annotation badges, outer-only
 person-match strokes, the current page's double border, stable geometry for long
 names/empty results, sorting, legacy URLs, light/dark themes and page width. The
 long-name check renames a synthetic person through the API and restores its name
