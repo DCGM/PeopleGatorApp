@@ -337,7 +337,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                         embeddings=[
                             FaceEmbedding(
                                 model_identifier=model,
-                                vector=[0.0] * dim if face.zero_vector else example_vector(face.group, face.key, dim),
+                                vector=example_vector(face.group, face.key, dim),
                             )
                             for model, dim in ((MODEL, 8), (SECOND_MODEL, 4), (DISCOVERY_MODEL, 8), (DISCOVERY_OTHER_MODEL, 4)) if face.embedded and model in face.models
                         ],

@@ -3,6 +3,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntitySortField, FoundEntity, EntityResponse } from '@/client'
 import { defaultDirection, listSortParams, sortParams, type SortState } from '@/lib/sorting'
+import { apiErrorCode } from '@/query/api'
 import { fetchEntities, useEntityListQuery, type EntityListParams } from '@/query/entities'
 import { queryKeys } from '@/query/keys'
 import { useEntitySearchQuery, type EntitySearchParams } from '@/query/search'
@@ -299,6 +300,12 @@ export function useScanPeople(options: {
     hasNextPage: computed(() => combined.value.active < used.value.length),
     isFetching: computed(() => used.value.some((slot) => slot.state.value.isFetching)),
     error: computed(() => activeSlot.value?.state.value.error ?? null),
+    /** The API cannot score with the attached face, e.g. its stored vector is all zeros. */
+    faceRejected: computed(
+      () =>
+        Boolean(input.value.face) &&
+        used.value.some((slot) => apiErrorCode(slot.state.value.error) === 'invalid_search'),
+    ),
     async loadMore() {
       const slot = activeSlot.value
       if (!slot?.state.value.pages || !slot.state.value.hasNextPage) return

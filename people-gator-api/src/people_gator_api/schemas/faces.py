@@ -46,8 +46,12 @@ class FaceCreateRequest(EntityLinkCreate):
     confidence: float = Field(
         ge=0.0, le=1.0, description="The confidence score of the face detection."
     )
-    embeddings: list[FaceEmbedding] | MissingType = Field(
-        default=MISSING, description="The embeddings of the face detection."
+    embeddings: list[FaceEmbedding] | None | MissingType = Field(
+        default=MISSING,
+        description=(
+            "The embeddings of the face detection. Omit it or send null when no model "
+            "produced a usable vector; all-zero vectors are rejected."
+        ),
     )
     source_id: uuid.UUID = Field(
         description="The unique identifier of the source from which the face was detected. Mandatory."
@@ -60,8 +64,11 @@ class FaceCreateRequest(EntityLinkCreate):
     @field_validator("embeddings")
     @classmethod
     def validate_unique_embeddings(
-        cls, embeddings: list[FaceEmbedding]
-    ) -> list[FaceEmbedding]:
+        cls, embeddings: list[FaceEmbedding] | None | MissingType
+    ) -> list[FaceEmbedding] | MissingType:
+        # Null means the detector produced no vector, the same as omitting it.
+        if embeddings is None or is_missing(embeddings):
+            return MISSING
         require_unique_model_embeddings(embeddings)
         return embeddings
 
@@ -78,18 +85,19 @@ class FacePatchRequest(EntityLinkPatch):
         default=MISSING,
         description="The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.",
     )
-    embeddings: list[FaceEmbedding] | MissingType = Field(
+    embeddings: list[FaceEmbedding] | None | MissingType = Field(
         default=MISSING,
-        description="When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.",
+        description="When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list or null is a no-op. All-zero vectors are rejected.",
     )
 
     @field_validator("embeddings")
     @classmethod
     def validate_unique_embeddings(
-        cls, embeddings: list[FaceEmbedding] | MissingType
+        cls, embeddings: list[FaceEmbedding] | None | MissingType
     ) -> list[FaceEmbedding] | MissingType:
-        if not is_missing(embeddings):
-            require_unique_model_embeddings(embeddings)
+        if embeddings is None or is_missing(embeddings):
+            return MISSING
+        require_unique_model_embeddings(embeddings)
         return embeddings
 
 
