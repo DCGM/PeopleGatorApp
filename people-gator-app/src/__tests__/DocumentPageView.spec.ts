@@ -310,6 +310,7 @@ describe('document page gallery navigation', () => {
       gallery_person_only: 'on',
       gallery_sort: 'faces_total_count',
       gallery_dir: 'desc',
+      pages_view: 'expanded',
     }
     await settleFocus()
     expect(person.value).toBe('nora')
@@ -323,6 +324,28 @@ describe('document page gallery navigation', () => {
         gallery_dir: 'desc',
       },
     })
+    wrapper.unmount()
+  })
+
+  it('restores expansion from the URL without replacing the mounted viewer', async () => {
+    route.query = { pages_view: 'expanded', selectedPerson: 'nora', gallery_person_only: 'on' }
+    const wrapper = await mountView()
+    const gallery = wrapper.findComponent({ name: 'DocumentPageGallery' })
+    const viewer = wrapper.get('.workspace-viewer').element
+    expect(gallery.props('expanded')).toBe(true)
+    expect((viewer as HTMLElement).style.display).toBe('none')
+    gallery.vm.$emit('update:expanded', false)
+    await flushPromises()
+    expect(mocks.push.mock.lastCall?.[0].query).toMatchObject({
+      pages_view: undefined,
+      selectedPerson: 'nora',
+      gallery_person_only: 'on',
+    })
+    route.query = { selectedPerson: 'nora', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    expect((viewer as HTMLElement).style.display).not.toBe('none')
+    expect(gallery.props('expanded')).toBe(false)
     wrapper.unmount()
   })
 

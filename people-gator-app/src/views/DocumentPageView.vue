@@ -73,6 +73,7 @@ import {
   type PageGalleryItem,
 } from '@/viewmodels/document-page-gallery'
 import { useTranslationQuery } from '@/query/translation'
+import { useGalleryView } from '@/viewmodels/gallery-view'
 import {
   adjacentIncluded,
   nearestIncluded,
@@ -136,6 +137,7 @@ const peopleScope = setting('peopleScope')
 const faceSort = setting('faceSort')
 const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
 const gallerySelectedPerson = useEntityQuery(computed(() => selectedPersonId.value || ''))
+const galleryExpanded = useGalleryView()
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
 const {
   page,
@@ -890,6 +892,7 @@ onBeforeUnmount(() => {
             >
               <section
                 ref="viewerElement"
+                v-show="!galleryExpanded"
                 class="workspace-viewer bg-viewer relative min-h-0 flex-1 overflow-hidden"
                 aria-label="Pan and zoom document page"
                 tabindex="-1"
@@ -998,7 +1001,12 @@ onBeforeUnmount(() => {
               </section>
 
               <DocumentPageGallery
-                class="workspace-gallery shrink-0 border-t"
+                :class="
+                  galleryExpanded
+                    ? 'workspace-gallery min-h-0 flex-1'
+                    : 'workspace-gallery shrink-0 border-t'
+                "
+                v-model:expanded="galleryExpanded"
                 :document-name="documentQuery.data.value?.name || documentId"
                 :page-number="page?.page_number"
                 :document-page-count="page?.registered_page_count"

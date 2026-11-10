@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ImageOff } from '@lucide/vue'
-import { useIntersectionObserver } from '@vueuse/core'
+import { ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
@@ -32,6 +32,7 @@ const props = defineProps<{
   location: (item: PageGalleryItem) => RouteLocationRaw
   sortOptions?: SortOption<PageSortField>[]
 }>()
+const expanded = defineModel<boolean>('expanded', { default: false })
 const personOnly = defineModel<boolean>('personOnly', { default: false })
 const sort = defineModel<SortState<PageSortField>>('sort')
 
@@ -43,6 +44,15 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
+
+watch(
+  [list, expanded],
+  async () => {
+    await nextTick()
+    scrollCurrentIntoView()
+  },
+  { flush: 'post' },
+)
 
 function itemName(item: PageGalleryItem) {
   return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
@@ -56,10 +66,15 @@ function scrollCurrentIntoView() {
     if (!current || !viewport) return
     const target = current.getBoundingClientRect()
     const bounds = viewport.getBoundingClientRect()
-    if (target.left >= bounds.left && target.right <= bounds.right) return
-    viewport.scrollTo?.({
-      left: viewport.scrollLeft + target.left - bounds.left - (bounds.width - target.width) / 2,
-    })
+    if (expanded.value) {
+      if (target.top >= bounds.top && target.bottom <= bounds.bottom) return
+      viewport.scrollTo?.({ top: viewport.scrollTop + target.top - bounds.top })
+    } else {
+      if (target.left >= bounds.left && target.right <= bounds.right) return
+      viewport.scrollTo?.({
+        left: viewport.scrollLeft + target.left - bounds.left - (bounds.width - target.width) / 2,
+      })
+    }
   })
 }
 
@@ -67,76 +82,101 @@ watch(() => props.items.find((item) => item.current)?.pageId, scrollCurrentIntoV
   immediate: true,
 })
 
-// Reaching the end of the strip loads the next batch; the button covers keyboard use.
-useIntersectionObserver(sentinel, ([entry]) => {
-  if (entry?.isIntersecting && props.hasNextPage && !props.isFetchingNextPage && !props.error)
+// Recheck the visible end after every batch and when changing scroll direction.
+useAutomaticPagination({
+  target: sentinel,
+  hasNextPage: () => Boolean(props.hasNextPage),
+  isFetching: () => Boolean(props.loading || props.isFetchingNextPage),
+  error: () => props.error,
+  enabled: () => true,
+  resetKey: expanded,
+  loadMore: async () => {
     emit('load-more')
+  },
 })
 </script>
 
 <template>
   <nav
     class="document-page-gallery min-w-0 bg-background"
+    :class="expanded && 'flex flex-col overflow-hidden'"
+    :data-expanded="expanded || undefined"
     aria-label="Document pages"
     @keydown.stop
   >
-    <div class="px-3 pt-2 sm:px-5">
-      <div class="w-full overflow-x-auto">
-        <div
-          class="gallery-header flex w-full min-w-[22rem] sm:min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
-        >
-          <div class="flex min-w-0 items-center gap-2">
-            <h2
-              id="document-pages-title"
-              class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
-              :title="props.documentName || 'Document pages'"
-            >
-              {{ props.documentName || 'Document pages' }}
-            </h2>
-            <template v-if="documentUrl">
+    <div class="px-3 pt-2 sm:px-5" :class="expanded && 'flex min-h-0 flex-1 flex-col'">
+      <div class="flex shrink-0 items-center gap-2">
+        <div class="min-w-0 flex-1 overflow-x-auto">
+          <div
+            class="gallery-header flex w-full min-w-[22rem] sm:min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
+          >
+            <div class="flex min-w-0 items-center gap-2">
+              <h2
+                id="document-pages-title"
+                class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
+                :title="props.documentName || 'Document pages'"
+              >
+                {{ props.documentName || 'Document pages' }}
+              </h2>
+              <template v-if="documentUrl">
+                <span aria-hidden="true">·</span>
+                <ArchiveLink :url="documentUrl" kind="document" />
+              </template>
               <span aria-hidden="true">·</span>
-              <ArchiveLink :url="documentUrl" kind="document" />
-            </template>
-            <span aria-hidden="true">·</span>
-            <PagePosition
-              class="shrink-0"
-              :number="pageNumber"
-              :total="documentPageCount ?? (personOnly ? undefined : totalCount)"
-            />
-          </div>
-          <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
-            <Toggle
-              :model-value="personOnly && Boolean(selectedPersonId)"
-              variant="outline"
-              size="sm"
-              class="w-28 min-w-0 sm:w-36"
-              :disabled="!selectedPersonId"
-              :aria-label="
-                selectedPersonId
-                  ? `${selectedPersonName || 'Selected person'} only`
-                  : 'Select a person in the right panel to filter pages'
-              "
-              :title="
-                selectedPersonId
-                  ? `${selectedPersonName || 'Selected person'} only`
-                  : 'Select a person in the right panel to filter pages'
-              "
-              @update:model-value="personOnly = $event"
-              ><span class="truncate">{{
-                selectedPersonId ? `${selectedPersonName || 'Selected person'} only` : 'Person only'
-              }}</span></Toggle
-            >
-            <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
-              <SortControl
-                v-model="sort"
-                :options="sortOptions"
-                label="Sort pages"
-                size="sm"
-                compact-on-mobile
+              <PagePosition
+                class="shrink-0"
+                :number="pageNumber"
+                :total="documentPageCount ?? (personOnly ? undefined : totalCount)"
               />
+            </div>
+            <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
+              <Toggle
+                :model-value="personOnly && Boolean(selectedPersonId)"
+                variant="outline"
+                size="sm"
+                class="w-28 min-w-0 sm:w-36"
+                :disabled="!selectedPersonId"
+                :aria-label="
+                  selectedPersonId
+                    ? `${selectedPersonName || 'Selected person'} only`
+                    : 'Select a person in the right panel to filter pages'
+                "
+                :title="
+                  selectedPersonId
+                    ? `${selectedPersonName || 'Selected person'} only`
+                    : 'Select a person in the right panel to filter pages'
+                "
+                @update:model-value="personOnly = $event"
+                ><span class="truncate">{{
+                  selectedPersonId
+                    ? `${selectedPersonName || 'Selected person'} only`
+                    : 'Person only'
+                }}</span></Toggle
+              >
+              <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
+                <SortControl
+                  v-model="sort"
+                  :options="sortOptions"
+                  label="Sort pages"
+                  size="sm"
+                  compact-on-mobile
+                />
+              </div>
             </div>
           </div>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          class="shrink-0"
+          :aria-label="expanded ? 'Collapse pages' : 'Expand pages'"
+          :aria-expanded="expanded"
+          aria-controls="document-pages-list"
+          :title="expanded ? 'Collapse pages' : 'Expand pages'"
+          @click="expanded = !expanded"
+          ><Minimize2 v-if="expanded" aria-hidden="true" /><Maximize2 v-else aria-hidden="true"
+        /></Button>
       </div>
       <div v-if="props.error" class="flex flex-wrap items-center gap-2 py-3" role="alert">
         <p class="text-sm text-destructive">Could not load document pages.</p>
@@ -159,15 +199,38 @@ useIntersectionObserver(sentinel, ([entry]) => {
         Could not check person matches.
         <Button variant="ghost" size="sm" @click="emit('retryHighlights')">Retry</Button>
       </div>
-      <ScrollArea type="always" orientation="horizontal" class="w-full">
+      <ScrollArea
+        type="always"
+        :orientation="expanded ? 'vertical' : 'horizontal'"
+        class="w-full"
+        :class="expanded && 'min-h-0 flex-1'"
+        :viewport-props="{
+          tabindex: 0,
+          'aria-label': expanded ? 'Document pages grid' : 'Document pages strip',
+        }"
+      >
         <ol
+          id="document-pages-list"
           ref="list"
-          class="flex min-h-32 sm:min-h-36 w-max min-w-full items-start gap-2 px-1 pb-4 pt-2"
+          class="items-start gap-2 px-1 pb-4 pt-2"
+          :class="
+            expanded
+              ? 'grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] w-full'
+              : 'flex min-h-32 sm:min-h-36 w-max min-w-full'
+          "
         >
-          <li v-if="!props.loading && !props.error && props.totalCount === 0" role="status">
+          <li
+            v-if="!props.loading && !props.error && props.totalCount === 0"
+            role="status"
+            :class="expanded && 'col-span-full'"
+          >
             No matching pages.
           </li>
-          <li v-for="item in props.items" :key="item.sourceId" class="w-14 shrink-0 sm:w-16">
+          <li
+            v-for="item in props.items"
+            :key="item.sourceId"
+            :class="expanded ? 'min-w-0' : 'w-14 shrink-0 sm:w-16'"
+          >
             <RouterLink
               :to="props.location(item)"
               class="group flex flex-col items-center gap-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -217,11 +280,16 @@ useIntersectionObserver(sentinel, ([entry]) => {
           <li
             v-for="index in props.loading || props.isFetchingNextPage ? 3 : 0"
             :key="`loading-${index}`"
-            class="aspect-[8/11] w-14 shrink-0 animate-pulse rounded-md border bg-muted sm:w-16"
+            class="aspect-[8/11] shrink-0 animate-pulse rounded-md border bg-muted"
+            :class="expanded ? 'w-full' : 'w-14 sm:w-16'"
             aria-hidden="true"
           />
-          <li v-if="props.hasNextPage && !props.error" class="flex shrink-0 self-center">
-            <span ref="sentinel" class="block h-full w-px" aria-hidden="true" />
+          <li
+            v-if="props.hasNextPage && !props.error"
+            class="flex shrink-0 self-center"
+            :class="expanded && 'col-span-full justify-center'"
+          >
+            <span ref="sentinel" class="block h-px w-px" aria-hidden="true" />
             <Button
               type="button"
               variant="outline"
