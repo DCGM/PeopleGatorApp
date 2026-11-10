@@ -938,6 +938,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",
             }, doseq=True),
+            # #142: reuse the contrasting titles, counts and local page media
+            # to exercise persisted visibility, order and resized widths.
+            "document-table-persistence": "/documents?" + urlencode({
+                "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
+                "sort": "name",
+            }, doseq=True),
             "document-table-scroll": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-scroll-performance": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-page-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
