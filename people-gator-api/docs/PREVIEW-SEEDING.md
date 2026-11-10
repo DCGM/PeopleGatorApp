@@ -1421,33 +1421,26 @@ replaced media and rerun stability.
 
 ### Bottom page-strip review (#131)
 
-Open the manifest's `page-strip-review` link, or the **Page strip review practice**
-document in `preview-page-strip`. Its 18 pages include unassigned faces (1, 4),
-Nora Page's assigned face (2), her mention alone (3), mixed assigned/unassigned
-faces (4), another person's face (5), an empty page (6), and more Nora mentions
-(7–18). Every page has deterministic local scan/layout media.
+Open `page-strip-review`, or **Page strip review practice** in
+`preview-page-strip`. Its 18 pages include Nora Page's assigned face (2), her
+mention alone (3), mixed assigned/unassigned faces (4), Otto Page's face (5), an
+empty page (6), and more Nora mentions (7–18). Pages 1 and 4 contain unassigned
+faces for review practice. Every page has deterministic local scan/layout media.
 
-The bottom **Document pages** strip shows counters inside thumbnails 1 and 4.
-Selecting Nora Page in the right panel highlights her pages with one outer
-stroke even before filtering. Select **Nora Page** in the right panel (or open
-`page-strip-selected-person`), then enable **Nora Page only** in the single-line
-strip header. The `page-strip-person` link opens this state directly, giving
-15 matching pages across two batches, including the mention-only page. The
-current scan can remain open while excluded by this filter. Turn the toggle off
-to restore all 18 pages. The header retains the document name, NDK link and 1/18
-page position without adding a selector, filter tags or extra rows. The same archive document UUID in
+Select **Nora Page** in the right panel, or open `page-strip-selected-person`.
+Her pages get a single orange outer border while all pages remain visible.
+Enable **Nora Page only**, or open `page-strip-person`, for 15 matching pages
+across two batches. Turn it off to restore all 18 pages. The current scan stays
+open when excluded by the filter. The compact strip shows no annotation counts.
+
+Open `page-strip-current-assigned` (page 2) to compare the current page's double
+orange border with the single outer border on Nora's other pages. Page 3 matches
+through a linked mention alone. The same document UUID in
 `preview-page-strip-mirror` demonstrates library isolation.
 
-On disposable data, assign page 1's face, unlink page 3's mention, or delete
-page 2's face and inspect membership/count refresh. Seed tests exercise these
-repository queries and local thumbnails and verify a second seed preserves
+On disposable data, assign page 1's face, unlink page 3's mention, or delete page
+2's face and inspect highlight/filter membership. Seed tests exercise repository
+queries bounded by loaded source IDs, local thumbnails and rerun preservation of
 assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
 Existing interrupted-checkpoint recovery coverage remains in place. These are
-additive fixtures; seeding does not replace older page-gallery media or records.
-
-For the current-page/person-match combination without an unassigned-face counter,
-open `page-strip-current-assigned` (page 2). Compare its double current-page
-border with the single outer person highlights on the other matching pages. Page 3 matches
-through a text mention alone; page 4 also has an independent unassigned-face
-counter inside its thumbnail. The batched membership query is covered through
-page repository predicates restricted to the loaded source IDs.
+additive examples and retain older page-gallery media and records.

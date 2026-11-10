@@ -20,7 +20,6 @@ export type PageGalleryItem = {
   pageId: string
   label: string
   current: boolean
-  unassignedFaces?: number | null
   matchesSelectedPerson?: boolean | null
   thumbnailUrl: string
   thumbnailLoading: boolean
@@ -164,7 +163,6 @@ export function useDocumentPageGallery(
       pageId: page.page_id,
       label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
-      unassignedFaces: page.entity_link_stats?.faces?.unassigned ?? null,
       matchesSelectedPerson: !toValue(selectedPersonId)
         ? false
         : toValue(personId) === toValue(selectedPersonId)

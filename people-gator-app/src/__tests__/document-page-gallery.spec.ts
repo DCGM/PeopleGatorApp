@@ -171,12 +171,10 @@ describe('document page gallery', () => {
     await flushPromises()
     expect(mocks.listPages).toHaveBeenCalledTimes(1)
     expect(mocks.listPages.mock.calls[0]![0].query['filter.entity_id']).toEqual(['nora'])
-    expect(gallery().items.value[0]?.unassignedFaces).toBe(1)
     expect(gallery().items.value.every((item) => !item.current)).toBe(true)
     gallery().loadMore()
     await flushPromises()
     expect(mocks.listPages).toHaveBeenCalledTimes(2)
-    expect(gallery().items.value[1]?.unassignedFaces).toBeNull()
     // Existing mutation invalidation must refresh counts/membership in the strip.
     respond({ first: { items: [], cursor: null } })
     await client.invalidateQueries({ queryKey: ['pages'] })

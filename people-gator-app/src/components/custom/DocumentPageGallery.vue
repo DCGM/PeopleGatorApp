@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ImageOff, UserRoundSearch } from '@lucide/vue'
+import { ImageOff } from '@lucide/vue'
 import { useIntersectionObserver } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
 import ArchiveLink from './ArchiveLink.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import { Badge } from '@/components/ui/badge'
 import { Toggle } from '@/components/ui/toggle'
 import PagePosition from './PagePosition.vue'
 import { Button } from '@/components/ui/button'
@@ -46,7 +45,7 @@ const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
 
 function itemName(item: PageGalleryItem) {
-  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}${item.unassignedFaces ? `, ${item.unassignedFaces} unassigned ${item.unassignedFaces === 1 ? 'face' : 'faces'}` : ''}`
+  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
 }
 
 /** Scroll only the strip, never the window, so the scan stays where it is. */
@@ -186,7 +185,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
                   item.current
                     ? 'border-2 border-secondary ring-2 ring-secondary ring-offset-2'
                     : item.matchesSelectedPerson
-                      ? 'border-0 p-0.5 ring-2 ring-primary'
+                      ? 'border-0 p-0.5 ring-2 ring-secondary'
                       : 'border-2 border-border group-hover:border-accent'
                 "
               >
@@ -206,15 +205,6 @@ useIntersectionObserver(sentinel, ([entry]) => {
                     </span>
                   </template>
                 </LoadableImage>
-                <Badge
-                  v-if="item.unassignedFaces"
-                  class="absolute bottom-1 right-1 max-w-[calc(100%-0.5rem)]"
-                  :title="`${item.unassignedFaces} unassigned faces`"
-                >
-                  <UserRoundSearch aria-hidden="true" />
-                  {{ item.unassignedFaces }}
-                  <span class="sr-only">unassigned faces</span>
-                </Badge>
               </div>
               <span
                 class="w-full truncate text-center font-mono text-[0.6875rem] leading-tight"

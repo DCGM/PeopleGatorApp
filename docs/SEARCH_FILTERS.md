@@ -484,15 +484,10 @@ Unassigned is intentionally absent: ownerless evidence cannot belong to a person
 
 ### Viewer bottom page strip (#131)
 
-The **Document pages** strip places the unassigned-face icon and count inside
-the page thumbnail. Pages containing the person selected in the right panel get
-a single outer highlight stroke, with no inner UI border, even when the
-person-only toggle is off. The current page retains its distinct double border, taking precedence when it
-also contains the selected person. The count covers that page's complete face
-set,
-independently of sidebar filters and the selected person. Unverified assigned
-faces and unassigned mentions do not trigger it. With no strip filter, empty
-pages remain available.
+The **Document pages** strip gives noncurrent pages containing the person
+selected in the right panel a single orange outer border, with no inner UI
+border. The current page keeps its double orange border, including when it also
+contains that person. The strip shows no per-page face or mention counters.
 
 Select a person in the viewer's right panel, then enable **[Person name] only**
 in the strip header to show pages with an assigned face **or** a linked text
