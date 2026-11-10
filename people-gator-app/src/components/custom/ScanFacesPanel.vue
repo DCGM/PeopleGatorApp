@@ -90,7 +90,7 @@ function location(item: ScanFaceItem) {
       <SharedFilterTags
         creation-only
         :specific-filters="tags"
-        :specific-keys="['face_scope']"
+        :specific-keys="['face_scope', 'page_link_state']"
         @remove-specific="scope = 'page'"
       />
     </div>

@@ -79,7 +79,7 @@ const tags = computed<ActiveFilter[]>(() =>
       <SharedFilterTags
         creation-only
         :specific-filters="tags"
-        :specific-keys="['mention_scope']"
+        :specific-keys="['mention_scope', 'page_link_state']"
         @remove-specific="scope = 'page'"
       />
     </div>
