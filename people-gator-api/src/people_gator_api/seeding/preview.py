@@ -623,6 +623,23 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         "person": active_faces.get("reference-ada-manual", ""),
         "library": "preview-nlk", "link_state": "verified",
     })
+    # Creation bounds come from immutable registered records, not the seed run's clock.
+    creation_document = await database.sources.get_document(documents["creation-user"])
+    creation_page = await database.sources.get_page(pages["creation-user-1"])
+    def creation_interval(record):
+        if record and record.created_at:
+            timestamp = record.created_at.isoformat()
+            return {"created_from": timestamp, "created_to": timestamp}
+        return {"created_from": "2000-01-01T00:00:00Z"}
+    creation_examples = {
+        "documents-created-by": "/documents?" + urlencode({"library": "preview-creation", "created_by": actors["reviewer"].user_id}),
+        "documents-created-key": "/documents?" + urlencode({"library": "preview-creation", "created_key": registered_keys["importer"]}),
+        "documents-created-range": "/documents?" + urlencode({"library": "preview-creation", **creation_interval(creation_document)}),
+        "scans-created-range": "/scans?" + urlencode({"library": "preview-creation", **creation_interval(creation_page)}),
+        "people-created-by": "/people?" + urlencode({"q": "Ada", "created_by": actors["reviewer"].user_id}),
+        "faces-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "faces", "created_key": registered_keys["importer"]}),
+        "mentions-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "mentions", "created_by": actors["importer"].user_id}),
+    }
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -632,6 +649,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            **creation_examples,
             "document-creation": "/documents?library=preview-creation",
             "people-search-merge": "/people?q=Rina+Merge&sort=name",
             "people-search-merge-paginated": "/people?sort=name",

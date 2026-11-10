@@ -5042,3 +5042,47 @@ async def test_source_creation_examples_and_legacy_unknown_survive_reruns(seed_t
                 assert getattr(current, field) == getattr(original, field)
     after = await db.sources.get_page(edited.source_id)
     assert after.page_number == 9 and after.last_touched_at == edited.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_shared_creation_filter_examples_work_and_survive_seed_reruns(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.faces import FaceListFilter, FaceListRequest
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    for key in ('documents-created-by', 'documents-created-key', 'documents-created-range'):
+        query = parse_qs(urlsplit(seeded.filter_examples[key]).query)
+        filters = DocumentListFilter(
+            library=query['library'],
+            **({'created_by_user_id': query['created_by']} if 'created_by' in query else {}),
+            **({'created_by_api_key_id': query['created_key']} if 'created_key' in query else {}),
+            **({'created_from': query['created_from'][0], 'created_to': query['created_to'][0]} if 'created_from' in query else {}),
+        )
+        found = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=filters))
+        assert len(found.items) == 1
+        assert found.items[0].source_id == seeded.documents['creation-key' if 'created_key' in query else 'creation-user']
+        assert seeded.documents['creation-legacy'] not in {item.source_id for item in found.items}
+    query = parse_qs(urlsplit(seeded.filter_examples['scans-created-range']).query)
+    pages = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
+        library=query['library'], created_from=query['created_from'][0], created_to=query['created_to'][0],
+    )))
+    assert [item.source_id for item in pages.items] == [seeded.pages['creation-user-1']]
+    ada = seeded.entities['ada']
+    people = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        entity_id=[ada], created_by_user_id=[seeded.users['reviewer']],
+    )))
+    assert [item.entity_id for item in people.items] == [ada]
+    assert people.items[0].last_touched_by_user_id != people.items[0].created_by_user_id
+    faces = await database.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        entity_id=[ada], created_by_api_key_id=[seeded.api_keys['importer']],
+    )))
+    assert faces.items and all(face.created_by_api_key_id == seeded.api_keys['importer'] for face in faces.items)
+    mentions = await database.text_mentions.list(TextMentionListRequest(limit=100, filter_=TextMentionListFilter(
+        entity_id=[ada], created_by_user_id=[seeded.users['importer']],
+    )))
+    assert mentions.items and all(mention.created_by_user_id == seeded.users['importer'] for mention in mentions.items)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    for key in seeded.filter_examples:
+        if 'created-' in key:
+            assert rerun.filter_examples[key] == seeded.filter_examples[key]

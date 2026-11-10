@@ -81,6 +81,22 @@ def touch_conditions(model, values):
     return conditions
 
 
+def creation_conditions(model, values):
+    """Creation belongs to the returned record, never to linked evidence/owners."""
+    from people_gator_api.schemas.missing import missing_to_none
+    conditions = []
+    for field in ("created_by_user_id", "created_by_api_key_id"):
+        value = missing_to_none(getattr(values, field))
+        if value is not None:
+            conditions.append(getattr(model, field).in_(value))
+    for field, op in (("created_from", model.created_at.__ge__),
+                      ("created_to", model.created_at.__le__)):
+        value = missing_to_none(getattr(values, field))
+        if value is not None:
+            conditions.append(op(value))
+    return conditions
+
+
 def annotation_conditions(model, values):
     """Link state and source scope of one face/mention annotation."""
     from people_gator_api.schemas.missing import missing_to_none

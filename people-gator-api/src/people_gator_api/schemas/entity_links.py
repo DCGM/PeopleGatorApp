@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from pydantic import AwareDatetime
-from .common import CreationMetadata, TouchMetadata
+from .common import CreationFilter, CreationMetadata, TouchMetadata
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from .enums import EntityLinkState
@@ -44,7 +44,7 @@ LEGACY_FILTER_REPLACEMENTS = {
 """Removed #31 parameters. Their replacements describe the filtered record itself."""
 
 
-class SharedFilter(BaseModel):
+class SharedFilter(CreationFilter):
     """Canonical criteria shared by documents, pages, entities, faces and mentions.
 
     Source scope uses actual library/document/page relationships. Last-touch

@@ -240,6 +240,10 @@ def shared_filter_dependency(
     last_touched_to: Annotated[datetime | None, _model_parameter(SharedFilter, "last_touched_to", "filter")] = None,
     last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "last_touched_by_user_id", "filter")] = None,
     last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "last_touched_by_api_key_id", "filter")] = None,
+    created_from: Annotated[datetime | None, _model_parameter(SharedFilter, "created_from", "filter")] = None,
+    created_to: Annotated[datetime | None, _model_parameter(SharedFilter, "created_to", "filter")] = None,
+    created_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "created_by_user_id", "filter")] = None,
+    created_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "created_by_api_key_id", "filter")] = None,
 ) -> dict[str, object]:
     """Parse the canonical criteria shared by every source/annotation/entity list.
 
@@ -254,6 +258,10 @@ def shared_filter_dependency(
                 f"filter.{name} was removed; use {replacement}, which describes the filtered record itself",
             )
     return {
+        "created_from": created_from,
+        "created_to": created_to,
+        "created_by_user_id": created_by_user_id,
+        "created_by_api_key_id": created_by_api_key_id,
         "entity_link_state": entity_link_state,
         "library": library,
         "document_source_id": document_source_id,

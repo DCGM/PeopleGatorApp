@@ -1424,7 +1424,7 @@ replaced media and rerun stability.
 Open the seed manifest's `document-creation` link (`/documents?library=preview-creation`).
 Use **Add column** to show **Created** and **Created by**. Both are hidden by
 default, retain the table's add/move/remove and tab-session preferences, and
-provide no creation sort or filter. Created displays local date/time; Created by
+provide no creation sorting. Created displays local date/time; Created by
 shows the user name and the API-key name in parentheses when used.
 
 The three documents and their local page scans demonstrate a bearer reviewer,
@@ -1440,3 +1440,23 @@ never backfills them or changes known creation on a retry. Seed reruns retain
 source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
 The creation integration checks query both document and page responses and
 read their actual media before repeating the seed and checking preservation.
+
+
+### Shared creation filters
+
+Every shared panel offers **Created by**, **Created via key**, **Created from**
+and **Created to**, independently of its modification filters. This includes
+Documents, Scan search, People and person evidence (Faces/Mentions), plus the scan
+sidebar's People, Faces and Mentions. Each list/search matches the returned
+record's own creation, rather than its containing document or latest editor.
+The API accepts `filter.created_from`, `filter.created_to`,
+`filter.created_by_user_id` and `filter.created_by_api_key_id`.
+
+Use `documents-created-by`, `documents-created-key` and `documents-created-range`
+for the three synthetic creation documents. The date example uses the stored
+reviewer document's exact timestamp as both inclusive bounds. Unknown legacy
+creation does not match an active date or creator criterion. `scans-created-range`
+uses the corresponding page's own timestamp. `people-created-by`,
+`faces-created-by` and `mentions-created-by` open populated people/annotation
+examples, including creation attributed to an importer despite later review edits.
+These example links and the underlying records survive reruns unchanged.

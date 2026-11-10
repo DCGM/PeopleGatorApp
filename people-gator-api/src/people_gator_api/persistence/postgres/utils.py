@@ -633,7 +633,7 @@ def search_page(
 
 
 from .entity_link_queries import (
-    evidence_predicate, load_link_stats, annotation_conditions, touch_conditions,
+    evidence_predicate, load_link_stats, annotation_conditions, touch_conditions, creation_conditions,
     LINK_FIELDS, document_sources, library_sources, page_sources, scope_conditions,
 )
 
@@ -758,7 +758,7 @@ def entity_filters(
     filter_values = missing_to_none(filter_)
     if filter_values is None:
         return []
-    filters: list[ColumnElement[bool]] = touch_conditions(Entity, filter_values)
+    filters: list[ColumnElement[bool]] = [*touch_conditions(Entity, filter_values), *creation_conditions(Entity, filter_values)]
     from .entity_counts import entity_count_predicate
     count_predicate = entity_count_predicate(filter_values)
     if count_predicate is not None:
@@ -798,6 +798,7 @@ def face_filters(
     filters: list[ColumnElement[bool]] = []
     filters.extend(annotation_conditions(Face, filter_values))
     filters.extend(touch_conditions(Face, filter_values))
+    filters.extend(creation_conditions(Face, filter_values))
     assigned = missing_to_none(filter_values.is_assigned)
     if assigned is not None:
         filters.append(Face.entity_id.is_not(None) if assigned else Face.entity_id.is_(None))
@@ -822,6 +823,7 @@ def mention_filters(
     filters: list[ColumnElement[bool]] = []
     filters.extend(annotation_conditions(TextMention, filter_values))
     filters.extend(touch_conditions(TextMention, filter_values))
+    filters.extend(creation_conditions(TextMention, filter_values))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(TextMention.entity_id.in_(entity_ids))
@@ -870,7 +872,7 @@ def source_filters(
     filter_values = missing_to_none(filter_)
     if filter_values is None:
         return []
-    filters: list[ColumnElement[bool]] = touch_conditions(Source, filter_values)
+    filters: list[ColumnElement[bool]] = [*touch_conditions(Source, filter_values), *creation_conditions(Source, filter_values)]
     from .annotation_counts import (
         count_column, count_maxima, count_minima, linked_entity_predicates,
         maximum_count_predicate, minimum_count_predicate,
