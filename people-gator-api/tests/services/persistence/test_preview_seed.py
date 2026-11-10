@@ -5038,6 +5038,17 @@ async def test_page_strip_highlights_person_matching_pagination_and_preservation
             assert image.width == 256
     assert parse_qs(urlsplit(seed.filter_examples["page-strip-person"]).query) == {"selectedPerson": [str(person)], "gallery_person_only": ["on"]}
 
+    # Unfiltered highlights use the same person predicate, restricted to loaded
+    # source IDs. A selected/assigned page has no unassigned-face counter.
+    highlighted = await database.sources.list_pages(PageListRequest(
+        limit=4, filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id],
+            source_id=[seed.pages[f"page-strip-{i}"] for i in (1, 2, 3, 4)], entity_id=[person]),
+    ))
+    assert {page.source_id for page in highlighted.items} == {seed.pages[f"page-strip-{i}"] for i in (2, 3, 4)}
+    assert next(page for page in highlighted.items if page.source_id == seed.pages["page-strip-2"]).entity_link_stats.faces.unassigned == 0
+    assigned_link = urlsplit(seed.filter_examples["page-strip-current-assigned"])
+    assert assigned_link.path.endswith(str(next(item.page_id for item in PAGES if item.key == "page-strip-2")))
+    assert parse_qs(assigned_link.query) == {"selectedPerson": [str(person)]}
     selected_link = parse_qs(urlsplit(seed.filter_examples["page-strip-selected-person"]).query)
     assert selected_link == {"selectedPerson": [str(person)]}
 

@@ -847,6 +847,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
             ),
+            "page-strip-current-assigned": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-2')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
             "page-strip-selected-person": (
                 f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"

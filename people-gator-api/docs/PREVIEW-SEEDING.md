@@ -1427,8 +1427,9 @@ Nora Page's assigned face (2), her mention alone (3), mixed assigned/unassigned
 faces (4), another person's face (5), an empty page (6), and more Nora mentions
 (7–18). Every page has deterministic local scan/layout media.
 
-The bottom **Document pages** strip marks pages 1 and 4 independently of its
-person scope. Select **Nora Page** in the right panel (or open
+The bottom **Document pages** strip shows counters inside thumbnails 1 and 4.
+Selecting Nora Page in the right panel highlights her pages with one outer
+stroke even before filtering. Select **Nora Page** in the right panel (or open
 `page-strip-selected-person`), then enable **Nora Page only** in the single-line
 strip header. The `page-strip-person` link opens this state directly, giving
 15 matching pages across two batches, including the mention-only page. The
@@ -1443,3 +1444,10 @@ repository queries and local thumbnails and verify a second seed preserves
 assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
 Existing interrupted-checkpoint recovery coverage remains in place. These are
 additive fixtures; seeding does not replace older page-gallery media or records.
+
+For the current-page/person-match combination without an unassigned-face counter,
+open `page-strip-current-assigned` (page 2). Compare its double current-page
+border with the single outer person highlights on the other matching pages. Page 3 matches
+through a text mention alone; page 4 also has an independent unassigned-face
+counter inside its thumbnail. The batched membership query is covered through
+page repository predicates restricted to the loaded source IDs.
