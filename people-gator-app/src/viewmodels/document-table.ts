@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import type { DocumentResponse, DocumentSortField } from '@/client'
-import type { ColumnVisibilityState } from '@tanstack/vue-table'
+import type { ColumnSizingState, ColumnVisibilityState } from '@tanstack/vue-table'
 
 export const DOCUMENT_ANNOTATION_STATES = [
   { id: 'total', label: 'Total' },
@@ -119,7 +119,11 @@ export function appendDocumentColumn(order: string[], visible: string[], id: str
 function usePersisted<T>(key: string, read: (storage: Storage) => T, fallback: () => T) {
   let initial = fallback()
   try {
-    initial = read(window.sessionStorage)
+    // Existing durable choices always win. Import the old tab preference only
+    // when this browser has never saved the corresponding durable setting.
+    initial = read(
+      window.localStorage.getItem(key) === null ? window.sessionStorage : window.localStorage,
+    )
   } catch {
     /* Storage can be disabled. */
   }
@@ -128,12 +132,12 @@ function usePersisted<T>(key: string, read: (storage: Storage) => T, fallback: (
     value,
     (next) => {
       try {
-        window.sessionStorage.setItem(key, JSON.stringify(next))
+        window.localStorage.setItem(key, JSON.stringify(next))
       } catch {
         /* Keep in-memory choices usable. */
       }
     },
-    { deep: true },
+    { deep: true, immediate: true },
   )
   return value
 }
@@ -147,6 +151,45 @@ export function useDocumentColumnOrder() {
     DOCUMENT_COLUMN_ORDER_STORAGE_KEY,
     readDocumentColumnOrder,
     defaultDocumentColumnOrder,
+  )
+}
+
+export const DOCUMENT_COLUMN_SIZING_STORAGE_KEY = 'people-gator:document-column-sizing'
+
+/** Sanitize persisted and interactive widths with the same column bounds. */
+export function normalizeDocumentColumnSizing(saved: unknown): ColumnSizingState {
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {}
+  const widths: ColumnSizingState = {}
+  for (const [id, value] of Object.entries(saved)) {
+    if (
+      (id !== 'identity' &&
+        !DOCUMENT_COLUMN_IDS.includes(id as (typeof DOCUMENT_COLUMN_IDS)[number])) ||
+      typeof value !== 'number' ||
+      !Number.isFinite(value) ||
+      value <= 0
+    )
+      continue
+    const { minSize, maxSize } = documentColumnSizing(id)
+    widths[id] = Math.min(maxSize, Math.max(minSize, value))
+  }
+  return widths
+}
+
+export function readDocumentColumnSizing(storage: Pick<Storage, 'getItem'>): ColumnSizingState {
+  try {
+    return normalizeDocumentColumnSizing(
+      JSON.parse(storage.getItem(DOCUMENT_COLUMN_SIZING_STORAGE_KEY) ?? 'null'),
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function useDocumentColumnSizing() {
+  return usePersisted<ColumnSizingState>(
+    DOCUMENT_COLUMN_SIZING_STORAGE_KEY,
+    readDocumentColumnSizing,
+    () => ({}),
   )
 }
 
