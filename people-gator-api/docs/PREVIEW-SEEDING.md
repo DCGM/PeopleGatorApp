@@ -822,7 +822,7 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields, order and widths. Document
 name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
@@ -1152,7 +1152,7 @@ touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
 Home/End (bounds), or Enter (that column's default); double-click also restores
 one column. Titles can range from 200 to 720px. Other columns retain readable
 header minima and purpose-specific maxima. There is no bulk width-reset action; use each header grip to restore its width. Width choices survive row changes
-and hidden/restored columns within the mounted Documents view; reloads use default widths. Visible column selections persist in sessionStorage for the browser tab.
+and hidden/restored columns. Column visibility, order and resized widths persist in localStorage across reloads and browser sessions on the same origin. Existing tab settings migrate once when no durable setting exists; malformed or unavailable storage falls back safely without disabling controls.
 
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; keyboard scrolling of the focused
@@ -1282,8 +1282,8 @@ fields, Annotations, Faces and Mentions. Choosing a field appends that one colum
 and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
 on the focused handle moves one position. Clicking a header's chevron-marked name opens a menu
 with **Move left**, **Move right** and **Remove column**; Escape closes it without removing. The document-link fallback that
-replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
-including reload/navigation back. **Restore default columns** restores the nine fields and order; unavailable/invalid storage recovers
+replaces a removed name cannot be removed. Visible fields, order and widths persist in localStorage,
+including reload/navigation back and new browser sessions. **Restore default columns** restores the nine fields, order and widths; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 120px, Linked entities 144px, All annotations columns 168px, Mentions columns 144px, Faces columns 128px and
 optional NDK 80px. Each header has a full-height sort strip on its left with a centered
@@ -1419,3 +1419,24 @@ media generated before #121, so the new lines appear on the scan and in the
 transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
+
+
+### Persistent document layout (#142)
+
+Open the `document-table-persistence` manifest link. It reuses the stable width
+fixtures: short/long document titles, a document with a registered page and local
+image/mention evidence, empty documents and enough rows for cursor loading. Add a
+column, remove another, reorder the headers and resize Document name with its
+right-edge grip (keyboard arrows also work). Reload, open another tab or restart
+the browser on the same origin: visibility, order and widths remain. Sorting,
+filters and pagination do not reset them. **Restore default columns** resets all
+three and the reset survives reload. Blocked/full storage keeps the controls
+usable for the current view. Existing sessionStorage choices migrate only when
+there is no corresponding localStorage preference; browser-local layout is not
+stored per account or shared between browsers/origins.
+
+The parametrized width/persistence integration scenario checks both manifest
+entries through repository queries, multi-batch traversal and actual page media,
+then confirms reviewed document/mention state survives reseeding. Browser
+layout storage is exercised separately by frontend tests and the maintained
+`check-document-persistence.mjs` browser check.

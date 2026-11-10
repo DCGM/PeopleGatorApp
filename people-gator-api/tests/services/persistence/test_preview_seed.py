@@ -4291,7 +4291,8 @@ async def test_replay_journey_has_linked_person_page_and_local_media(seed_target
 
 
 @pytest.mark.asyncio
-async def test_document_width_scenario_is_additive_readable_and_preserves_edits(seed_target, monkeypatch):
+@pytest.mark.parametrize("scenario", ["document-table-widths", "document-table-persistence"])
+async def test_document_width_scenario_is_additive_readable_and_preserves_edits(seed_target, monkeypatch, scenario):
     from people_gator_api.schemas.sources import DocumentListFilter
     database, filesystem, _ = seed_target
     # Retained preview upgrade: existing fixtures and checkpoints remain intact.
@@ -4303,7 +4304,7 @@ async def test_document_width_scenario_is_additive_readable_and_preserves_edits(
     existing = await database.sources.get_document(previous.documents["table-ledger"])
     seeded = await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(previous.documents["table-ledger"]) == existing
-    query = parse_qs(urlsplit(seeded.filter_examples["document-table-widths"]).query)
+    query = parse_qs(urlsplit(seeded.filter_examples[scenario]).query)
     request = DocumentListRequest(limit=12, sort="name", filter_=DocumentListFilter(library=query["library"]))
     first = await database.sources.list_documents(request)
     second = await database.sources.list_documents(request.model_copy(update={"cursor": first.cursor}))
