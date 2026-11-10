@@ -646,6 +646,7 @@ defineExpose({ scrollPage, navigateTo })
   <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
     <div role="toolbar" aria-label="Teleprompter settings"
       class="@container flex min-w-0 flex-row flex-wrap items-center gap-2 border-b py-1.5">
+      <slot name="panel-actions" />
       <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
         :model-value="lineVisibility" @update:model-value="setLineVisibility">
         <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="gap-1 px-2"

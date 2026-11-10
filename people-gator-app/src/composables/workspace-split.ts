@@ -1,7 +1,11 @@
-import { nextTick, watch, type Ref } from 'vue'
+import { nextTick, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 
 type Direction = 'horizontal' | 'vertical'
-export type WorkspacePanel = { getSize: () => number; resize: (size: number) => void }
+export type WorkspacePanel = {
+  getSize: () => number
+  resize: (size: number) => void
+  collapse?: () => void
+}
 const STORAGE_KEY = 'document-workspace-layouts-v1'
 
 function validSize(value: unknown): value is number {
@@ -9,7 +13,11 @@ function validSize(value: unknown): value is number {
 }
 
 /** Restore each orientation explicitly, without remounting either panel. */
-export function useWorkspaceSplit(direction: Ref<Direction>, panel: Ref<WorkspacePanel | null>) {
+export function useWorkspaceSplit(
+  direction: Ref<Direction>,
+  panel: Ref<WorkspacePanel | null>,
+  visible: MaybeRefOrGetter<boolean> = true,
+) {
   const sizes: Record<Direction, number> = { horizontal: 40, vertical: 30 }
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
@@ -37,11 +45,11 @@ export function useWorkspaceSplit(direction: Ref<Direction>, panel: Ref<Workspac
     }
   }
   function layoutChanged(layout: number[]) {
-    if (restoring || !validSize(layout[0])) return
+    if (!toValue(visible) || restoring || !validSize(layout[0])) return
     sizes[direction.value] = layout[0]
     save()
   }
-  watch(direction, async (value, previous, onCleanup) => {
+  watch([direction, () => toValue(visible)], async ([value, shown], [previous], onCleanup) => {
     let cancelled = false
     onCleanup(() => {
       cancelled = true
@@ -49,7 +57,8 @@ export function useWorkspaceSplit(direction: Ref<Direction>, panel: Ref<Workspac
     // Save before the direction change reaches the DOM. The splitter does not
     // reload auto-save settings or defaultSize when direction changes in place.
     const departing = panel.value?.getSize?.()
-    if (!restoring && validSize(departing)) sizes[previous] = departing
+    if (!restoring && shown && validSize(departing)) sizes[previous] = departing
+    if (!shown) return
     restoring = true
     await nextTick()
     if (cancelled) return
@@ -76,7 +85,11 @@ function validWidth(value: unknown): value is number {
  * The scan sidebar's width in pixels, resizable only on wide screens. Narrow
  * layouts stack the sidebar, so their splitter sizes are neither saved nor kept.
  */
-export function useSidebarWidth(wide: Ref<boolean>, panel: Ref<WorkspacePanel | null>) {
+export function useSidebarWidth(
+  wide: Ref<boolean>,
+  panel: Ref<WorkspacePanel | null>,
+  visible: MaybeRefOrGetter<boolean> = true,
+) {
   let width = SIDEBAR_WIDTH.default
   try {
     const stored = JSON.parse(localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? 'null')
@@ -89,7 +102,7 @@ export function useSidebarWidth(wide: Ref<boolean>, panel: Ref<WorkspacePanel | 
   function layoutChanged(layout: number[]) {
     // Pixel sizes arrive converted from percentages, e.g. 319.99 at the minimum.
     const next = Math.round(layout[1] ?? Number.NaN)
-    if (!wide.value || restoring || !validWidth(next)) return
+    if (!toValue(visible) || !wide.value || restoring || !validWidth(next)) return
     width = next
     try {
       localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(width))
@@ -97,9 +110,9 @@ export function useSidebarWidth(wide: Ref<boolean>, panel: Ref<WorkspacePanel | 
       // The layout still works when storage is unavailable.
     }
   }
-  watch(wide, async (value, _previous, onCleanup) => {
-    restoring = value
-    if (!value) return
+  watch([wide, () => toValue(visible)], async ([value, shown], _previous, onCleanup) => {
+    restoring = value && shown
+    if (!value || !shown) return
     let cancelled = false
     onCleanup(() => {
       cancelled = true
