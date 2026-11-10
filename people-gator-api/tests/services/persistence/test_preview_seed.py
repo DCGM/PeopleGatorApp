@@ -475,6 +475,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
 async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_target):
     database, filesystem, _ = seed_target
     first = await preview.seed_preview(database, filesystem)
+    original_counts = await counts(database)
     actor = GenericActor(user_id=first.users["reviewer"])
     await database.entities.merge(
         first.entities["ada"], first.entities["ada-candidate"], context=actor
@@ -488,7 +489,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (43, 161, 108)
+    assert await counts(database) == tuple(value - 1 for value in original_counts)
 
 
 
