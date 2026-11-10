@@ -28,9 +28,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky
    header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
-   and first breadcrumb return here. Open **Scan search** for pages and evidence;
-   follow a result into its page workspace and inspect the OCR/face overlays. Use the
-   **Document pages** strip below the scan to open other pages of that document.
+   and first breadcrumb return here. Use the **Document pages** strip below the scan to open other pages; **Expand pages** opens the full-height grid. The document breadcrumb opens this browser directly. Scans search has been retired; old document-scoped links redirect to the document browser.
 5. On disposable data, change an identity field or assignment and inspect its
    last-processing metadata. Try link-state filters and the mobile filter toggle.
    Review fixture details in the
@@ -104,8 +102,7 @@ results and applicable desktop/mobile screenshot evidence. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.
 
-Scan search offers **Minimum annotations**: choose All annotations, Faces or
-Text mentions, then a state and inclusive minimum. Documents keeps only search
+Page browsing keeps the document strip and expanded grid, with sorting and selected-person filtering. Cross-document scan search is retired; the backend page-search/count APIs remain available. Documents keeps only search
 and sort above its table; its filter sidebar (a drawer from the sliders button
 below 1024px) holds Libraries, Modified by/via key/from/to and **All
 annotations**, **Faces**, **Text mentions** and **People** ranges (State, Min, Max).

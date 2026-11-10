@@ -24,8 +24,16 @@ async function setup(start = '/lib/doc/one') {
         component: { template: '<div />' },
       },
       { path: '/', name: 'document-list', component: { template: '<div />' } },
-      { path: '/libraries/:libraryId/documents/:documentId', name: 'document-pages', component: { template: '<div />' } },
-      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
+      {
+        path: '/libraries/:libraryId/documents/:documentId',
+        name: 'document-pages',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/documents/:documentSourceId',
+        name: 'document-source',
+        component: { template: '<div />' },
+      },
       { path: '/people', name: 'people-search', component: { template: '<div />' } },
       { path: '/people/:personId', name: 'person-detail', component: { template: '<div />' } },
     ],

@@ -1,5 +1,10 @@
 # Search and configurable filters
 
+The standalone Scans search UI is retired (#141). Browse pages through Documents,
+the viewer's Document pages strip or its expanded grid. Older scan-search examples
+below describe retained backend filter contracts and compatibility URLs; global
+`/scans` URLs return to Documents and document-scoped URLs open that browser.
+
 The API exposes GET `/api/v1/search-entities`, `/search-faces`, `/search-pages`
 and `/search-documents`. Ordinary resource lists use the same resource filter
 schemas without requiring a search modality. Filter configuration is typed in

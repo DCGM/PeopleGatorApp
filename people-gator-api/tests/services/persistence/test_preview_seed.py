@@ -5121,3 +5121,34 @@ async def test_expanded_page_browser_links_resolve_media_membership_and_preserve
     preserved = await database.sources.get_page(seed.pages["page-strip-18"])
     assert preserved.page_number == 88
     assert preserved.last_touched_at == edited.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_document_first_entries_cover_pages_empty_and_orphan_documents(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    for key, fixture in [("document-browse", "page-gallery"), ("document-browse-empty", "table-nav-empty")]:
+        entry = urlsplit(seed.filter_examples[key])
+        assert entry.path == f"/documents/{seed.documents[fixture]}"
+        assert parse_qs(entry.query) == {"pages_view": ["expanded"]}
+        document = await database.sources.get_document(seed.documents[fixture])
+        pages = await database.sources.list_pages(PageListRequest(
+            limit=100, return_total_count=True,
+            filter_=PageListFilter(document_source_id=[document.source_id]),
+        ))
+        if fixture == "table-nav-empty":
+            assert not pages.items and pages.total_count == 0
+        else:
+            assert pages.total_count == 14
+            page = pages.items[0]
+            assert (await get_page_image(page.library, page.document_id, page.page_id, max_width=256)).content
+    orphan = next(d for d in DOCUMENTS if d.key == "scan-only")
+    entry = urlsplit(seed.filter_examples["document-browse-unregistered"])
+    assert entry.path == f"/libraries/{orphan.library}/documents/{orphan.document_id}"
+    assert await database.sources.lookup_document(DocumentLookupRequest(library=orphan.library, document_id=orphan.document_id)) is None
+    page = await database.sources.get_page(seed.pages["scan-only-1"])
+    assert (await get_page_image(page.library, page.document_id, page.page_id)).content
+    original = await database.sources.get_page(seed.pages["page-gallery-1"])
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.filter_examples["document-browse"] == seed.filter_examples["document-browse"]
+    assert await database.sources.get_page(original.source_id) == original
