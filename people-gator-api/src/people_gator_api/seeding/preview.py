@@ -582,6 +582,21 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         sidebar_face = str(active_faces.get("sidebar-hana-left", ""))
         sidebar_examples = {
             "scan-sidebar-people": sidebar_path,
+            # #138: show Page (Hana/Tomas), Document (Rosa/Karel), and
+            # DB (other seeded people) with existing local portraits/evidence.
+            "scan-source-tags": sidebar_path + "?" + urlencode({
+                "people_scope": "all", "candidate_sort": "context",
+            }),
+            "scan-source-tags-text": sidebar_path + "?" + urlencode({
+                "candidate_text": "Hana", "people_scope": "all", "candidate_sort": "relevance",
+            }),
+            "scan-source-tags-face": sidebar_path + "?" + urlencode({
+                "candidate_face": sidebar_face, "people_scope": "all", "candidate_sort": "relevance",
+            }),
+            "scan-source-tags-combined": sidebar_path + "?" + urlencode({
+                "candidate_face": sidebar_face, "candidate_text": "Hana",
+                "people_scope": "all", "candidate_sort": "relevance",
+            }),
             "scan-sidebar-card": sidebar_path + "?" + urlencode({"person": sidebar_face}),
             "scan-sidebar-face-search": sidebar_path + "?" + urlencode({
                 "person": sidebar_face, "candidate_face": sidebar_face,

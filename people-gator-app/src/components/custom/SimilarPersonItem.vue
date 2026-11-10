@@ -80,7 +80,7 @@ const scores = computed(() =>
       @click="emit('preview', person)"
     ></button>
 
-    <ItemMedia class="flex-col items-center gap-2 self-start">
+    <ItemMedia class="w-24 shrink-0 flex-col items-center gap-2 self-start">
       <div class="relative">
         <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
         <!-- Above the card's preview layer, like the card's other controls. -->
