@@ -594,6 +594,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "panel": "mentions", "mention_scope": "document",
             }),
             "scan-sidebar-info": sidebar_path + "?" + urlencode({"panel": "info"}),
+            # #139: existing linked face/text/media provide state to preserve while
+            # independently hiding/reopening transcription and People panels.
+            "page-panel-layout": sidebar_path + "?" + urlencode({
+                "person": sidebar_face,
+                "selectedPerson": manifest.entities["sidebar-hana"],
+                "lines": "person", "panel": "mentions", "mention_scope": "document",
+            }),
         }
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")

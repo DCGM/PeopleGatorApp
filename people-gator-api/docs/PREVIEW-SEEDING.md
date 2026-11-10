@@ -1419,3 +1419,16 @@ media generated before #121, so the new lines appear on the scan and in the
 transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
+
+### Page panel layout (#139)
+
+Open the manifest's **page-panel-layout** link. It uses the existing synthetic
+scan-sidebar page, Hana's linked face and text, local page media, selected-person
+transcription mode and document-scoped Mentions. Hide transcription with the
+left panel icon and the sidebar with the right panel icon; reopen each from the
+matching edge of the viewer toolbar. Both panels retain their settings and
+expanded sizes, including after resizing or crossing the desktop breakpoint.
+Link/Reassign and face Search reopen a hidden People panel. Hidden/open state is
+local to the current page workspace; expanded sizes keep their existing browser
+storage behavior. The seed test verifies the link's real evidence/media and
+preserves a reviewed face edit on rerun.

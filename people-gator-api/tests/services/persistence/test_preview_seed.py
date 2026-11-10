@@ -4993,3 +4993,34 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
     assert preserved.page_number == 42
     assert preserved.last_touched_at == edited.last_touched_at
     assert (await database.entities.get(person_id)).name == "Renamed Ada"
+
+
+@pytest.mark.asyncio
+async def test_page_panel_layout_links_real_evidence_and_preserves_edits(seed_target):
+    """#139: a usable face/text/media workspace for panel collapse/restore review."""
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    url = urlsplit(seeded.filter_examples["page-panel-layout"])
+    query = parse_qs(url.query)
+    page = await database.sources.get_page(seeded.pages["scan-sidebar-1"])
+    assert url.path == f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    assert query == {
+        "person": [str(seeded.faces["sidebar-hana-left"])],
+        "selectedPerson": [str(seeded.entities["sidebar-hana"])],
+        "lines": ["person"], "panel": ["mentions"], "mention_scope": ["document"],
+    }
+    face = await database.faces.get(seeded.faces["sidebar-hana-left"])
+    assert face.source_id == page.source_id
+    assert face.entity_id == seeded.entities["sidebar-hana"]
+    mentions = await database.text_mentions.list(TextMentionListRequest(
+        limit=100, filter_=TextMentionListFilter(source_id=[page.source_id], entity_id=[face.entity_id])))
+    assert mentions.items
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert Image.open(io.BytesIO(image.content)).width == 256
+    actor = GenericActor(user_id=seeded.users["reviewer"])
+    await database.faces.patch(face.detection_id, FacePatchRequest(entity_id=None), actor)
+    edited = await database.faces.get(face.detection_id)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.pages == seeded.pages and rerun.faces == seeded.faces
+    assert rerun.filter_examples["page-panel-layout"] == seeded.filter_examples["page-panel-layout"]
+    assert await database.faces.get(face.detection_id) == edited
