@@ -1,8 +1,9 @@
 from enum import StrEnum
+import math
 from typing import Self
 import uuid
 
-from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, field_validator, model_validator
 
 
 class ErrorResponse(BaseModel):
@@ -126,9 +127,20 @@ class ModelEmbedding[T: str](BaseModel):
     vector: list[FiniteFloat] = Field(
         min_length=1,
         description=(
-            "A non-empty, finite vector whose dimension must match model_identifier."
+            "A non-empty, finite, nonzero vector whose dimension must match "
+            "model_identifier. Omit the embedding when the model produced no "
+            "usable vector."
         ),
     )
+
+    @field_validator("vector")
+    @classmethod
+    def require_nonzero(cls, vector: list[float]) -> list[float]:
+        # Cosine similarity is undefined for a zero vector, so it can never be
+        # searched; storing one only makes its face fail as a search reference.
+        if math.hypot(*vector) == 0:
+            raise ValueError("embedding vector must not be all zeros")
+        return vector
 
 class BoundingBox(BaseModel):
     """Face detection bounding box."""

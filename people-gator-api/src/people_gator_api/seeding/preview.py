@@ -335,10 +335,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                         keypoints=face_keypoints(face),
                         confidence=face.confidence,
                         embeddings=[
-                            FaceEmbedding(
-                                model_identifier=model,
-                                vector=[0.0] * dim if face.zero_vector else example_vector(face.group, face.key, dim),
-                            )
+                            # The API rejects zero vectors (#134); these faces keep the
+                            # legacy stored rows that search must still tolerate.
+                            FaceEmbedding.model_construct(model_identifier=model, vector=[0.0] * dim)
+                            if face.zero_vector
+                            else FaceEmbedding(model_identifier=model, vector=example_vector(face.group, face.key, dim))
                             for model, dim in ((MODEL, 8), (SECOND_MODEL, 4), (DISCOVERY_MODEL, 8), (DISCOVERY_OTHER_MODEL, 4)) if face.embedded and model in face.models
                         ],
                         **fields,

@@ -75,7 +75,12 @@ async def discovery(migrated_postgres):
                     keypoints=[Keypoint(type=t, x=2, y=2) for t in FaceKeypointType],
                     source_id=page.source_id,
                     entity_id=entity.entity_id if entity else None,
-                    embeddings=[FaceEmbedding(model_identifier=MODEL, vector=vector)]
+                    # Zero vectors are legacy rows the API now rejects (#134).
+                    embeddings=[
+                        (FaceEmbedding if any(vector) else FaceEmbedding.model_construct)(
+                            model_identifier=MODEL, vector=vector
+                        )
+                    ]
                     if vector is not None
                     else [],
                 ),
