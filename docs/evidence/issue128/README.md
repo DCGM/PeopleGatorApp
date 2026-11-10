@@ -23,3 +23,6 @@ The script checks hidden defaults, add, keyboard move, remove/re-add, session
 reload persistence, dates, user/API-key names, Unknown values, absence of creation
 sorting and absence of document-level horizontal overflow at both viewports.
 It fails on browser errors. Physical touch/trackpad devices were not tested.
+
+The [creation-filter evidence](creation-filters/README.md) covers the shared date,
+creator and API-key controls throughout the application and scan sidebar.

@@ -293,3 +293,20 @@ hidden defaults, column add/move/remove and tab-session reload persistence,
 creator/API-key labels, local dates and Unknown legacy values. Mobile captures
 scroll the table horizontally to show each new column. See the
 [evidence and reproduction command](evidence/issue128/README.md).
+
+### Shared creation filtering (#128)
+
+`tests/services/persistence/test_creation_filters.py` verifies creator users/API
+keys and inclusive creation bounds for documents, pages, images, generic sources,
+entities, faces and text mentions. It checks each record's own creation after
+later edits, source/annotation independence, null legacy history, cursor query
+binding, searches, grouped mentions, HTTP/OpenAPI validation, and explicit
+unsupported-adapter rejection. Preview tests verify the linked examples and
+preserve their identities, media and edits on rerun.
+
+`people-gator-app/scripts/check-creation-filters.mjs` uses the running seeded
+application to exercise Documents, People, Scans, person Faces/Mentions, and all
+three scan-viewer result panels at desktop 1440 × 900 and mobile 390 × 844. It
+checks creator/date controls, URL restoration and backend query parameters,
+multi-select changes, individual removal, date/time editing and evidence reset.
+See [screenshots and reproduction](evidence/issue128/creation-filters/README.md).
