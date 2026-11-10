@@ -26,7 +26,7 @@ try {
       await page.waitForFunction(
         () =>
           !document.querySelector(
-            '.document-page-gallery [data-slot=loadable-image][data-state=loading]',
+            '.document-page-gallery [data-slot=loadable-image][data-state=loading], .document-page-gallery [data-page-thumbnail][aria-busy=true]',
           ),
       )
     }
@@ -59,6 +59,23 @@ try {
     assert.ok((await header.innerText()).includes('Page strip review practice'))
     assert.ok((await header.innerText()).includes('1/18'))
     assert.equal(await strip.locator('.search-filter-panel,.active-filters').count(), 0)
+    // Every face counter is inside its thumbnail, never below the page number.
+    const countersInside = await strip
+      .locator('[data-page-thumbnail] [data-slot=badge]')
+      .evaluateAll((badges) =>
+        badges.every((b) => {
+          const count = b.getBoundingClientRect(),
+            image = b.closest('[data-page-thumbnail]').getBoundingClientRect()
+          return (
+            count.left >= image.left &&
+            count.right <= image.right &&
+            count.top >= image.top &&
+            count.bottom <= image.bottom
+          )
+        }),
+      )
+    assert.equal(countersInside, true)
+    assert.equal(await strip.locator('[data-page-thumbnail][data-person-match=true]').count(), 0)
     await capture('highlights')
 
     // Identity comes exclusively from the viewer's right-panel preview selection.
@@ -68,6 +85,29 @@ try {
     const toggle = strip.getByRole('button', { name: 'Nora Page only', exact: true })
     await toggle.waitFor()
     assert.equal(await toggle.getAttribute('aria-pressed'), 'false')
+    // Highlight matches even with the person-only filter OFF. Nonmatching pages stay visible.
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('.document-page-gallery [data-person-match=true]').length === 9,
+    )
+    await settled()
+    assert.equal(await strip.locator('ol a').count(), 12)
+    const borderWidths = await strip
+      .locator('a:not([aria-current=page]) [data-person-match=true]')
+      .evaluateAll((frames) => frames.map((frame) => getComputedStyle(frame).borderTopWidth))
+    assert.ok(
+      borderWidths.every((width) => width === '0px'),
+      'person matches have no inner border',
+    )
+    assert.ok(
+      await strip
+        .locator('ol a')
+        .nth(2)
+        .getAttribute('aria-label')
+        .then((text) => text.includes('appears on this page')),
+      'mention-only page is highlighted',
+    )
+    await capture('person-highlights')
     const filtered = listResponse(person)
     await toggle.focus()
     await page.keyboard.press('Space')
@@ -165,6 +205,22 @@ try {
       )
     }
 
+    // Current assigned page: retain the double frame, with no unnecessary face counter.
+    const currentAssignedPath = await strip.locator('ol a').first().getAttribute('href')
+    await page.goto(origin + currentAssignedPath)
+    await settled()
+    const currentFrame = strip.locator('a[aria-current=page] [data-page-thumbnail]')
+    assert.equal(
+      await currentFrame.evaluate((frame) => getComputedStyle(frame).borderTopWidth),
+      '2px',
+    )
+    assert.equal(await currentFrame.locator('[data-slot=badge]').count(), 0)
+    await capture('current-assigned')
+    await strip.screenshot({
+      animations: 'disabled',
+      path: `${output}/${label}-current-assigned-strip.png`,
+    })
+
     // Earlier saved links restore the same right-panel identity and migrate on toggle.
     await page.goto(origin + root + first + '?gallery_person=' + person)
     await settled()
@@ -202,7 +258,7 @@ try {
     )
     assert.deepEqual(errors, [])
     console.log(
-      `${label}: sidebar-only person selection, keyboard toggle, face/mention matches, fixed header height, sorting, URL/history, legacy links, unknown person, long names and dark mode passed`,
+      `${label}: counter placement, single outer strokes, unfiltered person highlights, sidebar-only person selection, keyboard toggle, face/mention matches, fixed header height, sorting, URL/history, legacy links, unknown person, long names and dark mode passed`,
     )
     await context.close()
   }
