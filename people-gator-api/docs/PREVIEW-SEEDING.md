@@ -1445,3 +1445,27 @@ queries bounded by loaded source IDs, local thumbnails and rerun preservation of
 assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
 Existing interrupted-checkpoint recovery coverage remains in place. These are
 additive examples and retain older page-gallery media and records.
+
+
+## Expanded document-page browser (issue #140)
+
+Open `document-page-browser` from the seed report, or choose **Expand pages**
+in the bottom strip. The central viewer area becomes a vertically scrolling
+thumbnail grid, ordered left to right and then down. **Collapse pages** restores
+the viewer; opening a thumbnail also returns to that page's viewer. The side
+panels keep their state. `pages_view=expanded` restores this mode after reload
+and through Back/Forward, including links through `/pages/:pageSourceId`.
+
+The scenario reuses the stable 18-page **Page strip review practice** document
+from #131. `document-page-browser-person` starts with Nora Page's person-only
+filter: face-only and mention-only matches remain highlighted/filterable across
+two cursor batches while the excluded current page stays open. Sort, selected
+person and person-only state carry into the selected page. Source membership and
+current-page outlines retain the strip's single/double orange distinction;
+there are no annotation counters.
+
+`document-page-browser-missing-media` opens the existing registered page without
+media in expanded mode, to check the **No preview** fallback and navigation.
+The new links add no records or checkpoint identities. Seed integration tests
+resolve their source/page targets, inspect cross-batch membership and local
+thumbnail media, and preserve a reviewer's page-number edit on rerun.

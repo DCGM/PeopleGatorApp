@@ -508,3 +508,15 @@ navigation, reload and history alongside `gallery_sort` / `gallery_dir`.
 Earlier `gallery_person=<id>` links restore that person in the sidebar with the
 scope enabled. A filtered-out current scan stays open; the strip does not fetch
 every batch trying to find it.
+
+
+### Expanded document pages (#140)
+
+The bottom strip's **Expand pages** action switches the central viewer to a
+row-first thumbnail grid with vertical scrolling; **Collapse pages** restores
+the scan. Expansion is URL state (`pages_view=expanded`) and works through
+canonical page URLs and page-source redirects. Selecting a thumbnail returns
+to the viewer while preserving selected-person, person-only and gallery sort
+settings. Compact and expanded modes use the same document-scoped query,
+face-or-mention predicate, page totals, orange highlights and automatic
+pagination described above; expansion adds no new filters or counters.

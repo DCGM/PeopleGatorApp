@@ -5069,3 +5069,55 @@ async def test_page_strip_highlights_person_matching_pagination_and_preservation
     assert after_rerun.last_touched_at == before_rerun.last_touched_at
     assert await database.faces.get(seed.faces["strip-assigned"]) is None
     assert (await database.text_mentions.get(seed.mentions["strip-mentioned"])).entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_expanded_page_browser_links_resolve_media_membership_and_preserve_edits(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    spec = next(item for item in DOCUMENTS if item.key == "page-strip")
+    person = seed.entities["strip-person"]
+    browser = urlsplit(seed.filter_examples["document-page-browser"])
+    assert parse_qs(browser.query) == {"pages_view": ["expanded"]}
+    first_page = next(item for item in PAGES if item.key == "page-strip-1")
+    assert browser.path == f"/libraries/{spec.library}/documents/{spec.document_id}/pages/{first_page.page_id}"
+    assert await database.sources.lookup_page(PageLookupRequest(
+        library=spec.library, document_id=spec.document_id, page_id=first_page.page_id,
+    )) is not None
+
+    filtered = urlsplit(seed.filter_examples["document-page-browser-person"])
+    assert filtered.path == browser.path
+    assert parse_qs(filtered.query) == {
+        "pages_view": ["expanded"], "selectedPerson": [str(person)], "gallery_person_only": ["on"],
+    }
+    request = PageListRequest(
+        limit=12, return_total_count=True, sort="page_number", sort_direction="asc",
+        filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id], entity_id=[person]),
+    )
+    first = await database.sources.list_pages(request)
+    second = await database.sources.list_pages(request.model_copy(update={"cursor": first.cursor}))
+    assert [page.source_id for page in second.items] == [seed.pages[f"page-strip-{i}"] for i in (16, 17, 18)]
+    assert seed.pages["page-strip-3"] in {page.source_id for page in first.items}  # mention-only membership
+    assert seed.pages["page-strip-1"] not in {page.source_id for page in first.items + second.items}
+    for page in (first.items[0], second.items[-1]):
+        thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width == 256
+
+    missing = urlsplit(seed.filter_examples["document-page-browser-missing-media"])
+    assert missing.path == f"/pages/{seed.pages['page-gallery-9']}"
+    assert parse_qs(missing.query) == {"pages_view": ["expanded"]}
+    missing_page = await database.sources.get_page(seed.pages["page-gallery-9"])
+    with pytest.raises(SourceResolutionError):
+        await get_page_image(missing_page.library, missing_page.document_id, missing_page.page_id)
+
+    from people_gator_api.schemas.sources import PagePatchRequest
+    edited = await database.sources.patch_page(seed.pages["page-strip-18"], PagePatchRequest(page_number=88),
+        context=GenericActor(user_id=seed.users["reviewer"]))
+    rerun = await preview.seed_preview(database, filesystem)
+    assert {key: value for key, value in rerun.filter_examples.items() if key.startswith("document-page-browser")} == {
+        key: value for key, value in seed.filter_examples.items() if key.startswith("document-page-browser")
+    }
+    preserved = await database.sources.get_page(seed.pages["page-strip-18"])
+    assert preserved.page_number == 88
+    assert preserved.last_touched_at == edited.last_touched_at

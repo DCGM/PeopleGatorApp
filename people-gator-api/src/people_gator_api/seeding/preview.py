@@ -862,6 +862,22 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
                 + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
             ),
+            # #140: expanded entry points reuse the stable, media-backed #131
+            # document and its face-or-mention membership beyond the first batch.
+            "document-page-browser": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"pages_view": "expanded"})
+            ),
+            "document-page-browser-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"pages_view": "expanded", "selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
+            ),
+            "document-page-browser-missing-media": (
+                f"/pages/{pages['page-gallery-9']}"
+                + "?" + urlencode({"pages_view": "expanded"})
+            ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. The gallery loads until the current page is found.
             "document-page-gallery": (
