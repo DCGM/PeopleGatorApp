@@ -665,6 +665,16 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     "page": pages["discovery-1"],
                 })
             ),
+            # #134: the legacy zero-vector face cannot be searched; People falls back to its list.
+            "scan-face-search-unusable": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'discovery-8')}?"
+                + urlencode({
+                    "person": active_faces.get("discovery-zero-reference", ""),
+                    "candidate_face": active_faces.get("discovery-zero-reference", ""),
+                    "candidate_sort": "relevance",
+                })
+            ),
             "global-discovery-scan-excluded": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
                 f"/pages/{discovery_page.page_id}?" + urlencode({
