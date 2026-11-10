@@ -1359,7 +1359,7 @@ test resolves every link through repositories, checks metadata and local media,
 checks the intentional missing-scan response, then reruns the seed and verifies preservation of an edited number and timestamp
 and a renamed person.
 
-## Scan sidebar practice (#103)
+## Scan sidebar practice (#103, #137)
 
 The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
 has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
@@ -1368,15 +1368,20 @@ occurrence), a four-line mention of Hana with long context (#121) and a
 text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
 faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 21 further Hana occurrences, so document scope exceeds the 30-face and
-20-occurrence sidebar batches.
+20-occurrence sidebar batches. Dora Document has one direct document mention
+(`sidebar-direct-mention`) and no page evidence.
 
-- Open `scan-sidebar-people`. People lists Hana and Tomas (this page), then
-  Karel and Rosa (this document), then everyone else. Change the scope in the
-  search group to **This page** or **This document**; type a name and press
-  Enter or the Search button to refine.
+- Open `scan-sidebar-people`. Empty People search defaults to **This document**:
+  Hana and Tomas (this page), then Dora, Karel and Rosa (the rest of this document).
+  Dora demonstrates direct document membership; Tomas is mention-only.
+- Type **Hana** (or open `scan-sidebar-global-text`) to switch automatically to
+  **All people / Similarity**, including Hana Ledger outside this document.
+  Clear the final text/face input to restore document-only contextual browsing.
+  An explicit scope/sort choice remains in effect while refining an active search;
+  `scan-sidebar-document-only` demonstrates a copied, explicitly document-scoped search.
 - Open `scan-sidebar-card` to see Hana's tag expanded into the details card.
   Choose **Search** (magnifier): the face is attached to People search, Similarity
-  sorting is selected and the scope is kept. Remove the face with its ×.
+  sorting and **All people** are selected, even from a locally scoped search. Remove the face with its ×.
   `scan-sidebar-face-search` opens that state directly.
 - Open `scan-sidebar-faces` for document faces grouped by person, with
   **Unassigned** last. Scroll to load the next batch; faces on other pages open
@@ -1390,11 +1395,12 @@ faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 - Open `scan-sidebar-info` for this page's statistics, last change and the
   latest recorded change of each face and mention.
 
-New stable keys add the four people, document, pages, faces and mentions to
+New stable keys add the sidebar people, document, pages, faces and mentions to
 retained previews. Reruns keep reviewer reassignments and timestamps.
 Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
-combined name/face search within the document, local media and aligned crops,
+combined name/face search, global relevance pagination, direct-document-only
+membership and unlink preservation, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
 
 ## Resizable scan sidebar and wrapping mention context (#121)
