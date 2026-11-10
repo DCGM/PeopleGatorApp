@@ -78,7 +78,7 @@ This does not automatically seed the actual staging environment.
 | Mentions only | Nora Svoboda across Research notes and Correspondence |
 | No evidence | Lenka Vesela, ready for manual linking |
 | Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
-| Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, one missing, one other-model and one zero vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a zero-vector candidate exercise finite scoring and assignment recovery. All ten practice scans have local media. |
+| Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, two without embeddings, and one other-model vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a candidate without an embedding exercise finite scoring and assignment recovery. All ten practice scans have local media. |
 | Identity discovery and merging | Open Ada Novak's Faces tab; A. Novak appears under Similar people |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
@@ -614,11 +614,12 @@ reviewed aliases, assignments and checkpoints are retained on reruns. No retaine
 vectors or user edits are rewritten. Open the printed `entity-discovery` link,
 choose individual **Modalities** or combinations in Similar people, and compare
 its results on desktop and mobile. Found faces always uses faces and also finds `discovery-unassigned` for
-manual linking. Zero embeddings remain stored as realistic degenerate fixtures;
-search excludes undefined cosine contributions rather than assigning fake scores.
+manual linking. `discovery-zero-reference` and `discovery-zero-candidate` have no
+embedding: since #134 the API and database refuse all-zero vectors, migration
+`d34a021b0015` deletes stored ones, and that case is covered only by tests.
 
 The seed integration regression queries each source through both repositories,
-checks meaningful matches and finite scores, excludes zero-vector witnesses,
+checks meaningful matches and finite scores, excludes faces without vectors as witnesses,
 reads a real aligned crop, and preserves edited aliases/assignments on rerun.
 Existing interrupted-checkpoint and edit-preservation checks cover the added keys.
 

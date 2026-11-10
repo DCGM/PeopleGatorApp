@@ -335,11 +335,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                         keypoints=face_keypoints(face),
                         confidence=face.confidence,
                         embeddings=[
-                            # The API rejects zero vectors (#134); these faces keep the
-                            # legacy stored rows that search must still tolerate.
-                            FaceEmbedding.model_construct(model_identifier=model, vector=[0.0] * dim)
-                            if face.zero_vector
-                            else FaceEmbedding(model_identifier=model, vector=example_vector(face.group, face.key, dim))
+                            FaceEmbedding(
+                                model_identifier=model,
+                                vector=example_vector(face.group, face.key, dim),
+                            )
                             for model, dim in ((MODEL, 8), (SECOND_MODEL, 4), (DISCOVERY_MODEL, 8), (DISCOVERY_OTHER_MODEL, 4)) if face.embedded and model in face.models
                         ],
                         **fields,
@@ -663,16 +662,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
                     "library": "preview-mzk", "document": documents["discovery"],
                     "page": pages["discovery-1"],
-                })
-            ),
-            # #134: the legacy zero-vector face cannot be searched; People falls back to its list.
-            "scan-face-search-unusable": (
-                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
-                f"/pages/{next(item.page_id for item in PAGES if item.key == 'discovery-8')}?"
-                + urlencode({
-                    "person": active_faces.get("discovery-zero-reference", ""),
-                    "candidate_face": active_faces.get("discovery-zero-reference", ""),
-                    "candidate_sort": "relevance",
                 })
             ),
             "global-discovery-scan-excluded": (

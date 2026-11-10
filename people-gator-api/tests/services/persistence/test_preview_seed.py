@@ -4845,45 +4845,6 @@ async def _assert_long_sidebar_mention(database, seed, page):
 
 
 @pytest.mark.asyncio
-async def test_unusable_face_search_example_falls_back_to_page_people(seed_target):
-    """Issue #134: a stored zero vector cannot search, so the scan lists People instead."""
-    from people_gator_api.schemas.search import EntitySearchQuery
-    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
-
-    database, filesystem, _ = seed_target
-    seed = await preview.seed_preview(database, filesystem)
-    zero = seed.faces["discovery-zero-reference"]
-    page = await database.sources.get_page(seed.pages["discovery-8"])
-
-    # The example opens the seeded page with the zero-vector face attached.
-    example = urlsplit(seed.filter_examples["scan-face-search-unusable"])
-    assert example.path.endswith(f"/pages/{page.page_id}")
-    assert parse_qs(example.query) == {"person": [str(zero)], "candidate_face": [str(zero)],
-                                       "candidate_sort": ["relevance"]}
-    face = await database.faces.get(zero)
-    assert face.source_id == page.source_id and face.embeddings == [DISCOVERY_MODEL]
-
-    # Search rejects the reference (the route answers 422 invalid_search) ...
-    with pytest.raises(ValueError, match="unusable cosine"):
-        await database.entities.search(SearchEntitiesRequest(
-            limit=20,
-            query=EntitySearchQuery(face_id=[zero], face_embedding_model=DISCOVERY_MODEL),
-            filter_=EntityListFilter(entity_type=["person"]),
-        ))
-    # ... and the fallback page tier lists the people linked on this page.
-    listed = await database.entities.list(EntityListRequest(
-        limit=20, filter_=EntityListFilter(entity_type=["person"], page_source_id=[page.source_id])))
-    assert {item.entity_id for item in listed.items} == {seed.entities["discovery"], seed.entities["discovery-face"]}
-    with Image.open(io.BytesIO((await get_page_image(page.library, page.document_id, page.page_id)).content)) as scan:
-        box = face.bounding_box
-        assert box.x + box.width <= scan.size[0] and box.y + box.height <= scan.size[1]
-
-    # The API no longer accepts new zero vectors, but a rerun keeps the legacy rows.
-    rerun = await preview.seed_preview(database, filesystem)
-    assert rerun.faces["discovery-zero-reference"] == zero
-
-
-@pytest.mark.asyncio
 async def test_scan_sidebar_long_mention_upgrades_only_legacy_media(seed_target, monkeypatch):
     """A retained preview gains the #121 mention and its lines; replaced media stays."""
     database, filesystem, _ = seed_target
