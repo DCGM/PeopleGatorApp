@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCreationFilters } from '@/viewmodels/shared-filters'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
@@ -95,6 +96,11 @@ const sidebarState = sidebar.state
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
+const creation = useCreationFilters()
+function resetEvidenceFilters() {
+  linkStates.value = []
+  creation.clear()
+}
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -358,7 +364,8 @@ const people = reactive(
     order: peopleOrder,
     search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
     searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,
-    enabled: () => sidebarState.value.tab === 'people',
+    filters: creation.params,
+    enabled: () => sidebarState.value.tab === 'people' && !creation.error.value,
     pageFaces: faces,
     transcription,
     pageSourceId: () => page.value?.source_id ?? '',
@@ -371,7 +378,8 @@ const scanFaces = reactive(
     view: faceView,
     sort: faceSort,
     linkStates,
-    enabled: () => sidebarState.value.tab === 'faces',
+    filters: creation.params,
+    enabled: () => sidebarState.value.tab === 'faces' && !creation.error.value,
   }),
 )
 function removeSearchFace() {
@@ -1060,11 +1068,11 @@ onBeforeUnmount(() => {
               :error="scanFaces.error"
               :total-count="scanFaces.totalCount"
               :selected-face-id="selectedFace?.id ?? null"
-              :filtered="linkStates.length > 0"
+              :filtered="linkStates.length > 0 || Object.keys(creation.params.value).length > 0"
               :load-more="scanFaces.loadMore"
               :retry="scanFaces.retry"
               @select="selectFace"
-              @reset-filters="linkStates = []"
+              @reset-filters="resetEvidenceFilters"
             />
           </TabsContent>
           <TabsContent value="mentions" class="mt-0 flex min-h-0 flex-1 flex-col">
@@ -1075,7 +1083,9 @@ onBeforeUnmount(() => {
               v-model:group-sort="mentionGroupSort"
               :sources="sources"
               :link-states="linkStates"
-              @reset-filters="linkStates = []"
+              :creation-filters="creation.params.value"
+              :enabled="!creation.error.value"
+              @reset-filters="resetEvidenceFilters"
             />
           </TabsContent>
           <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">

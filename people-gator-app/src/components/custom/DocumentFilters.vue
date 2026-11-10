@@ -20,7 +20,9 @@ const apply = (field: string, lower: string, upper: string) =>
 
 <template>
   <div class="flex w-full min-w-0 flex-col items-stretch gap-2" role="group" aria-label="Filters">
-    <SharedFilterControls :controls="['libraries', 'actors', 'dates']" />
+    <SharedFilterControls
+      :controls="['libraries', 'creators', 'creationDates', 'actors', 'dates']"
+    />
     <CountRangeControl
       v-for="category in DOCUMENT_COUNT_CATEGORIES"
       :key="category.value"

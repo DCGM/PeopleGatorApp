@@ -1,3 +1,4 @@
+import type { CreationQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -119,6 +120,7 @@ export function useScanPeople(options: {
   search: MaybeRefOrGetter<PeopleSearchInput>
   /** Wait while an attached face's record is still loading. */
   searchPending?: MaybeRefOrGetter<boolean>
+  filters?: MaybeRefOrGetter<CreationQuery>
   enabled?: MaybeRefOrGetter<boolean>
   pageFaces: MaybeRefOrGetter<Face[]>
   transcription: MaybeRefOrGetter<TranscriptionLine[]>
@@ -141,7 +143,9 @@ export function useScanPeople(options: {
     const tier = computed(() => tiers.value[index])
     const base = computed(() => {
       const sources = toValue(options.sources)
-      return tier.value && sources ? tierParams(tier.value, sources) : undefined
+      return tier.value && sources
+        ? { ...toValue(options.filters ?? {}), ...tierParams(tier.value, sources) }
+        : undefined
     })
     const list = useEntityListQuery(
       computed(() => base.value && { ...base.value, ...listSortParams(sort.value) }),

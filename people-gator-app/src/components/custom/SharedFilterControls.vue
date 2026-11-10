@@ -7,10 +7,27 @@ import FilterDateTimePicker from './FilterDateTimePicker.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 
 // The one shared configuration (#52); each screen applies it to its own records.
-type Control = 'libraries' | 'documents' | 'pages' | 'linkStates' | 'actors' | 'dates'
+type Control =
+  | 'libraries'
+  | 'documents'
+  | 'pages'
+  | 'linkStates'
+  | 'actors'
+  | 'dates'
+  | 'creators'
+  | 'creationDates'
 // Screens may show a subset (Documents, #111); hidden values still apply from the URL.
 const props = withDefaults(defineProps<{ controls?: readonly Control[] }>(), {
-  controls: () => ['libraries', 'documents', 'pages', 'linkStates', 'actors', 'dates'],
+  controls: () => [
+    'libraries',
+    'documents',
+    'pages',
+    'linkStates',
+    'creators',
+    'creationDates',
+    'actors',
+    'dates',
+  ],
 })
 const shown = (control: Control) => props.controls.includes(control)
 const { filters, error } = useSharedFilters()
@@ -23,12 +40,16 @@ function field<K extends keyof SharedFilters>(key: K) {
   })
 }
 const linkStates = field('linkStates'),
+  createdFrom = field('createdFrom'),
+  createdTo = field('createdTo'),
   from = field('touchedFrom'),
   to = field('touchedTo')
 const selections = {
   libraries: field('libraries'),
   documentIds: field('documentIds'),
   pageIds: field('pageIds'),
+  creatorIds: field('creatorIds'),
+  creationApiKeyIds: field('creationApiKeyIds'),
   userIds: field('userIds'),
   apiKeyIds: field('apiKeyIds'),
 }
@@ -37,6 +58,8 @@ const searches = {
   libraries: ref(''),
   documentIds: ref(''),
   pageIds: ref(''),
+  creatorIds: ref(''),
+  creationApiKeyIds: ref(''),
   userIds: ref(''),
   apiKeyIds: ref(''),
 }
@@ -71,9 +94,31 @@ const lookups = [
   },
 ].filter((lookup) => shown(lookup.control))
 const actors = [
-  { key: 'userIds' as const, label: 'Modified by', options: option('userIds', 'user') },
-  { key: 'apiKeyIds' as const, label: 'Modified via key', options: option('apiKeyIds', 'api-key') },
-]
+  {
+    key: 'creatorIds' as const,
+    control: 'creators' as const,
+    label: 'Created by',
+    options: option('creatorIds', 'user'),
+  },
+  {
+    key: 'creationApiKeyIds' as const,
+    control: 'creators' as const,
+    label: 'Created via key',
+    options: option('creationApiKeyIds', 'api-key'),
+  },
+  {
+    key: 'userIds' as const,
+    control: 'actors' as const,
+    label: 'Modified by',
+    options: option('userIds', 'user'),
+  },
+  {
+    key: 'apiKeyIds' as const,
+    control: 'actors' as const,
+    label: 'Modified via key',
+    options: option('apiKeyIds', 'api-key'),
+  },
+].filter((lookup) => shown(lookup.control))
 </script>
 <template>
   <FilterMultiSelect
@@ -94,7 +139,7 @@ const actors = [
   />
   <EntityLinkStateFilter v-if="shown('linkStates')" v-model="linkStates" />
   <FilterMultiSelect
-    v-for="lookup in shown('actors') ? actors : []"
+    v-for="lookup in actors"
     :key="lookup.key"
     v-model="selections[lookup.key].value"
     v-model:search="searches[lookup.key].value"
@@ -112,5 +157,9 @@ const actors = [
   <template v-if="shown('dates')">
     <FilterDateTimePicker v-model="from" label="Modified from" :invalid="!!error" />
     <FilterDateTimePicker v-model="to" label="Modified to" :invalid="!!error" />
+  </template>
+  <template v-if="shown('creationDates')">
+    <FilterDateTimePicker v-model="createdFrom" label="Created from" :invalid="!!error" />
+    <FilterDateTimePicker v-model="createdTo" label="Created to" :invalid="!!error" />
   </template>
 </template>

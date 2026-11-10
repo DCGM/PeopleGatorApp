@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   invalidSharedValues,
+  CREATION_KEYS,
+  CREATION_FIELDS,
+  creationUrlError,
   legacyFilterNotice,
   sharedKeys,
   useSharedFilters,
@@ -15,6 +18,7 @@ import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 // Shared tags first, then the screen's specific filters. Clear all keeps search,
 // sort and view-specific state such as tabs; clearing search is separate.
 const props = defineProps<{
+  creationOnly?: boolean
   specificFilters?: ActiveFilter[]
   /** URL keys of the screen's specific filters, cleared together with shared ones. */
   specificKeys?: string[]
@@ -24,15 +28,22 @@ const props = defineProps<{
 const emit = defineEmits<{ removeSpecific: [filter: ActiveFilter] }>()
 const route = useRoute(),
   router = useRouter()
-const { filters, error } = useSharedFilters()
+const { filters, error: sharedError } = useSharedFilters()
+const error = computed(() =>
+  props.creationOnly ? creationUrlError(route.query) : sharedError.value,
+)
 const users = useActorLabels('user', () => filters.value.userIds),
   keys = useActorLabels('api-key', () => filters.value.apiKeyIds)
+const creators = useActorLabels('user', () => filters.value.creatorIds),
+  creationKeys = useActorLabels('api-key', () => filters.value.creationApiKeyIds)
 const documents = useSourceLabels('document', () => filters.value.documentIds)
 const pages = useSourceLabels('page', () => filters.value.pageIds)
 const prefixes: [keyof SharedFilters, string][] = [
   ['libraries', 'Library'],
   ['documentIds', 'Document'],
   ['pageIds', 'Page'],
+  ['creatorIds', 'Created by'],
+  ['creationApiKeyIds', 'Created via key'],
   ['userIds', 'Modified by'],
   ['apiKeyIds', 'Modified via key'],
 ]
@@ -41,6 +52,8 @@ const tags = computed<ActiveFilter[]>(() => {
   const labels: Partial<Record<keyof SharedFilters, Record<string, string>>> = {
     documentIds: { ...documents.labels.value, ...props.documentLabels },
     pageIds: pages.labels.value,
+    creatorIds: creators.labels.value,
+    creationApiKeyIds: creationKeys.labels.value,
     userIds: users.labels.value,
     apiKeyIds: keys.labels.value,
   }
@@ -57,13 +70,20 @@ const tags = computed<ActiveFilter[]>(() => {
       value,
       label: `Link state: ${linkStateVisuals[value].label}`,
     })),
-    ...(['touchedFrom', 'touchedTo'] as const).flatMap((key) =>
+    ...(
+      [
+        ['createdFrom', 'Created from'],
+        ['createdTo', 'Created to'],
+        ['touchedFrom', 'Modified from'],
+        ['touchedTo', 'Modified to'],
+      ] as const
+    ).flatMap(([key, label]) =>
       f[key]
         ? [
             {
               key,
               value: f[key],
-              label: `Modified ${key === 'touchedFrom' ? 'from' : 'to'}: ${f[key].replace('T', ' ')}`,
+              label: `${label}: ${f[key].replace('T', ' ')}`,
             },
           ]
         : [],
@@ -73,7 +93,13 @@ const tags = computed<ActiveFilter[]>(() => {
       value,
       label: `Invalid ${key.replace(/_/g, ' ')}: ${value}`,
     })),
-  ]
+  ].filter(
+    (tag) =>
+      !props.creationOnly ||
+      CREATION_FIELDS.includes(tag.key as (typeof CREATION_FIELDS)[number]) ||
+      (tag.key.startsWith('$') &&
+        CREATION_KEYS.includes(tag.key.slice(1) as (typeof CREATION_KEYS)[number])),
+  )
 })
 function remove(chip: ActiveFilter) {
   if (chip.key.startsWith('specific:')) {
@@ -99,7 +125,7 @@ const combined = computed(() => [
 ])
 function clearAll() {
   const cleared = new Set<string>([
-    ...sharedKeys,
+    ...(props.creationOnly ? CREATION_KEYS : sharedKeys),
     ...(props.specificKeys ?? []),
     'cursor',
     'page_cursor',

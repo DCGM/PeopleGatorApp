@@ -3,7 +3,9 @@ import PersonNameTitle from './PersonNameTitle.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
+import type { ActiveFilter } from './ActiveFilters.vue'
+import SharedFilterControls from './SharedFilterControls.vue'
+import SharedFilterTags from './SharedFilterTags.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import ListPagination from './ListPagination.vue'
 import ScanFaceThumbnail from './ScanFaceThumbnail.vue'
@@ -83,12 +85,13 @@ function location(item: ScanFaceItem) {
           :options="WORKSPACE_FACE_SORTS"
           label="Sort faces"
         />
+        <SharedFilterControls :controls="['creators', 'creationDates']" />
       </SearchFilterPanel>
-      <ActiveFilters
-        :filters="tags"
-        clear-label="Clear filters"
-        @remove="scope = 'page'"
-        @clear="scope = 'page'"
+      <SharedFilterTags
+        creation-only
+        :specific-filters="tags"
+        :specific-keys="['face_scope']"
+        @remove-specific="scope = 'page'"
       />
     </div>
     <ScrollArea class="min-h-0 flex-1" :aria-busy="loading || isFetching">

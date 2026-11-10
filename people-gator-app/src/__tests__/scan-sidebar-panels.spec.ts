@@ -1,10 +1,15 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
-import { h } from 'vue'
+import { h, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import ScanPeoplePanel from '@/components/custom/ScanPeoplePanel.vue'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
+
+vi.mock('@vueuse/core', async (original) => ({
+  ...(await original<typeof import('@vueuse/core')>()),
+  useMediaQuery: () => ref(true),
+}))
 
 vi.mock('@/composables/object-url', () => ({ useObjectUrl: () => ({ value: '' }) }))
 vi.mock('@/query/faces', () => ({
@@ -118,7 +123,14 @@ describe('People panel (#103)', () => {
         retry: vi.fn(),
         ...props,
       },
-      global: { stubs: { ...stubs, SimilarPersonItem: false } },
+      global: {
+        stubs: {
+          ...stubs,
+          SimilarPersonItem: false,
+          SharedFilterControls: true,
+          SharedFilterTags: true,
+        },
+      },
     })
   }
 
@@ -142,13 +154,18 @@ describe('People panel (#103)', () => {
     expect(context.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
     expect(context.get('button').attributes('aria-label')).toBe('Add search context')
     expect(options.get('[aria-label="Scope: All people"]').text()).toBe('All people')
-    expect(options.element.lastElementChild!.textContent).toBe('1 result')
+    expect(form.get('[data-slot="input-group"]').get('[role="status"]').text()).toBe('1 result')
     await context.get('[aria-label="Remove search face"]').trigger('click')
     expect(wrapper.emitted('removeFace')).toHaveLength(1)
     // Titles share the grouped-name heading style.
     const results = wrapper.get('#people-results-title')
     expect(results.text()).toBe('Results')
-    expect(form.get('#people-search-title').classes()).toEqual(results.classes())
+    expect(
+      form
+        .get('#people-search-title')
+        .classes()
+        .filter((name) => name !== 'basis-full'),
+    ).toEqual(results.classes())
     expect(results.classes()).toEqual(['font-heading', 'text-lg', 'font-normal'])
     const sort = wrapper.findComponent({ name: 'SortSelect' })
     expect(form.findComponent({ name: 'SortSelect' }).exists()).toBe(false)

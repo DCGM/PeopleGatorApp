@@ -140,5 +140,13 @@ Documents also offers optional **Created** and **Created by** columns through
 **Add column**. Created by shows the registering user and API key, when used.
 Sources registered before creation tracking show **Unknown**; registration retries
 preserve their recorded creation. These columns support the same add/move/remove
-and tab-session preferences, without creation sorting or filtering. Explore the
+and tab-session preferences, without creation sorting. Explore the
 seed's `document-creation` link for user, API-key and legacy examples.
+
+
+Use **Created by**, **Created via key**, **Created from** and **Created to** in
+shared filter panels and the scan sidebar to select the creator and an inclusive
+creation interval. The criteria match the listed person, face, mention or source's
+own creation; modification filters remain independent. Start with the seed's
+`documents-created-by`, `scans-created-range`, `people-created-by`,
+`faces-created-by` and `mentions-created-by` examples.
