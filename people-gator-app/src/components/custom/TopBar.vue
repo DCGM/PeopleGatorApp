@@ -2,7 +2,7 @@
 import ArchiveLink from './ArchiveLink.vue'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
-import { FileText, Scan, User } from '@lucide/vue'
+import { FileText, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
 
@@ -60,19 +60,19 @@ const breadcrumbs = computed(() => {
     })
     return items
   }
-  // A page's library/document crumbs open that scope in Scans. The archive
-  // document ID resolves to its registered document there.
+  // Source crumbs keep only their explicit library/document context.
   if (route.name === 'document-page' && typeof library === 'string') {
     items.push({
       label: library,
-      to: { name: 'document-search', query: { library } },
+      to: { name: 'document-list', query: { library } },
     })
     if (typeof document === 'string') {
       items.push({
         label: documentQuery.data.value?.name?.trim() || document,
         to: {
-          name: 'document-search',
-          query: { library, archive_document: document },
+          name: 'document-pages',
+          params: { libraryId: library, documentId: document },
+          query: { pages_view: 'expanded' },
         },
       })
     }
@@ -80,8 +80,8 @@ const breadcrumbs = computed(() => {
       label: `Page ${pageQuery.data.value?.page_number ?? String(route.params.pageId)}`,
       to: { path: route.path, query: route.query },
     })
-  } else if (route.name === 'document-search') {
-    items.push({ label: 'Scans', to: { name: 'document-search' } })
+  } else if (route.name === 'document-source' || route.name === 'document-pages') {
+    items.push({ label: 'Documents', to: { name: 'document-list' } })
   } else if (route.name === 'people-search') {
     items.push({
       label: 'People',
@@ -96,11 +96,11 @@ const hidesHomeCrumbOnPhone = computed(
   () => route.name === 'document-page' || route.name === 'person-detail',
 )
 
-const isScanRoute = computed(
-  () => route.name === 'document-search' || route.name === 'document-page',
+const isDocumentRoute = computed(() =>
+  ['document-list', 'document-source', 'document-pages', 'page-source', 'document-page'].includes(
+    String(route.name),
+  ),
 )
-// Top-level navigation always starts a fresh default listing (#109).
-const scansLink = { name: 'document-search' }
 const isPeopleRoute = computed(
   () => route.name === 'people-search' || route.name === 'person-detail',
 )
@@ -173,29 +173,12 @@ const isPeopleRoute = computed(
     <div class="flex shrink-0 items-center gap-3 sm:gap-6">
       <slot name="navigation">
         <RouterLink
-          :to="scansLink"
-          aria-label="Scans"
-          :aria-current="isScanRoute ? 'page' : undefined"
-          class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
-          :class="
-            isScanRoute
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          "
-        >
-          <span class="flex items-center gap-2">
-            <Scan class="size-[1em]" />
-            <span class="hidden 2xl:inline">Scans</span>
-          </span>
-        </RouterLink>
-
-        <RouterLink
           :to="{ name: 'document-list' }"
           aria-label="Documents"
-          :aria-current="route.name === 'document-list' ? 'page' : undefined"
+          :aria-current="isDocumentRoute ? 'page' : undefined"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
           :class="
-            route.name === 'document-list'
+            isDocumentRoute
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           "

@@ -49,7 +49,7 @@ async function render() {
     routes: [
       { path: '/pages/:pageSourceId', name: 'page-source', component: { template: '<div />' } },
       { path: '/documents', name: 'document-list', component: { template: '<div />' } },
-      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
     ],
   })
   await router.push('/documents?view=table&library=Archive&link_state=verified')

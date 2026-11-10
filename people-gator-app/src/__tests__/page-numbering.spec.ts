@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import { pagePosition } from '@/lib/page-position'
 import { pageGalleryLabel } from '@/viewmodels/document-page-gallery'
 import PageNumberEditor from '@/components/custom/PageNumberEditor.vue'
-import DocumentCard from '@/components/custom/DocumentCard.vue'
+import PagePosition from '@/components/custom/PagePosition.vue'
 import type { PageResponse } from '@/client'
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn() }))
@@ -25,18 +25,9 @@ describe('page numbering', () => {
     expect(pagePosition()).toBe('–/–')
     expect(pageGalleryLabel('12345678-uuid', 10)).toBe('10')
     expect(pageGalleryLabel('12345678-uuid')).toBe('12345678')
-    const card = mount(DocumentCard, {
-      props: {
-        library: 'x',
-        documentUuid: 'd',
-        pageUuid: 'p',
-        names: [],
-        pageNumber: 10,
-        registeredPageCount: 3,
-      },
-    })
+    const card = mount(PagePosition, { props: { number: 10, total: 3 } })
     // The compact form is hidden from assistive tech; the spoken form is sr-only text.
-    expect(card.get('small > span[aria-hidden="true"]').text()).toBe('10/3')
+    expect(card.get('span[aria-hidden="true"]').text()).toBe('10/3')
     expect(card.get('.sr-only').text()).toBe('Page 10 of 3 registered pages')
     expect(card.find('small[aria-label]').exists()).toBe(false)
   })

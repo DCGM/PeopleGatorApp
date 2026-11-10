@@ -21,9 +21,13 @@ export function documentTitle(document: Pick<DocumentResponse, 'name' | 'documen
 export function documentOpenLocation(
   document: Pick<DocumentResponse, 'first_page_source_id' | 'source_id'>,
 ): RouteLocationRaw {
-  return document.first_page_source_id
-    ? { name: 'page-source', params: { pageSourceId: document.first_page_source_id } }
-    : { name: 'document-search', query: { document: document.source_id } }
+  if (document.first_page_source_id)
+    return { name: 'page-source', params: { pageSourceId: document.first_page_source_id } }
+  return {
+    name: 'document-source',
+    params: { documentSourceId: document.source_id },
+    query: { pages_view: 'expanded' },
+  }
 }
 
 export function useDocumentList(

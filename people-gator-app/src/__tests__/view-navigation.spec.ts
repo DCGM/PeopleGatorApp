@@ -14,15 +14,22 @@ vi.mock('@/query/entities', () => ({
 }))
 
 const query = {
-  library: 'preview-mzk', document: '00000000-0000-4000-8000-000000000001',
-  page: '00000000-0000-4000-8000-000000000002', link_state: ['manual', 'verified'],
-  touched_by: '00000000-0000-4000-8000-000000000003', api_key: 'bad-id',
-  touched_from: '2026-01-01T00:00:00Z', touched_to: 'invalid-date',
-  q: 'Ada', cursor: 'old', assignment: 'mentions', sort: 'name', annotations_min: '2',
+  library: 'preview-mzk',
+  document: '00000000-0000-4000-8000-000000000001',
+  page: '00000000-0000-4000-8000-000000000002',
+  link_state: ['manual', 'verified'],
+  touched_by: '00000000-0000-4000-8000-000000000003',
+  api_key: 'bad-id',
+  touched_from: '2026-01-01T00:00:00Z',
+  touched_to: 'invalid-date',
+  q: 'Ada',
+  cursor: 'old',
+  assignment: 'mentions',
+  sort: 'name',
+  annotations_min: '2',
 }
 const listings = [
   ['Documents', 'document-list', '/documents'],
-  ['Scans', 'document-search', '/scans'],
   ['People', 'people-search', '/people'],
 ] as const
 const Harness = defineComponent({
@@ -30,9 +37,18 @@ const Harness = defineComponent({
     const filters = useSharedFilters()
     const route = useRoute()
     const effective = computed(() => sharedFiltersQuery(filters.filters.value))
-    return () => h('div', [h(TopBar), h('output', JSON.stringify({
-      effective: effective.value, error: filters.error.value, query: route.query,
-    }))])
+    return () =>
+      h('div', [
+        h(TopBar),
+        h(
+          'output',
+          JSON.stringify({
+            effective: effective.value,
+            error: filters.error.value,
+            query: route.query,
+          }),
+        ),
+      ])
   },
 })
 async function setup(name: string, params = {}) {
@@ -40,8 +56,17 @@ async function setup(name: string, params = {}) {
     history: createMemoryHistory(),
     routes: [
       ...listings.map(([, name, path]) => ({ path, name, component: Harness })),
+      {
+        path: '/libraries/:libraryId/documents/:documentId',
+        name: 'document-pages',
+        component: Harness,
+      },
       { path: '/people/:personId', name: 'person-detail', component: Harness },
-      { path: '/libraries/:libraryId/documents/:documentId/pages/:pageId', name: 'document-page', component: Harness },
+      {
+        path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
+        name: 'document-page',
+        component: Harness,
+      },
     ],
   })
   await router.push({ name, params, query })
@@ -77,24 +102,36 @@ describe('fresh application navigation (#109)', () => {
       wrapper.unmount()
     })
   }
-  it.each(['document-list', 'document-search', 'people-search'])('logo opens default Documents from %s', async (source) => {
-    const { router, wrapper } = await setup(source)
-    await wrapper.get('a[aria-label="PeopleGator"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.fullPath).toBe('/documents')
-    wrapper.unmount()
-  })
+  it.each(['document-list', 'people-search'])(
+    'logo opens default Documents from %s',
+    async (source) => {
+      const { router, wrapper } = await setup(source)
+      await wrapper.get('a[aria-label="PeopleGator"]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.fullPath).toBe('/documents')
+      wrapper.unmount()
+    },
+  )
   it('People breadcrumb resets filters; source breadcrumbs retain only explicit context', async () => {
     const { router, wrapper } = await setup('person-detail', { personId: 'ada' })
     await wrapper.get('[aria-label="Breadcrumb"] a[title="People"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/people')
-    await router.push({ name: 'document-page', params: { libraryId: 'preview-mzk', documentId: 'archive', pageId: 'page' }, query })
+    await router.push({
+      name: 'document-page',
+      params: { libraryId: 'preview-mzk', documentId: 'archive', pageId: 'page' },
+      query,
+    })
     await flushPromises()
     const link = wrapper.get('[aria-label="Breadcrumb"] a[title="archive"]')
     await link.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'preview-mzk', archive_document: 'archive' })
+    expect(router.currentRoute.value.name).toBe('document-pages')
+    expect(router.currentRoute.value.params).toEqual({
+      libraryId: 'preview-mzk',
+      documentId: 'archive',
+    })
+    expect(router.currentRoute.value.query).toEqual({ pages_view: 'expanded' })
     wrapper.unmount()
   })
 })
