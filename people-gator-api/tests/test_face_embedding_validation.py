@@ -17,7 +17,7 @@ from people_gator_api.services.database_service import get_database
 MODEL = "synthetic-model"
 
 
-@pytest.mark.parametrize("vector", [[0.0], [0.0, 0.0, 0.0], [-0.0, 0.0]])
+@pytest.mark.parametrize("vector", [[0.0], [0.0, 0.0, 0.0], [-0.0, 0.0], [1e-50, -1e-50]])
 def test_zero_vector_is_rejected(vector: list[float]) -> None:
     with pytest.raises(ValidationError, match="must not be all zeros"):
         FaceEmbedding(model_identifier=MODEL, vector=vector)
@@ -29,7 +29,7 @@ def test_non_finite_or_empty_vector_is_rejected(vector: list[float]) -> None:
         FaceEmbedding(model_identifier=MODEL, vector=vector)
 
 
-@pytest.mark.parametrize("vector", [[1.0, 0.0], [0.0, -1e-200], [1e300, 1e300]])
+@pytest.mark.parametrize("vector", [[1.0, 0.0], [0.0, -1e-40], [1e30, 1e30]])
 def test_nonzero_vector_is_accepted(vector: list[float]) -> None:
     assert FaceEmbedding(model_identifier=MODEL, vector=vector).vector == vector
 

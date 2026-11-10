@@ -1,8 +1,8 @@
 from enum import StrEnum
-import math
 from typing import Self
 import uuid
 
+import numpy as np
 from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, field_validator, model_validator
 
 
@@ -138,7 +138,8 @@ class ModelEmbedding[T: str](BaseModel):
     def require_nonzero(cls, vector: list[float]) -> list[float]:
         # Cosine similarity is undefined for a zero vector, so it can never be
         # searched; storing one only makes its face fail as a search reference.
-        if math.hypot(*vector) == 0:
+        # pgvector stores float32, so values that round to zero there count too.
+        if not np.any(np.asarray(vector, dtype=np.float32)):
             raise ValueError("embedding vector must not be all zeros")
         return vector
 
