@@ -374,6 +374,13 @@ const scanFaces = reactive(
     enabled: () => sidebarState.value.tab === 'faces',
   }),
 )
+// A face the API cannot search with falls back to the People list (#134).
+watch(
+  () => people.faceRejected,
+  (rejected) => {
+    if (rejected) removeSearchFace()
+  },
+)
 function removeSearchFace() {
   // Typed name text stays; Similarity needs a name or face to score.
   sidebar.update({

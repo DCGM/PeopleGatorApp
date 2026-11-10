@@ -1,4 +1,5 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { AxiosError, type AxiosResponse } from 'axios'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -212,5 +213,36 @@ describe('useScanPeople (#103)', () => {
     expect(api.entities).not.toHaveBeenCalled()
     wrapper.unmount()
     client.clear()
+  })
+
+  it('reports a face the API cannot search with, not other failures (#134)', async () => {
+    const rejected = (status: number, code?: string) =>
+      new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status,
+        data: code ? { detail: { code, message: 'x' } } : {},
+      } as AxiosResponse)
+    const face = { id: 'zero', embeddingModel: 'model' }
+    api.search.mockRejectedValue(rejected(422, 'invalid_search'))
+    const unusable = mountPeople({ order: 'relevance', search: { text: '', face } })
+    await flushPromises()
+    expect(unusable.model().faceRejected.value).toBe(true)
+    expect(unusable.model().error.value).toBeInstanceOf(AxiosError)
+    unusable.wrapper.unmount()
+    unusable.client.clear()
+
+    api.search.mockRejectedValue(rejected(500))
+    const outage = mountPeople({ order: 'relevance', search: { text: '', face } })
+    await flushPromises()
+    expect(outage.model().error.value).toBeInstanceOf(AxiosError)
+    expect(outage.model().faceRejected.value).toBe(false)
+    outage.wrapper.unmount()
+    outage.client.clear()
+
+    api.search.mockRejectedValue(rejected(422, 'invalid_search'))
+    const text = mountPeople({ order: 'relevance', search: { text: 'Ada' } })
+    await flushPromises()
+    expect(text.model().faceRejected.value).toBe(false)
+    text.wrapper.unmount()
+    text.client.clear()
   })
 })
