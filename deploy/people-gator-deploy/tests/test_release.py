@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import release
 from people_gator_deploy.core import DeployError
 
@@ -80,6 +81,7 @@ class FakeRelease(release.Release):
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)

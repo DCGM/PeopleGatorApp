@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 import urllib.error
 
 
+from actions_isolation import isolate
 from people_gator_deploy import host, preview
 from people_gator_deploy.core import DeployError
 SHA = "a" * 40
@@ -40,6 +41,7 @@ def response(data):
 
 class GitHubAccessTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -184,6 +186,7 @@ class GitHubAccessTests(unittest.TestCase):
 
 class LifecycleTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -374,6 +377,15 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(json.loads(state_file.read_text()), state)
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")
         self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
+
+    def test_synthetic_deployments_never_reach_a_real_job_summary(self):
+        summary = self.root / "summary.md"
+        with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.assertIn("pr-123.preview.peoplegator.dev", summary.read_text())  # the feature itself works
+        summary.unlink()
+        self.controller.deploy_pr(124, RUN, IMAGES)  # under the test isolation nothing is written
+        self.assertFalse(summary.exists())
 
     def test_seeding_runs_after_migrations_and_before_application_startup(self):
         self.controller.deploy_pr(123, RUN, IMAGES)
@@ -583,6 +595,9 @@ class LifecycleTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("PREVIEW_TEST_POSTGRES_CONTAINER"), "requires disposable PostgreSQL container")
 class DatabaseIsolationTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+
     def test_two_pr_databases_are_isolated_and_cleanup_is_repeatable(self):
         container = os.environ["PREVIEW_TEST_POSTGRES_CONTAINER"]
         admin = os.environ.get("PREVIEW_TEST_POSTGRES_USER", "ci")

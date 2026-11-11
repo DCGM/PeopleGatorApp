@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from s3_fixture import S3Fixture
 
+from actions_isolation import isolate
 from people_gator_deploy import staging
 from people_gator_deploy.core import DeployError
 import test_snapshot as snapshot_tests
@@ -20,6 +21,9 @@ import test_snapshot as snapshot_tests
 @unittest.skipUnless(os.environ.get("STAGING_TEST_IMAGE") and os.environ.get("STAGING_TEST_POSTGRES_CONTAINER"),
                      "Set isolated STAGING_TEST_IMAGE/container/port/network")
 class RuntimeTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+
     @classmethod
     def setUpClass(cls):
         snapshot_tests.SnapshotIntegrationTests.setUpClass()

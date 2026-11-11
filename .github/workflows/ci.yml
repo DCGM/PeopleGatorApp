@@ -148,6 +148,9 @@ jobs:
         env:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
           PYTHONPATH: ../deploy/people-gator-deploy/src
+          # Synthetic deployments in the tests must not land in this job's summary.
+          GITHUB_STEP_SUMMARY: ''
+          GITHUB_OUTPUT: ''
         run: uv run --locked python -B -m unittest discover -s ../deploy/people-gator-deploy/tests -v
       - name: Install the deployment utility as the deploy jobs do
         uses: ./.github/actions/deploy-tools

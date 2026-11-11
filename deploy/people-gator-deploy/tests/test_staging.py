@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import staging
 from people_gator_deploy.core import DeployError
 
@@ -97,6 +98,7 @@ class FakeStaging(staging.Staging):
 
 class StagingTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

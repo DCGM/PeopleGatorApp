@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import snapshots, staging
 from people_gator_deploy.core import DeployError
 from test_staging import FakeStaging
@@ -59,6 +60,7 @@ class S3:
 
 class SourceTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import cli, environments
 from people_gator_deploy.core import DeployError, write_json
 from people_gator_deploy.environments import Environment
@@ -65,6 +66,7 @@ class FakeDocker:
 
 class EnvironmentTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory(prefix="environment test ")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
