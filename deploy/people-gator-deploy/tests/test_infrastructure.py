@@ -28,6 +28,9 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(postgres["networks"], ["db"])
         self.assertEqual((document["networks"]["db"]["name"], document["networks"]["web"]["name"]), ("db", "web"))
         traefik = document["services"]["traefik"]
+        # Older Traefik cannot talk to Docker Engine 29 ("client version 1.24 is too old").
+        major, minor = map(int, traefik["image"].removeprefix("traefik:v").split(".")[:2])
+        self.assertGreaterEqual((major, minor), (3, 6))
         self.assertEqual(traefik["command"], ["--configfile=/etc/traefik/traefik.yaml"])
         self.assertEqual(traefik["ports"], ["${HTTPS_PORT:-443}:443"])  # HTTPS only, on a chosen host port
         self.assertNotIn("certresolver", compose)  # certificates come from traefik.yaml's entry point

@@ -36,7 +36,9 @@ services:
     # No published port: only containers on the db network reach PostgreSQL.
 
   traefik:
-    image: traefik:v3.5
+    # 3.6+ negotiates the Docker API; 3.5 and older fail on Docker Engine 29
+    # ("client version 1.24 is too old"). v3.7 follows the latest 3.7 release.
+    image: traefik:v3.7
     restart: unless-stopped
     # All settings live in traefik.yaml (copy traefik.example.yaml): HTTPS-only
     # `websecure` entry point, Docker provider and the ACME resolver.
