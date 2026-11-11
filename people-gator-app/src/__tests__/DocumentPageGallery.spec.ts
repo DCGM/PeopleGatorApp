@@ -153,17 +153,57 @@ describe('DocumentPageGallery', () => {
 
   it('offers more pages and a retry for a failed page list', async () => {
     const { wrapper } = await mountGallery({ hasNextPage: true })
-    await wrapper.get('button:not([disabled])').trigger('click')
+    await wrapper.get('button[aria-label="Expand pages"]').trigger('focus')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'More pages')!
+      .trigger('click')
     expect(wrapper.emitted('load-more')).toHaveLength(1)
 
     await wrapper.setProps({ error: true, hasNextPage: true })
     expect(wrapper.get('[role=alert]').text()).toContain('Could not load document pages.')
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
       'Person only',
+      '',
       'Retry pages',
     ])
-    await wrapper.get('button:not([disabled])').trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Retry pages')!
+      .trigger('click')
     expect(wrapper.emitted('retry')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('expands into a row-first grid while retaining current and person-match states', async () => {
+    const { wrapper } = await mountGallery({
+      selectedPersonId: 'nora',
+      selectedPersonName: 'Nora Page',
+      items: [item(1, true), { ...item(2), matchesSelectedPerson: true }, item(3)],
+    })
+    const expand = wrapper.get('button[aria-label="Expand pages"]')
+    expect(expand.attributes('aria-expanded')).toBe('false')
+    expect(expand.attributes('aria-controls')).toBe('document-pages-list')
+    await expand.trigger('click')
+    expect(wrapper.emitted('update:expanded')).toEqual([[true]])
+    await wrapper.setProps({ expanded: true })
+    expect(wrapper.get('nav').attributes('data-expanded')).toBe('true')
+    expect(wrapper.get('ol').classes()).toContain('grid')
+    expect(wrapper.get('ol').classes()).not.toContain('w-max')
+    expect(wrapper.findAll('ol a').map((link) => link.attributes('href'))).toEqual([
+      '/libraries/preview-mzk/documents/doc/pages/page-1',
+      '/libraries/preview-mzk/documents/doc/pages/page-2',
+      '/libraries/preview-mzk/documents/doc/pages/page-3',
+    ])
+    expect(wrapper.get('a[aria-current="page"] [data-page-thumbnail]').classes()).toContain(
+      'border-2',
+    )
+    expect(wrapper.get('[data-person-match="true"]').classes()).toContain('border-0')
+    expect(wrapper.get('[aria-label="Document pages grid"]').attributes('tabindex')).toBe('0')
+    await wrapper.get('button[aria-label="Collapse pages"]').trigger('click')
+    expect(wrapper.emitted('update:expanded')).toEqual([[true], [false]])
+    await wrapper.setProps({ expanded: false })
+    expect(wrapper.get('ol').classes()).toContain('w-max')
     wrapper.unmount()
   })
 

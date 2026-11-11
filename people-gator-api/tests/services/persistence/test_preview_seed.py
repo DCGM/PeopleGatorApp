@@ -116,6 +116,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (47, 168, 123)
     assert len(result.documents) == 59 and len(result.pages) == 136
+
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -401,6 +402,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
     assert await counts(database) == (47, 168, 123)
 
 
+
 @pytest.mark.asyncio
 async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     seed_target, monkeypatch
@@ -419,6 +421,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     second = await preview.seed_preview(database, filesystem)
     assert second == first
     assert await counts(database) == (47, 168, 123)
+
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -442,6 +445,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
     assert await counts(database) == (48, 168, 123)
+
 
 
 
@@ -471,6 +475,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
 
 
 
+
 @pytest.mark.asyncio
 async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_target):
     database, filesystem, _ = seed_target
@@ -490,6 +495,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
     assert await counts(database) == tuple(value - 1 for value in original_counts)
+
 
 
 
@@ -3618,6 +3624,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
     assert await counts(db) == (47, 168, 123)
+
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -5105,6 +5112,59 @@ async def test_page_strip_highlights_person_matching_pagination_and_preservation
     assert after_rerun.last_touched_at == before_rerun.last_touched_at
     assert await database.faces.get(seed.faces["strip-assigned"]) is None
     assert (await database.text_mentions.get(seed.mentions["strip-mentioned"])).entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_expanded_page_browser_links_resolve_media_membership_and_preserve_edits(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    spec = next(item for item in DOCUMENTS if item.key == "page-strip")
+    person = seed.entities["strip-person"]
+    browser = urlsplit(seed.filter_examples["document-page-browser"])
+    assert parse_qs(browser.query) == {"pages_view": ["expanded"]}
+    first_page = next(item for item in PAGES if item.key == "page-strip-1")
+    assert browser.path == f"/libraries/{spec.library}/documents/{spec.document_id}/pages/{first_page.page_id}"
+    assert await database.sources.lookup_page(PageLookupRequest(
+        library=spec.library, document_id=spec.document_id, page_id=first_page.page_id,
+    )) is not None
+
+    filtered = urlsplit(seed.filter_examples["document-page-browser-person"])
+    assert filtered.path == browser.path
+    assert parse_qs(filtered.query) == {
+        "pages_view": ["expanded"], "selectedPerson": [str(person)], "gallery_person_only": ["on"],
+    }
+    request = PageListRequest(
+        limit=12, return_total_count=True, sort="page_number", sort_direction="asc",
+        filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id], entity_id=[person]),
+    )
+    first = await database.sources.list_pages(request)
+    second = await database.sources.list_pages(request.model_copy(update={"cursor": first.cursor}))
+    assert [page.source_id for page in second.items] == [seed.pages[f"page-strip-{i}"] for i in (16, 17, 18)]
+    assert seed.pages["page-strip-3"] in {page.source_id for page in first.items}  # mention-only membership
+    assert seed.pages["page-strip-1"] not in {page.source_id for page in first.items + second.items}
+    for page in (first.items[0], second.items[-1]):
+        thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width == 256
+
+    missing = urlsplit(seed.filter_examples["document-page-browser-missing-media"])
+    assert missing.path == f"/pages/{seed.pages['page-gallery-9']}"
+    assert parse_qs(missing.query) == {"pages_view": ["expanded"]}
+    missing_page = await database.sources.get_page(seed.pages["page-gallery-9"])
+    with pytest.raises(SourceResolutionError):
+        await get_page_image(missing_page.library, missing_page.document_id, missing_page.page_id)
+
+    from people_gator_api.schemas.sources import PagePatchRequest
+    edited = await database.sources.patch_page(seed.pages["page-strip-18"], PagePatchRequest(page_number=88),
+        context=GenericActor(user_id=seed.users["reviewer"]))
+    rerun = await preview.seed_preview(database, filesystem)
+    assert {key: value for key, value in rerun.filter_examples.items() if key.startswith("document-page-browser")} == {
+        key: value for key, value in seed.filter_examples.items() if key.startswith("document-page-browser")
+    }
+    preserved = await database.sources.get_page(seed.pages["page-strip-18"])
+    assert preserved.page_number == 88
+    assert preserved.last_touched_at == edited.last_touched_at
+
 
 @pytest.mark.asyncio
 async def test_scan_people_document_default_global_search_and_direct_seed_preservation(seed_target):

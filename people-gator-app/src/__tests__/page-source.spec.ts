@@ -46,7 +46,9 @@ describe('first-page source navigation', () => {
       },
     })
     const { router, wrapper } = await render()
-    await router.push('/pages/internal-source')
+    await router.push(
+      '/pages/internal-source?pages_view=expanded&selectedPerson=nora&gallery_person_only=on#pages',
+    )
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-page')
     expect(router.currentRoute.value.params).toEqual({
@@ -54,6 +56,12 @@ describe('first-page source navigation', () => {
       documentId: 'document-id',
       pageId: 'archive-page-id',
     })
+    expect(router.currentRoute.value.query).toEqual({
+      pages_view: 'expanded',
+      selectedPerson: 'nora',
+      gallery_person_only: 'on',
+    })
+    expect(router.currentRoute.value.hash).toBe('#pages')
     expect(wrapper.text()).toContain('Page editor')
     expect(api.page).toHaveBeenCalledTimes(1)
     expect(api.page).toHaveBeenCalledWith(
@@ -64,16 +72,14 @@ describe('first-page source navigation', () => {
     expect(router.currentRoute.value.name).toBe('document-list')
   })
   it('keeps a failed link recoverable and retries the same source', async () => {
-    api.page
-      .mockRejectedValueOnce(new Error('unavailable'))
-      .mockResolvedValueOnce({
-        data: {
-          source_id: 'source',
-          library: 'archive',
-          document_id: 'document-id',
-          page_id: 'page-id',
-        },
-      })
+    api.page.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce({
+      data: {
+        source_id: 'source',
+        library: 'archive',
+        document_id: 'document-id',
+        page_id: 'page-id',
+      },
+    })
     const { router, wrapper } = await render()
     await router.push('/pages/source')
     await flushPromises()
