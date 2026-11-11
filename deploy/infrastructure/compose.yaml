@@ -3,9 +3,11 @@
 # Start it once as the deployment account and leave it running; the deploy jobs
 # only check it.
 #
-#   cp deploy/infrastructure/example.env /private/infrastructure.env        # password, port, paths
-#   cp deploy/infrastructure/traefik.example.yaml /private/traefik.yaml     # ACME e-mail
-#   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
+# From the repository root, as the deployment account (safe to rerun: the env
+# file with its generated password and the Traefik config are created only once,
+# in ~/.config/peoplegator-infra; edit them there and rerun to apply changes):
+#
+#   d=~/.config/peoplegator-infra; install -d -m 700 $d && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" deploy/infrastructure/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp deploy/infrastructure/traefik.example.yaml $d/traefik.yaml; } && docker compose -f deploy/infrastructure/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 #
 # The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
 # postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres

@@ -24,19 +24,22 @@ commands and operations in the [utility guide](README.md).
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
 PostgreSQL 16 with pgvector as `postgres` on the internal `db` network (no
-published port) and Traefik on `web`. Prepare two private files:
-
-- a copy of [`example.env`](../infrastructure/example.env): PostgreSQL password
-  and user, `HTTPS_PORT`, the path below and the Docker socket;
-- a copy of [`traefik.example.yaml`](../infrastructure/traefik.example.yaml): the
-  static Traefik configuration with the HTTPS-only `websecure` entry point, the
-  Docker provider and the `letsencrypt` resolver (set the ACME e-mail).
+published port) and Traefik on `web`. One command from the repository root, as
+the deployment account, creates the private files in
+`~/.config/peoplegator-infra` the first time and starts the stack:
 
 ```sh
-docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
+d=~/.config/peoplegator-infra; install -d -m 700 $d && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" deploy/infrastructure/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp deploy/infrastructure/traefik.example.yaml $d/traefik.yaml; } && docker compose -f deploy/infrastructure/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 ```
 
-Rerun the same command after editing a file or pulling a newer `main`; passwords,
+- `infra.env`, from [`example.env`](../infrastructure/example.env): generated
+  PostgreSQL password, user, `HTTPS_PORT`, the Traefik config path and the
+  current Docker context's socket;
+- `traefik.yaml`, from [`traefik.example.yaml`](../infrastructure/traefik.example.yaml):
+  the HTTPS-only `websecure` entry point, the Docker provider and the
+  `letsencrypt` resolver (set the ACME e-mail).
+
+Rerun the same command after editing either file or pulling a newer `main`; passwords,
 certificates (`traefik-acme` volume) and data are kept. Certificates come from
 Let's Encrypt's TLS-ALPN-01 challenge, one per host name on its first request
 (each new preview's first page load waits for issuance; Let's Encrypt allows 50
