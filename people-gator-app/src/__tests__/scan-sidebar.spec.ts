@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   effectivePeopleOrder,
+  peopleSearchChanges,
   resolveSearchModel,
   readSidebarState,
   sidebarQuery,
@@ -15,7 +16,7 @@ describe('scan sidebar URL state (#103)', () => {
       peopleText: '',
       searchFaceId: null,
       searchModel: null,
-      peopleScope: 'all',
+      peopleScope: 'document',
       peopleOrder: 'context',
       faceScope: 'page',
       faceView: 'flat',
@@ -41,7 +42,7 @@ describe('scan sidebar URL state (#103)', () => {
     })
     expect(state).toMatchObject({
       tab: 'people',
-      peopleScope: 'all',
+      peopleScope: 'document',
       peopleOrder: 'context',
       faceScope: 'page',
       faceView: 'flat',
@@ -93,6 +94,60 @@ describe('scan sidebar URL state (#103)', () => {
       candidate_face: 'face-a',
       candidate_mode: undefined,
     })
+  })
+
+  it('defaults copied text/face searches to global similarity, preserving explicit URL choices', () => {
+    for (const query of [{ candidate_text: ' Ada ' }, { candidate_face: 'face-a' }] as Record<
+      string,
+      string
+    >[]) {
+      expect(readSidebarState(query)).toMatchObject({
+        peopleScope: 'all',
+        peopleOrder: 'relevance',
+      })
+      expect(
+        readSidebarState({ ...query, people_scope: 'page', candidate_sort: 'context' }),
+      ).toMatchObject({ peopleScope: 'page', peopleOrder: 'context' })
+    }
+    expect(readSidebarState({ candidate_text: '  ' })).toMatchObject({
+      peopleScope: 'document',
+      peopleOrder: 'context',
+    })
+    // A nondefault explicit scope must survive URL serialization during search.
+    expect(sidebarQuery({ peopleScope: 'document' }, { peopleText: 'Ada' })).toEqual({
+      people_scope: 'document',
+    })
+    expect(sidebarQuery({ peopleScope: 'all' }, { peopleText: '' })).toEqual({
+      people_scope: 'all',
+    })
+  })
+
+  it('changes search mode only at input boundaries, allowing later explicit overrides', () => {
+    const idle = readSidebarState({})
+    const start = peopleSearchChanges(idle, { peopleText: 'Ada' })
+    expect(start).toEqual({ peopleText: 'Ada', peopleScope: 'all', peopleOrder: 'relevance' })
+    const searching = { ...idle, ...start }
+    expect(peopleSearchChanges(searching, { peopleScope: 'page', peopleOrder: 'name' })).toEqual({
+      peopleScope: 'page',
+      peopleOrder: 'name',
+    })
+    expect(
+      peopleSearchChanges({ ...searching, peopleScope: 'page' }, { peopleText: 'Adaline' }),
+    ).toEqual({ peopleText: 'Adaline' })
+    expect(peopleSearchChanges(searching, { peopleText: '  ' })).toEqual({
+      peopleText: '  ',
+      peopleScope: 'document',
+      peopleOrder: 'context',
+    })
+    const combined = { ...searching, searchFaceId: 'f' }
+    expect(peopleSearchChanges(combined, { peopleText: '' })).toEqual({ peopleText: '' })
+    expect(peopleSearchChanges(combined, { searchFaceId: null })).toEqual({ searchFaceId: null })
+    expect(peopleSearchChanges({ ...combined, peopleText: '' }, { searchFaceId: null })).toEqual({
+      searchFaceId: null,
+      peopleScope: 'document',
+      peopleOrder: 'context',
+    })
+    expect(peopleSearchChanges(idle, { peopleText: ' ' })).toEqual({ peopleText: ' ' })
   })
 
   it('searches with the chosen model only when the attached face has it', () => {

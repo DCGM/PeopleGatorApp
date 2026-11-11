@@ -906,7 +906,7 @@ describe('scan sidebar (#103)', () => {
     wrapper.unmount()
   })
 
-  it('searches by the selected face: one attachment, no name text, Similarity, same scope', async () => {
+  it('searches by the selected face: one attachment, no name text, global Similarity', async () => {
     route.query = {
       people_scope: 'document',
       candidate_text: 'Novak',
@@ -930,8 +930,8 @@ describe('scan sidebar (#103)', () => {
       panel: undefined,
       candidate_face: 'a',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
-      people_scope: 'document',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     // Unlike Link/Reassign, Search leaves focus where it is, even once People opens.
     route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
@@ -951,7 +951,8 @@ describe('scan sidebar (#103)', () => {
     expect(lastQuery(mocks.push)).toMatchObject({
       candidate_face: 'b',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     wrapper.unmount()
   })

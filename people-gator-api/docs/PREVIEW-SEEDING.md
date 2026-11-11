@@ -822,7 +822,7 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields, order and widths. Document
 name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
@@ -1152,7 +1152,7 @@ touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
 Home/End (bounds), or Enter (that column's default); double-click also restores
 one column. Titles can range from 200 to 720px. Other columns retain readable
 header minima and purpose-specific maxima. There is no bulk width-reset action; use each header grip to restore its width. Width choices survive row changes
-and hidden/restored columns within the mounted Documents view; reloads use default widths. Visible column selections persist in sessionStorage for the browser tab.
+and hidden/restored columns. Column visibility, order and resized widths persist in localStorage across reloads and browser sessions on the same origin. Existing tab settings migrate once when no durable setting exists; malformed or unavailable storage falls back safely without disabling controls.
 
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; keyboard scrolling of the focused
@@ -1282,8 +1282,8 @@ fields, Annotations, Faces and Mentions. Choosing a field appends that one colum
 and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
 on the focused handle moves one position. Clicking a header's chevron-marked name opens a menu
 with **Move left**, **Move right** and **Remove column**; Escape closes it without removing. The document-link fallback that
-replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
-including reload/navigation back. **Restore default columns** restores the nine fields and order; unavailable/invalid storage recovers
+replaces a removed name cannot be removed. Visible fields, order and widths persist in localStorage,
+including reload/navigation back and new browser sessions. **Restore default columns** restores the nine fields, order and widths; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 120px, Linked entities 144px, All annotations columns 168px, Mentions columns 144px, Faces columns 128px and
 optional NDK 80px. Each header has a full-height sort strip on its left with a centered
@@ -1359,7 +1359,7 @@ test resolves every link through repositories, checks metadata and local media,
 checks the intentional missing-scan response, then reruns the seed and verifies preservation of an edited number and timestamp
 and a renamed person.
 
-## Scan sidebar practice (#103)
+## Scan sidebar practice (#103, #137)
 
 The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
 has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
@@ -1368,15 +1368,20 @@ occurrence), a four-line mention of Hana with long context (#121) and a
 text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
 faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 21 further Hana occurrences, so document scope exceeds the 30-face and
-20-occurrence sidebar batches.
+20-occurrence sidebar batches. Dora Document has one direct document mention
+(`sidebar-direct-mention`) and no page evidence.
 
-- Open `scan-sidebar-people`. People lists Hana and Tomas (this page), then
-  Karel and Rosa (this document), then everyone else. Change the scope in the
-  search group to **This page** or **This document**; type a name and press
-  Enter or the Search button to refine.
+- Open `scan-sidebar-people`. Empty People search defaults to **This document**:
+  Hana and Tomas (this page), then Dora, Karel and Rosa (the rest of this document).
+  Dora demonstrates direct document membership; Tomas is mention-only.
+- Type **Hana** (or open `scan-sidebar-global-text`) to switch automatically to
+  **All people / Similarity**, including Hana Ledger outside this document.
+  Clear the final text/face input to restore document-only contextual browsing.
+  An explicit scope/sort choice remains in effect while refining an active search;
+  `scan-sidebar-document-only` demonstrates a copied, explicitly document-scoped search.
 - Open `scan-sidebar-card` to see Hana's tag expanded into the details card.
   Choose **Search** (magnifier): the face is attached to People search, Similarity
-  sorting is selected and the scope is kept. Remove the face with its ×.
+  sorting and **All people** are selected, even from a locally scoped search. Remove the face with its ×.
   `scan-sidebar-face-search` opens that state directly.
 - Open `scan-sidebar-faces` for document faces grouped by person, with
   **Unassigned** last. Scroll to load the next batch; faces on other pages open
@@ -1390,11 +1395,12 @@ faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 - Open `scan-sidebar-info` for this page's statistics, last change and the
   latest recorded change of each face and mention.
 
-New stable keys add the four people, document, pages, faces and mentions to
+New stable keys add the sidebar people, document, pages, faces and mentions to
 retained previews. Reruns keep reviewer reassignments and timestamps.
 Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
-combined name/face search within the document, local media and aligned crops,
+combined name/face search, global relevance pagination, direct-document-only
+membership and unlink preservation, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
 
 ## Resizable scan sidebar and wrapping mention context (#121)
@@ -1469,3 +1475,24 @@ media in expanded mode, to check the **No preview** fallback and navigation.
 The new links add no records or checkpoint identities. Seed integration tests
 resolve their source/page targets, inspect cross-batch membership and local
 thumbnail media, and preserve a reviewer's page-number edit on rerun.
+
+
+### Persistent document layout (#142)
+
+Open the `document-table-persistence` manifest link. It reuses the stable width
+fixtures: short/long document titles, a document with a registered page and local
+image/mention evidence, empty documents and enough rows for cursor loading. Add a
+column, remove another, reorder the headers and resize Document name with its
+right-edge grip (keyboard arrows also work). Reload, open another tab or restart
+the browser on the same origin: visibility, order and widths remain. Sorting,
+filters and pagination do not reset them. **Restore default columns** resets all
+three and the reset survives reload. Blocked/full storage keeps the controls
+usable for the current view. Existing sessionStorage choices migrate only when
+there is no corresponding localStorage preference; browser-local layout is not
+stored per account or shared between browsers/origins.
+
+The parametrized width/persistence integration scenario checks both manifest
+entries through repository queries, multi-batch traversal and actual page media,
+then confirms reviewed document/mention state survives reseeding. Browser
+layout storage is exercised separately by frontend tests and the maintained
+`check-document-persistence.mjs` browser check.

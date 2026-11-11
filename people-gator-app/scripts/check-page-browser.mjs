@@ -129,7 +129,10 @@ try {
         url.pathname.startsWith('/libraries/') && url.searchParams.get('pages_view') === 'expanded',
     )
     await settled()
-    assert.ok((await gallery.innerText()).includes('No preview'))
+    await gallery
+      .locator('a[aria-current="page"]')
+      .getByText('No preview', { exact: true })
+      .waitFor()
     await capture('missing-media')
     await page.goto(
       origin +

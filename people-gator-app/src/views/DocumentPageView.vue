@@ -404,12 +404,11 @@ watch(
   },
 )
 function removeSearchFace(history: 'push' | 'replace' = 'push') {
-  // Typed name text stays; Similarity needs a name or face to score.
+  // Typed name text stays; clearing the last input restores document browsing.
   sidebar.update(
     {
       searchFaceId: null,
       searchModel: null,
-      ...(!sidebarState.value.peopleText.trim() && { peopleOrder: 'context' as const }),
     },
     history,
   )
