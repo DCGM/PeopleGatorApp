@@ -249,23 +249,48 @@ describe('People panel (#103)', () => {
     }
   })
 
-  it('marks page text, page faces and document membership with one icon each', () => {
+  it('shows one Page context tag below the portrait rather than redundant containing scopes', () => {
     const wrapper = panel({
       people: [
         {
           ...candidate,
+          source: 'page',
           matchSources: [{ type: 'scan-text' }, { type: 'scan-face' }, { type: 'in-document' }],
         },
       ],
     })
-    const badges = wrapper.get('[aria-label="Match sources"]')
-    expect(badges.findAll('[aria-label]').map((badge) => badge.attributes('aria-label'))).toEqual([
-      'Mentioned on this page',
-      'Face on this page',
-      'In this document',
-    ])
-    expect(badges.findAll('svg')).toHaveLength(3)
-    expect(badges.find('.lucide-scan').exists()).toBe(false)
+    const media = wrapper.get('[data-slot="item-media"]')
+    expect(media.get('[data-source="page"]').text()).toBe('Page')
+    expect(media.findAll('[data-source]')).toHaveLength(1)
+    expect(media.get('[data-source="page"]').attributes('aria-label')).toBe('Evidence on this page')
+    expect(wrapper.find('[aria-label="Match sources"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Similarity scores"]').exists()).toBe(false)
+  })
+
+  it.each([
+    ['page', 'Page'],
+    ['document', 'Document'],
+    ['database', 'DB'],
+    ['unknown', 'Unknown'],
+  ] as const)('renders the %s source with text and separate face/text scores', (source, label) => {
+    const wrapper = panel({
+      people: [
+        {
+          ...candidate,
+          source,
+          matchSources: [
+            { type: 'text-search', score: 80 },
+            { type: 'face-match', distance: 0.15 },
+          ],
+        },
+      ],
+    })
+    const media = wrapper.get('[data-slot="item-media"]')
+    expect(media.get(`[data-source="${source}"]`).text()).toBe(label)
+    expect(media.get('[aria-label="Similarity scores"]').text()).toContain('80')
+    expect(media.get('[aria-label="Face similarity 85%"]').text()).toBe('85%')
+    expect(media.get('[aria-label="Text search score 80"]').text()).toBe('80')
+    expect(wrapper.find('[aria-label*="cosine distance"]').exists()).toBe(false)
   })
 
   it('shows more faces from the same gallery button over the result portrait', () => {

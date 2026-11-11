@@ -4834,6 +4834,40 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
         assert aligned.size[0] > 0
 
 
+@pytest.mark.asyncio
+async def test_source_tag_preview_distinguishes_page_document_and_database_evidence(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(seed.pages["scan-sidebar-1"])
+    ids = [seed.entities[key] for key in ["sidebar-hana", "sidebar-tomas", "sidebar-rosa", "ada"]]
+    on_page = await database.entities.list(EntityListRequest(
+        limit=len(ids), filter_=EntityListFilter(entity_id=ids, page_source_id=[page.source_id]),
+    ))
+    in_document = await database.entities.list(EntityListRequest(
+        limit=len(ids), filter_=EntityListFilter(entity_id=ids, document_source_id=[seed.documents["scan-sidebar"]]),
+    ))
+    # Tomas is mention-only; Rosa is present only on a sibling page; Ada's
+    # unrelated page evidence must not acquire a local context tag.
+    assert {person.entity_id for person in on_page.items} == set(ids[:2])
+    assert {person.entity_id for person in in_document.items} == set(ids[:3])
+    for key in ["scan-source-tags", "scan-source-tags-text", "scan-source-tags-face", "scan-source-tags-combined"]:
+        url = urlsplit(seed.filter_examples[key])
+        assert url.path.endswith(f"/pages/{page.page_id}")
+        assert parse_qs(url.query)["people_scope"] == ["all"]
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert Image.open(io.BytesIO(image.content)).width == 256
+    face = await database.faces.get(seed.faces["sidebar-hana-left"])
+    crop = await get_aligned_face_crop(seed.users["reviewer"], face, page, max_width=96)
+    assert Image.open(io.BytesIO(crop.content)).width > 0
+    actor = GenericActor(user_id=seed.users["reviewer"])
+    await database.text_mentions.patch(seed.mentions["sidebar-hana-opened"], TextMentionPatchRequest(entity_id=None), actor)
+    reviewed_page = await database.sources.get_page(page.source_id)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.filter_examples["scan-source-tags"] == seed.filter_examples["scan-source-tags"]
+    assert (await database.text_mentions.get(seed.mentions["sidebar-hana-opened"])).entity_id is None
+    assert await database.sources.get_page(page.source_id) == reviewed_page
+
+
 async def _assert_long_sidebar_mention(database, seed, page):
     """Issue #121: a linked mention with four lines of context and an unbroken token."""
     mention = await database.text_mentions.get(seed.mentions["sidebar-hana-long"])
