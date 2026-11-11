@@ -73,6 +73,7 @@ class Preview(Host):
         if not re.fullmatch(r"[a-f0-9]{64}", password):
             raise DeployError("Invalid database password in preview state")
         name = f"preview_pr_{number}"
+        self.harden_shared_server()
         # Names and passwords are strictly validated; SQL never comes from PR text.
         # Disable connections during creation, before revoking PUBLIC access.
         self.sql(rf"""

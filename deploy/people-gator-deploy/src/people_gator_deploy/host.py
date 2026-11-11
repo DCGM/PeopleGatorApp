@@ -211,6 +211,16 @@ class Host:
             raise DeployError("Invalid character in Compose configuration")
         return "".join(f"{key}='{value}'\n" for key, value in values.items())
 
+    def harden_shared_server(self) -> None:
+        """Per-environment roles may connect only to their own database (idempotent).
+
+        PostgreSQL grants CONNECT on every database to PUBLIC by default; revoke it on
+        the admin and template databases of the shared server before creating roles.
+        """
+        admin = self.config["postgres"]["database"]
+        quoted = '"' + admin.replace('"', '""') + '"'
+        self.sql(f"REVOKE ALL ON DATABASE {quoted}, template1 FROM PUBLIC;\n")
+
     def check_database(self, role: str = "postgres") -> dict:
         """The configured database must answer from the database network; nothing is created here."""
         connection = self.config[role]

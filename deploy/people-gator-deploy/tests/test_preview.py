@@ -387,6 +387,12 @@ class LifecycleTests(unittest.TestCase):
         self.controller.deploy_pr(124, RUN, IMAGES)  # under the test isolation nothing is written
         self.assertFalse(summary.exists())
 
+    def test_provisioning_closes_the_shared_admin_database_to_preview_roles(self):
+        self.controller.provision_database(123, "c" * 64)
+        statements = [call.args[0] for call in self.controller.sql.call_args_list]
+        self.assertEqual(statements[0], 'REVOKE ALL ON DATABASE "postgres", template1 FROM PUBLIC;\n')
+        self.assertIn("CREATE ROLE preview_pr_123", statements[1])
+
     def test_seeding_runs_after_migrations_and_before_application_startup(self):
         self.controller.deploy_pr(123, RUN, IMAGES)
         commands = [call.args[0] for call in self.controller.command.call_args_list]
@@ -634,6 +640,13 @@ class DatabaseIsolationTests(unittest.TestCase):
                 ], capture_output=True, text=True)
                 self.assertNotEqual(denied.returncode, 0)
                 self.assertIn("permission denied for database", denied.stderr)
+                # Nor may it connect to the shared server's admin database.
+                admin_denied = subprocess.run([
+                    "docker", "exec", "-e", "PGPASSWORD=" + "c" * 64, container,
+                    "psql", "-h", "127.0.0.1", "-U", "preview_pr_900001", "-d", "ci", "-c", "SELECT 1",
+                ], capture_output=True, text=True)
+                self.assertNotEqual(admin_denied.returncode, 0)
+                self.assertIn("permission denied for database", admin_denied.stderr)
                 allowed = subprocess.run([
                     "docker", "exec", "-e", "PGPASSWORD=" + "c" * 64, container,
                     "psql", "-h", "127.0.0.1", "-U", "preview_pr_900001", "-d", "preview_pr_900001", "-v", "ON_ERROR_STOP=1",

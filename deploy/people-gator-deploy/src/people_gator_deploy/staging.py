@@ -120,6 +120,7 @@ class Staging(Host):
 
     def provision(self, values):
         name, password = values["DB_NAME"], values["DB_PASSWORD"]
+        self.harden_shared_server()
         self.sql(f"""CREATE ROLE {name} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '{password}';
 CREATE DATABASE {name} OWNER {name} ALLOW_CONNECTIONS false;
 REVOKE ALL ON DATABASE {name} FROM PUBLIC;
