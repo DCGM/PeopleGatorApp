@@ -242,8 +242,9 @@ describe('exact appearance mention groups', () => {
     const link = wrapper.getComponent(RouterLinkStub)
     expect(link.text()).toBe('lib · Letters')
     expect(link.props('to')).toMatchObject({
-      name: 'document-search',
-      query: { document: 'doc-source' },
+      name: 'document-source',
+      params: { documentSourceId: 'doc-source' },
+      query: { selectedPerson: 'person-ada', pages_view: 'expanded' },
     })
     expect(wrapper.text()).not.toContain('8e788655')
   })

@@ -35,7 +35,6 @@ import {
   normalizePageContentFilter,
   pageContentFilter,
 } from '@/viewmodels/assignment'
-import { useDocumentSearch } from '@/viewmodels/document-search'
 import { usePeopleSearch } from '@/viewmodels/people-search'
 
 function mountQuery(setup: () => void) {
@@ -107,46 +106,6 @@ describe('assignment search filters', () => {
     })
     mocks.fetchPage.mockResolvedValue(page)
     mocks.fetchPageImage.mockResolvedValue(new Blob())
-  })
-
-  it('applies breadcrumb scope to browsing and ranked search', async () => {
-    const term = ref('')
-    const scope = ref<import('@/viewmodels/shared-filters').SharedQuery>({
-      'filter.library': ['library'],
-      'filter.document_source_id': ['document-1'],
-    })
-    const wrapper = mountQuery(() => {
-      useDocumentSearch(term, ref('all'), 12, scope)
-    })
-    await flushPromises()
-    expect(mocks.fetchPages).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        'filter.library': ['library'],
-        'filter.document_source_id': ['document-1'],
-      }),
-      expect.any(AbortSignal),
-    )
-    term.value = 'Ada'
-    await flushPromises()
-    expect(mocks.searchPages).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        query: expect.objectContaining({
-          'query.text': ['Ada'],
-          'filter.library': ['library'],
-          'filter.document_source_id': ['document-1'],
-        }),
-      }),
-    )
-    scope.value = { 'filter.library': ['other-library'] }
-    await flushPromises()
-    const lastRequest = mocks.searchPages.mock.calls[
-      mocks.searchPages.mock.calls.length - 1
-    ]?.[0] as {
-      query: Record<string, unknown>
-    }
-    expect(lastRequest.query['filter.library']).toEqual(['other-library'])
-    expect(lastRequest.query['filter.document_source_id']).toBeUndefined()
-    wrapper.unmount()
   })
 
   it('normalizes route values and maps UI values to API values', () => {
@@ -297,128 +256,6 @@ describe('assignment search filters', () => {
         limit: 12,
         return_total_count: true,
         cursor: 'entity-1',
-      },
-      expect.any(AbortSignal),
-    )
-    wrapper.unmount()
-  })
-
-  it('sends the mention-content filter when searching pages', async () => {
-    mocks.searchPages.mockResolvedValue({
-      data: { items: [page], total_count: 1, limit: 12, cursor: null },
-    })
-    const wrapper = mountQuery(() => {
-      useDocumentSearch(ref('Ada'), ref('mentions'), 12)
-    })
-    await flushPromises()
-
-    expect(mocks.searchPages).toHaveBeenCalledWith({
-      query: {
-        'query.text': ['Ada'],
-        'filter.has_entities': undefined,
-        'filter.has_faces': undefined,
-        'filter.has_mentions': true,
-        limit: 12,
-        return_total_count: true,
-        cursor: null,
-      },
-      throwOnError: true,
-      signal: expect.any(AbortSignal),
-    })
-    expect(mocks.fetchTextMentions).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-
-  it('sends the face-content filter while browsing pages', async () => {
-    mocks.fetchPages.mockResolvedValue({
-      items: [page],
-      total_count: 1,
-      limit: 12,
-      cursor: null,
-    })
-    const wrapper = mountQuery(() => {
-      useDocumentSearch(ref(''), ref('faces'), 12)
-    })
-    await flushPromises()
-
-    expect(mocks.fetchPages).toHaveBeenCalledWith(
-      {
-        'filter.has_entities': undefined,
-        'filter.has_faces': true,
-        'filter.has_mentions': undefined,
-        limit: 12,
-        return_total_count: true,
-        cursor: null,
-      },
-      expect.any(AbortSignal),
-    )
-    expect(mocks.fetchFaces).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-
-  it('sends the assigned-entity filter while browsing pages', async () => {
-    const wrapper = mountQuery(() => {
-      useDocumentSearch(ref(''), ref('entities'), 12)
-    })
-    await flushPromises()
-
-    expect(mocks.fetchPages).toHaveBeenCalledWith(
-      {
-        'filter.has_entities': true,
-        'filter.has_faces': undefined,
-        'filter.has_mentions': undefined,
-        limit: 12,
-        return_total_count: true,
-        cursor: null,
-      },
-      expect.any(AbortSignal),
-    )
-    wrapper.unmount()
-  })
-
-  it('uses the returned cursor while browsing pages', async () => {
-    mocks.fetchPages
-      .mockResolvedValueOnce({
-        items: [],
-        total_count: 2,
-        limit: 12,
-        cursor: 'page-1',
-      })
-      .mockResolvedValueOnce({
-        items: [],
-        total_count: 2,
-        limit: 12,
-        cursor: null,
-      })
-
-    let search: ReturnType<typeof useDocumentSearch> | undefined
-    const wrapper = mountQuery(() => {
-      search = useDocumentSearch(ref(''), ref('all'), 12)
-    })
-    await flushPromises()
-    await search?.loadMore()
-
-    expect(mocks.fetchPages).toHaveBeenNthCalledWith(
-      1,
-      {
-        'filter.has_entities': undefined,
-        'filter.has_faces': undefined,
-        'filter.has_mentions': undefined,
-        limit: 12,
-        return_total_count: true,
-        cursor: null,
-      },
-      expect.any(AbortSignal),
-    )
-    expect(mocks.fetchPages).toHaveBeenNthCalledWith(
-      2,
-      {
-        'filter.has_entities': undefined,
-        'filter.has_faces': undefined,
-        'filter.has_mentions': undefined,
-        limit: 12,
-        return_total_count: true,
-        cursor: 'page-1',
       },
       expect.any(AbortSignal),
     )

@@ -24,7 +24,16 @@ async function setup(start = '/lib/doc/one') {
         component: { template: '<div />' },
       },
       { path: '/', name: 'document-list', component: { template: '<div />' } },
-      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      {
+        path: '/libraries/:libraryId/documents/:documentId',
+        name: 'document-pages',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/documents/:documentSourceId',
+        name: 'document-source',
+        component: { template: '<div />' },
+      },
       { path: '/people', name: 'people-search', component: { template: '<div />' } },
       { path: '/people/:personId', name: 'person-detail', component: { template: '<div />' } },
     ],
@@ -58,8 +67,8 @@ it.each([
     expect(labels()).toEqual(['PeopleGator', 'lib', documentLabel, pageLabel])
     const links = wrapper.findAll('[aria-label="Breadcrumb"] a')
     expect(links.map((a) => a.attributes('title'))).toEqual(labels())
-    expect(links[1]!.attributes('href')).toBe('/scans?library=lib')
-    expect(links[2]!.attributes('href')).toBe('/scans?library=lib&archive_document=doc')
+    expect(links[1]!.attributes('href')).toBe('/?library=lib')
+    expect(links[2]!.attributes('href')).toBe('/libraries/lib/documents/doc?pages_view=expanded')
     expect(links[3]!.attributes('href')).toBe('/lib/doc/one')
     expect(wrapper.get('a[target="_blank"]').attributes('href')).toBe(
       'https://archive.example/page',

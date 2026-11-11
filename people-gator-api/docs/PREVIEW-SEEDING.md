@@ -1477,6 +1477,29 @@ resolve their source/page targets, inspect cross-batch membership and local
 thumbnail media, and preserve a reviewer's page-number edit on rerun.
 
 
+### Document-first entry and retired Scans search (#141)
+
+Use `document-browse` to open the expanded page browser for the existing 14-page
+navigation document. `document-browse-empty` opens a registered document with no
+pages, showing its actual title and a Documents link. `document-browse-unregistered`
+resolves a source archive containing a stored page even when no parent document
+record exists. Every example uses deterministic existing records and local media.
+No fake first page is created for an empty or unavailable document.
+The empty-document link is added only when its fixture is present, so upgrading
+an older preview without that example remains valid.
+
+The standalone Scans screen and cross-document scan-search UI are retired.
+Documents and People are the top-level destinations. Page breadcrumbs return to
+that document's expanded browser; person mention document groups retain the
+selected person. Direct page URLs remain valid. Existing `/scans` fixture links
+are retained as compatibility examples: a single document resolves to its browser,
+a single page resolves to the viewer, and global/ambiguous queries return to
+Documents without transferring retired search/filter criteria. They no longer
+load a Scans component. The backend search API remains unchanged.
+
+Repository/media tests verify document identity, all 14 registered pages, the
+empty count, orphan page media and stable entries/source metadata on rerun.
+
 ### Page, document and database source tags (#138)
 
 Open `scan-source-tags`. Hana Sidebar has linked faces and mentions on the

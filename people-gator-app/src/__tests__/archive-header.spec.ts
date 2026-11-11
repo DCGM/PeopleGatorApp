@@ -28,7 +28,8 @@ it('uses the API page URL and clears it while navigating or when the source is u
         component: { template: '<div />' },
       },
       { path: '/', name: 'document-list', component: { template: '<div />' } },
-      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      { path: '/libraries/:libraryId/documents/:documentId', name: 'document-pages', component: { template: '<div />' } },
+      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
       { path: '/people', name: 'people-search', component: { template: '<div />' } },
     ],
   })

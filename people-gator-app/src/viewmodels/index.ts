@@ -1,5 +1,4 @@
 export * from './assignment'
-export * from './document-search'
 export * from './document-workspace'
 export * from './document-workspace.types'
 export * from './people-search'

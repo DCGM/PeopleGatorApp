@@ -659,6 +659,17 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # #141: document-first entry points backed by existing local pages
+            # and a registered empty document. Older /scans examples below are
+            # retained as explicit compatibility links handled by redirects.
+            "document-browse": f"/documents/{documents['page-gallery']}?pages_view=expanded",
+            **({
+                "document-browse-empty": f"/documents/{documents['table-nav-empty']}?pages_view=expanded",
+            } if "table-nav-empty" in documents else {}),
+            "document-browse-unregistered": (
+                f"/libraries/{next(d.library for d in DOCUMENTS if d.key == 'scan-only')}"
+                f"/documents/{next(d.document_id for d in DOCUMENTS if d.key == 'scan-only')}?pages_view=expanded"
+            ),
             "people-search-merge": "/people?q=Rina+Merge&sort=name",
             "people-search-merge-paginated": "/people?sort=name",
             # #109: reuse linked local media in both libraries. Defaults include

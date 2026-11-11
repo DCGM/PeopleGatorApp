@@ -4680,6 +4680,7 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
         old.setattr(preview, "DOCUMENTS", tuple(d for d in DOCUMENTS if not d.key.startswith("table-nav-")))
         old.setattr(preview, "PAGES", tuple(p for p in PAGES if not p.key.startswith("table-nav-")))
         previous = await preview.seed_preview(database, filesystem)
+    assert "document-browse-empty" not in previous.filter_examples
     ledger_before = await database.sources.get_document(previous.documents["table-ledger"])
     seeded = await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(previous.documents["table-ledger"]) == ledger_before
@@ -4691,6 +4692,9 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
     assert len(second.items) == 7 and second.cursor is None
     rows = {row.source_id: row for row in [*first.items, *second.items]}
     empty = rows[seeded.documents["table-nav-empty"]]
+    assert seeded.filter_examples["document-browse-empty"] == (
+        f"/documents/{empty.source_id}?pages_view=expanded"
+    )
     missing = rows[seeded.documents["table-nav-missing"]]
     assert empty.registered_page_count == 0 and empty.first_page_source_id is None
     assert empty.linked_entity_count == 0
@@ -4714,6 +4718,7 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
     edited = await database.sources.get_document(ledger.source_id)
     rerun = await preview.seed_preview(database, filesystem)
     assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    assert rerun.filter_examples["document-browse-empty"] == seeded.filter_examples["document-browse-empty"]
     assert await database.sources.get_document(ledger.source_id) == edited
     assert (await database.text_mentions.get(seeded.mentions["table-manual-mention"])).entity_id is None
 
@@ -5221,3 +5226,36 @@ async def test_scan_people_document_default_global_search_and_direct_seed_preser
         limit=100, filter_=EntityListFilter(document_source_id=[document_id]),
     ))).items
     assert seed.entities["sidebar-direct"] not in {item.entity_id for item in remaining}
+
+@pytest.mark.asyncio
+async def test_document_first_entries_cover_pages_empty_and_orphan_documents(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    for key, fixture in [("document-browse", "page-gallery"), ("document-browse-empty", "table-nav-empty")]:
+        entry = urlsplit(seed.filter_examples[key])
+        assert entry.path == f"/documents/{seed.documents[fixture]}"
+        assert parse_qs(entry.query) == {"pages_view": ["expanded"]}
+        document = await database.sources.get_document(seed.documents[fixture])
+        pages = await database.sources.list_pages(PageListRequest(
+            limit=100, return_total_count=True, sort="page_number", sort_direction="asc",
+            filter_=PageListFilter(document_source_id=[document.source_id]),
+        ))
+        if fixture == "table-nav-empty":
+            assert not pages.items and pages.total_count == 0
+        else:
+            assert pages.total_count == 14
+            page = pages.items[0]
+            # Match entry navigation order; UUID order can start at page 9,
+            # whose absent media is a deliberate preview fallback scenario.
+            assert page.source_id == seed.pages["page-gallery-1"]
+            assert (await get_page_image(page.library, page.document_id, page.page_id, max_width=256)).content
+    orphan = next(d for d in DOCUMENTS if d.key == "scan-only")
+    entry = urlsplit(seed.filter_examples["document-browse-unregistered"])
+    assert entry.path == f"/libraries/{orphan.library}/documents/{orphan.document_id}"
+    assert await database.sources.lookup_document(DocumentLookupRequest(library=orphan.library, document_id=orphan.document_id)) is None
+    page = await database.sources.get_page(seed.pages["scan-only-1"])
+    assert (await get_page_image(page.library, page.document_id, page.page_id)).content
+    original = await database.sources.get_page(seed.pages["page-gallery-1"])
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.filter_examples["document-browse"] == seed.filter_examples["document-browse"]
+    assert await database.sources.get_page(original.source_id) == original

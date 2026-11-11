@@ -25,7 +25,6 @@ vi.mock('@/viewmodels/page-cards', () => ({
     computed(() => pages.value.map((page) => ({ sourceId: page.source_id }))),
 }))
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
-import DocumentSearchView from '@/views/DocumentSearchView.vue'
 import DocumentListView from '@/views/DocumentListView.vue'
 
 let endTop: number
@@ -127,7 +126,6 @@ afterEach(() => {
 
 const screens = [
   { name: 'people', view: PeopleSearchView, sort: 'name', manual: true },
-  { name: 'scans', view: DocumentSearchView, sort: 'page_id', manual: true },
   // Documents loads only on scroll: it has no manual Load more control.
   { name: 'documents', view: DocumentListView, sort: 'name', manual: false },
 ]
@@ -154,7 +152,6 @@ for (const screen of screens)
           plugins: [router, [VueQueryPlugin, { queryClient: client }]],
           stubs: {
             PeopleSearchBar: true,
-            DocumentSearchBar: true,
             DocumentListSearchBar: true,
             DocumentTable: {
               props: ['documents'],
@@ -162,7 +159,6 @@ for (const screen of screens)
                 '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span><slot name="list-end" /></div>',
             },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
-            DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },
           },
         },
       })

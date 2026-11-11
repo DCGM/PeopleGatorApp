@@ -79,7 +79,7 @@ it.each(['mention', 'document', 'page'] as const)(
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
-        { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+        { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
         {
           path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
           name: 'document-page',
@@ -168,7 +168,7 @@ it('adds forward and reverse flat ranges, includes appended rows and clears stal
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div />' } },
-      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
       {
         path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
         name: 'document-page',
@@ -259,7 +259,7 @@ it.each(['mention', 'document', 'page'] as const)(
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
-        { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+        { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
         {
           path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
           name: 'document-page',
