@@ -1,6 +1,6 @@
 # Issue #131 — compact bottom page strip
 
-Captured from this branch's local production build, backed by a new migrated
+Captured from this branch's running local application, backed by a new migrated
 PostgreSQL database and disposable filesystem seeded twice. All data/media are
 synthetic. Chromium 156.0.8078.4 via Playwright; desktop **1440 × 900**, mobile
 **390 × 844** CSS pixels.
@@ -8,7 +8,7 @@ synthetic. Chromium 156.0.8078.4 via Playwright; desktop **1440 × 900**, mobile
 Reproduce from `people-gator-app` with the documented local instance:
 
 ```sh
-PAGE_STRIP_ORIGIN=http://127.0.0.1:5132 node scripts/check-page-strip.mjs
+PAGE_STRIP_ORIGIN=http://127.0.0.1:5231 PAGE_STRIP_API=http://127.0.0.1:8231 node scripts/check-page-strip.mjs
 ```
 
 | State | Desktop | Mobile |
@@ -42,15 +42,14 @@ in `finally`. Screenshots wait for thumbnails and disable closing animations.
 Validation:
 
 - `npm run build` (including type checking) passed; the complete frontend unit
-  suite passed: **529 tests / 75 files**.
-- Production browser script passes at both viewport sizes.
-- Real migration → seed → seed on the isolated `compact_preview` database and
-  `/tmp/people-gator-issue131-compact-storage`; schema tests use a separate store.
-- Current focused page-strip seed integration test passed, including batched
-  source-ID membership and new current/assigned exploration links. The previous
-  revision passed all 94 seed tests and GitHub backend/frontend/image CI. These
-  checks cover page/library scope, face-or-mention matching across
-  cursor batches, independent indicators, local thumbnails, mutations, review
-  preservation and interrupted checkpoints. CI findings concerning added library
-  options and Ada's existing gallery are covered by their regression tests; the
-  new scene now uses a dedicated second person.
+  suite passed: **549 tests / 76 files**.
+- Playwright browser checks passed at both viewport sizes against the current
+  main integration, including People defaults and source tags.
+- Real migration → seed → seed → schema check passed on the isolated
+  `issue131_merge_preview` database with disposable filesystem storage.
+- **10 focused seed integration tests passed** on the separate
+  `issue131_merge_schema` database. These exercise graph/vector integrity,
+  review-edit preservation, interrupted checkpoint recovery, page-strip
+  highlights, source tags, People defaults and additive column-layout fixtures.
+- The full backend suite is delegated to PR CI; local checks above do not
+  replace its result.
