@@ -58,7 +58,7 @@ class Staging(Host):
         if "snapshot_source_file" in self.config:
             return snapshots.read_source(self.config["snapshot_source_file"])
         if "snapshot" not in self.config:
-            raise StagingConfigurationError("snapshot-init/refresh need backup_source in STAGING_CONFIG "
+            raise StagingConfigurationError("snapshot-init/refresh need the STAGING_BACKUP_S3_* settings "
                                            "(deploy/GITHUB-SETUP.md)")
         return validate_snapshot(self.config["snapshot"], inputs=True)
 

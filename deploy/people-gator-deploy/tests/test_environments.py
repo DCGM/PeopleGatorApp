@@ -17,15 +17,15 @@ from people_gator_deploy.environments import Environment
 
 SHA = "a" * 40
 DOCUMENTS = {
-    "pr": {"host": "preview.example.invalid", "database": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
-           "otel": {"endpoint": "http://lgtm:4318"}},
-    "staging": {"host": "staging.example.invalid", "database": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
-                "storage": {"s3": {"region": "r", "bucket_name": "staging", "access_key_id": "k", "secret_access_key": "s"}},
-                "backup_source": {"endpoint_url": "https://s3.example.invalid", "region": "r", "bucket": "backups", "prefix": "p/",
-                                  "access_key_id": "reader", "secret_access_key": "reader-secret"}},
-    "release": {"host": "people.example.invalid", "database": "postgresql://app:app-pw@db.internal:5432/people",
-                "migration_database": "postgresql://migrator:mig-pw@db.internal:5432/people",
-                "storage": {"s3": {"region": "r", "bucket_name": "release", "access_key_id": "k", "secret_access_key": "s"}}},
+    "pr": {"HOST": "preview.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
+           "OTEL_ENDPOINT": "http://lgtm:4318"},
+    "staging": {"HOST": "staging.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
+                "S3_REGION": "r", "S3_BUCKET": "staging", "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s",
+                "BACKUP_S3_ENDPOINT_URL": "https://s3.example.invalid", "BACKUP_S3_REGION": "r", "BACKUP_S3_BUCKET": "backups",
+                "BACKUP_S3_PREFIX": "p/", "BACKUP_S3_ACCESS_KEY_ID": "reader", "BACKUP_S3_SECRET_ACCESS_KEY": "reader-secret"},
+    "release": {"HOST": "people.example.invalid", "DATABASE_URL": "postgresql://app:app-pw@db.internal:5432/people",
+                "MIGRATION_DATABASE_URL": "postgresql://migrator:mig-pw@db.internal:5432/people",
+                "S3_REGION": "r", "S3_BUCKET": "release", "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s"},
 }
 
 
@@ -74,12 +74,14 @@ class EnvironmentTests(unittest.TestCase):
         self.environment_patch = None
         self.stderr = io.StringIO()
 
-    def configure(self, name="pr", document=None, **changes):
-        """Export one environment's configuration as the deploy job would (DEPLOY_CONFIG)."""
-        document = {**(DOCUMENTS[name] if document is None else document), **changes}
-        document = {k: v for k, v in document.items() if v is not None}
+    def configure(self, name="pr", **changes):
+        """Export one environment's variables as the deploy job would (DEPLOY_*; None removes one)."""
+        document = {**DOCUMENTS[name], **changes}
         values = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_STATE_DIR": str(self.root / "state" / name),
-                  "DEPLOY_CONFIG": json.dumps(document)}
+                  **{f"DEPLOY_{key}": value for key, value in document.items() if value is not None}}
+        for key, value in document.items():
+            if value is None:
+                os.environ.pop(f"DEPLOY_{key}", None)
         if self.environment_patch:
             self.environment_patch.stop()
         self.environment_patch = patch.dict(os.environ, values, clear=False)
@@ -94,13 +96,13 @@ class EnvironmentTests(unittest.TestCase):
             return environment.preflight()
 
     def test_missing_setting_fails_with_secret_name_and_field_without_side_effects(self):
-        self.configure("staging", host=None)
+        self.configure("staging", HOST=None)
         for operation in ("status", "preflight", "update", "stop"):
             stderr = io.StringIO()
             with self.subTest(operation=operation), redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
                 cli.main(["staging", operation])
             self.assertEqual(raised.exception.code, 1)
-            self.assertIn("STAGING_CONFIG: host:", stderr.getvalue())
+            self.assertIn("STAGING_HOST: is required", stderr.getvalue())
             self.assertIn("deploy/GITHUB-SETUP.md", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
             self.assertNotIn("admin-pw", stderr.getvalue())
@@ -135,7 +137,7 @@ class EnvironmentTests(unittest.TestCase):
         self.assertFalse((root / "owned.json").exists())
         # Without otel no telemetry file is rendered (a stale one is removed); the
         # stacks still declare the logging network, so it is still checked.
-        self.configure(otel=None)
+        self.configure(OTEL_ENDPOINT=None)
         environment = self.environment()
         environment.preflight()
         self.assertIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
@@ -217,12 +219,12 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual((root / "migration.env").stat().st_mode & 0o777, 0o600)
         # A changed secret is republished on the next operation; a loosened mode is restored.
         (root / "runtime.env").chmod(0o644)
-        self.configure("release", extra_env={"PEOPLE_GATOR_API__OPENROUTER__API_KEY": "sk-2"})
+        self.configure("release", S3_BUCKET="release-2")
         self.environment("release").preflight()
         self.assertEqual((root / "runtime.env").stat().st_mode & 0o777, 0o600)
-        self.assertIn("sk-2", (root / "runtime.env").read_text())
+        self.assertIn("release-2", (root / "runtime.env").read_text())
         # One role: no second check, no separate password.
-        self.configure("release", migration_database=None)
+        self.configure("release", MIGRATION_DATABASE_URL=None)
         environment = self.environment("release")
         self.assertNotIn("migration_database", environment.preflight())
 
@@ -271,7 +273,7 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_configuration_secrets_never_reach_docker_subprocess_environments(self):
         from people_gator_deploy.docker import Docker
-        with patch.dict(os.environ, {"DEPLOY_CONFIG": "{}", "PGPASSWORD": "ambient", "DEPLOY_STATE_DIR": "/x"}):
+        with patch.dict(os.environ, {"DEPLOY_DATABASE_URL": "postgresql://a:b@c/d", "PGPASSWORD": "ambient", "DEPLOY_STATE_DIR": "/x"}):
             environment = Docker("rootless").environment({"PGPASSWORD": "explicit"})
         self.assertFalse(any(key.startswith("DEPLOY_") for key in environment))
         self.assertEqual(environment["PGPASSWORD"], "explicit")

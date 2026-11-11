@@ -1,7 +1,7 @@
 # Production application stack for verified release tags.
 # PostgreSQL, object storage and the reverse proxy are external dependencies.
 # The deployment renders RUNTIME_FILE (application role, storage, auth) and
-# MIGRATION_FILE (migration role) from PRODUCTION_CONFIG. The fixed settings
+# MIGRATION_FILE (migration role) from the PRODUCTION_* settings. The fixed settings
 # below cannot be overridden by those files.
 x-release-labels: &release-labels
   people-gator.environment: release

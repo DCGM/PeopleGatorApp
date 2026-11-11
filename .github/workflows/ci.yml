@@ -229,7 +229,19 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -260,7 +272,19 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.number }}
       HEAD_REF: ${{ github.head_ref }}
-      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -294,7 +318,23 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       OPERATION: ${{ inputs.operation || 'update' }}
       BACKUP_RECORD: ${{ inputs.backup_record }}
-      DEPLOY_CONFIG: ${{ secrets.STAGING_CONFIG }}
+      DEPLOY_HOST: ${{ vars.STAGING_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.STAGING_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.STAGING_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.STAGING_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.STAGING_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.STAGING_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_BACKUP_S3_ENDPOINT_URL: ${{ vars.STAGING_BACKUP_S3_ENDPOINT_URL }}
+      DEPLOY_BACKUP_S3_REGION: ${{ vars.STAGING_BACKUP_S3_REGION }}
+      DEPLOY_BACKUP_S3_BUCKET: ${{ vars.STAGING_BACKUP_S3_BUCKET }}
+      DEPLOY_BACKUP_S3_PREFIX: ${{ vars.STAGING_BACKUP_S3_PREFIX }}
+      DEPLOY_BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.STAGING_BACKUP_S3_ACCESS_KEY_ID }}
+      DEPLOY_BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.STAGING_BACKUP_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.STAGING_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.STAGING_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.STAGING_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.STAGING_RUM_SITE }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -331,7 +371,19 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      DEPLOY_CONFIG: ${{ secrets.PREVIEW_CONFIG }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -364,7 +416,18 @@ jobs:
       GH_ACTOR: ${{ github.actor }}
       RELEASE_TAG: ${{ github.ref_name }}
       BACKUP_RECORD: ${{ inputs.backup_record }}
-      DEPLOY_CONFIG: ${{ secrets.PRODUCTION_CONFIG }}
+      DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DEPLOY_MIGRATION_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATION_DATABASE_URL }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PRODUCTION_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PRODUCTION_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PRODUCTION_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PRODUCTION_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PRODUCTION_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PRODUCTION_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PRODUCTION_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PRODUCTION_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PRODUCTION_RUM_SITE }}
     steps:
       - uses: actions/checkout@v4
         with:

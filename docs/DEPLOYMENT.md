@@ -193,11 +193,10 @@ Each deploy job checks out its own commit, installs
 temporary directory, runs `<environment> preflight`, then one operation with
 `--sha <tested commit>`, then sets superseded GitHub Deployments inactive. A PR
 therefore deploys with the deploy code of its own branch; staging uses `main`
-and releases the tagged commit. Each environment is configured by one repository
-secret with a JSON document (`PREVIEW_CONFIG`, `STAGING_CONFIG`,
-`PRODUCTION_CONFIG`: host, database, storage, OTel, RUM, users), described with
-examples in [GitHub setup](../deploy/GITHUB-SETUP.md); everything else is a
-convention. Hosts keep only state directories and the self-hosted runners' [job-started
+and releases the tagged commit. Each environment is configured by a short list
+of repository variables and secrets (`PREVIEW_*`, `STAGING_*`, `PRODUCTION_*`:
+host, database URL, storage, OTel, RUM, users), listed in
+[GitHub setup](../deploy/GITHUB-SETUP.md); everything else is a convention. Hosts keep only state directories and the self-hosted runners' [job-started
 guard](../deploy/runner/job-started.sh), which admits only this repository's
 events for the runner's environment and refuses fork pull requests
 (see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners)).

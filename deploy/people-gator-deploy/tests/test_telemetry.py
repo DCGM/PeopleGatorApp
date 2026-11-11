@@ -9,17 +9,16 @@ import unittest
 
 from people_gator_deploy import config
 
-DOCUMENT = {"host": "app.example", "database": "postgresql://app:pw@db:5432/app", "storage": {"local": {"root": "/data"}},
-            "otel": {"endpoint": "http://collector:4318", "headers": "Authorization=Basic synthetic"},
-            "rum": {"client_token": "synthetic-rum", "site": "o2.example", "session_sample_rate": 50}}
+VARIABLES = {"DEPLOY_HOST": "app.example", "DEPLOY_DATABASE_URL": "postgresql://app:pw@db:5432/app", "DEPLOY_STORAGE_DIR": "/data",
+             "DEPLOY_OTEL_ENDPOINT": "http://collector:4318", "DEPLOY_OTEL_HEADERS": "Authorization=Basic synthetic",
+             "DEPLOY_RUM_CLIENT_TOKEN": "synthetic-rum", "DEPLOY_RUM_SITE": "o2.example"}
 
 
 class TelemetryTests(unittest.TestCase):
     def test_telemetry_file_is_rendered_from_otel_and_rum(self):
         with tempfile.TemporaryDirectory() as directory:
-            settings = config.load("staging", {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_STATE_DIR": directory,
-                                               "DEPLOY_CONFIG": json.dumps(DOCUMENT)})
-            files = {path.name: (content, mode) for path, content, mode in config.files("staging", settings)}
+            settings = config.load("pr", {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_STATE_DIR": directory, **VARIABLES})
+            files = {path.name: (content, mode) for path, content, mode in config.files("pr", settings)}
             lines = files["telemetry.env"][0].splitlines()
             self.assertEqual(lines, [
                 "PEOPLE_GATOR_API__OTEL__ENABLED=true",
@@ -30,7 +29,6 @@ class TelemetryTests(unittest.TestCase):
                 "PEOPLE_GATOR_API__RUM__ENABLED=true",
                 "PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=synthetic-rum",
                 "PEOPLE_GATOR_API__RUM__SITE=o2.example",
-                "PEOPLE_GATOR_API__RUM__SESSION_SAMPLE_RATE=50",
             ])
             self.assertEqual(files["telemetry.env"][1], 0o600)
             self.assertNotIn("synthetic", files["runtime.env"][0])

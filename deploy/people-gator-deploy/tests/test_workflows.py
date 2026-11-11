@@ -27,13 +27,13 @@ DEPLOY_JOBS = {
 }
 FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository"
 SHA = "a" * 40
-SECRETS = {"pr": "PREVIEW_CONFIG", "staging": "STAGING_CONFIG", "release": "PRODUCTION_CONFIG"}
-SETUP_PAGE = REPOSITORY / "deploy/GITHUB-SETUP.md"
-
-
-def example(secret):
-    section = SETUP_PAGE.read_text().split(f"## `{secret}`", 1)[1]
-    return section.split("```json\n", 1)[1].split("```", 1)[0]
+PREFIXES = {"pr": "PREVIEW", "staging": "STAGING", "release": "PRODUCTION"}
+SAMPLES = {"HOST": "app.example.invalid", "DATABASE_URL": "postgresql://u:p@db:5432/d", "MIGRATION_DATABASE_URL": "postgresql://m:p@db:5432/d",
+           "STORAGE_DIR": "", "S3_ENDPOINT_URL": "https://s3.example.invalid", "S3_REGION": "r", "S3_BUCKET": "b",
+           "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s", "BACKUP_S3_ENDPOINT_URL": "https://s3.example.invalid",
+           "BACKUP_S3_REGION": "r", "BACKUP_S3_BUCKET": "backups", "BACKUP_S3_PREFIX": "p/", "BACKUP_S3_ACCESS_KEY_ID": "rk",
+           "BACKUP_S3_SECRET_ACCESS_KEY": "rs", "OTEL_ENDPOINT": "http://lgtm:4318", "OTEL_HEADERS": "Authorization=Basic x",
+           "RUM_CLIENT_TOKEN": "t", "RUM_SITE": "o2.example", "USERS_JSON": '{"test": {"hash": "h", "scopes": []}}'}
 
 
 def workflow():
@@ -62,8 +62,10 @@ class WorkflowStructureTests(unittest.TestCase):
         for forbidden in ("workflow_run", "pull_request_target", "install.py", "sudo", "workflow_sha", "run-id", " install",
                           "versions/", "docker/login-action@v3\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - uses: ./.github"):
             self.assertNotIn(forbidden, text)
-        self.assertEqual(set(re.findall(r"secrets\.([A-Za-z_]+)", text)), {"GITHUB_TOKEN", *SECRETS.values()})
-        self.assertNotIn("vars.", text)  # one JSON secret per environment, no variables
+        expected = {"GITHUB_TOKEN"}
+        for environment, prefix in PREFIXES.items():
+            expected |= {f"{prefix}_{name}" for name in config.names(environment) if config.VARIABLES[name][1]}
+        self.assertEqual(set(re.findall(r"secrets\.([A-Za-z0-9_]+)", text)), expected)
         self.assertEqual(document["permissions"], {"contents": "read"})
 
     def test_pipeline_concurrency_isolates_events_and_pull_requests(self):
@@ -144,19 +146,24 @@ class WorkflowStructureTests(unittest.TestCase):
         configured = yaml.safe_load((REPOSITORY / ".github/actionlint.yaml").read_text())["self-hosted-runner"]["labels"]
         self.assertEqual(sorted(configured), sorted({label for label, _, _ in DEPLOY_JOBS.values()}))
 
-    def test_each_deploy_job_passes_exactly_its_environment_configuration_secret(self):
+    def test_each_deploy_job_passes_exactly_its_environment_variables(self):
         jobs = workflow()["jobs"]
         for name, (_, github_environment, environment) in DEPLOY_JOBS.items():
             job = jobs[name]
+            prefix = PREFIXES[environment]
             with self.subTest(job=name):
                 settings = {key: value for key, value in job["env"].items() if key.startswith("DEPLOY_")}
-                self.assertEqual(settings, {"DEPLOY_CONFIG": f"${{{{ secrets.{SECRETS[environment]} }}}}"})
+                expected = {f"DEPLOY_{variable}": f"${{{{ {'secrets' if config.VARIABLES[variable][1] else 'vars'}.{prefix}_{variable} }}}}"
+                            for variable in config.names(environment)}
+                self.assertEqual(settings, expected)
                 self.assertEqual(job["env"]["GH_TOKEN"], "${{ secrets.GITHUB_TOKEN }}")
                 if name.startswith("deploy-"):
                     self.assertEqual(job["env"]["GH_ACTOR"], "${{ github.actor }}")
-                # The setup page's example for that secret configures the environment as is.
-                loaded = config.load(environment, {"DEPLOY_CONFIG": example(SECRETS[environment]), "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"})
+                # Exactly the passed names, with plausible values, configure the environment.
+                passed = {key: SAMPLES[key[len("DEPLOY_"):]] for key in settings}
+                loaded = config.load(environment, {**passed, "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"})
                 self.assertEqual(loaded["environment"], environment)
+                self.assertTrue(config.files(environment, loaded))
 
     def test_deploy_tools_action_installs_only_into_the_job_temporary_directory(self):
         action = yaml.safe_load((REPOSITORY / ".github/actions/deploy-tools/action.yml").read_text())

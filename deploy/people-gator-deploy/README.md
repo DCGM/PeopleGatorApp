@@ -9,8 +9,8 @@ configuration and the database validator ship inside the package.
 The [CI workflow](../../.github/workflows/ci.yml) runs it **from the checkout of
 the commit being deployed**: a PR preview uses the PR's own deploy code, staging
 uses `main`, a release uses the tagged commit. Each environment is configured by
-one JSON secret ([`deploy/GITHUB-SETUP.md`](../GITHUB-SETUP.md)); everything else
-is a convention. The utility installs and provisions nothing: the shared
+a short list of repository variables and secrets
+([`deploy/GITHUB-SETUP.md`](../GITHUB-SETUP.md)); everything else is a convention. The utility installs and provisions nothing: the shared
 PostgreSQL and pgAdmin are an operator-run Compose stack
 ([`deploy/infrastructure`](../infrastructure/compose.yaml)) that every operation
 only **checks**, and the application stacks are plain frontend + backend Compose
@@ -45,11 +45,10 @@ build only; no fork event reaches a self-hosted runner (the
 [runner guard](HOSTS.md#github-runners) enforces this too).
 
 **Prerequisite checks.** `preflight` and every operation first verify the
-Docker context, Compose 2.32+, the `web`, `people-gator-db` and (with `otel`)
-`logging` networks, and that the configured database answers `SELECT 1` from the
-database network (both roles for production). Failures name the secret, the
-field or the missing network before any Compose command runs. Secret values are
-never printed.
+Docker context, Compose 2.32+, the `web`, `people-gator-db` and `logging`
+networks, and that the configured database answers `SELECT 1` from the database
+network (both roles for production). Failures name the variable or the missing
+network before any Compose command runs. Secret values are never printed.
 
 **Build identity.** The `images` job labels each image with the tested commit and
 tags it `sha-<commit>`. `--sha` names that commit; the utility pulls the tag,
@@ -69,27 +68,27 @@ runners on one host stay consistent.
 
 ## Configuration
 
-One repository secret per environment, `PREVIEW_CONFIG`, `STAGING_CONFIG` and
-`PRODUCTION_CONFIG`, holds a JSON document with `host`, `database`, `storage`,
-optional `otel`, `rum`, `extra_env` and, per environment, `users` (previews),
-`backup_source` (staging) or `migration_database` (production). The deploy jobs
-pass it as `DEPLOY_CONFIG`; the utility validates it (unknown fields are
-rejected, errors name the secret and field) and renders the files the Compose
-stacks read into the environment's private state directory: `runtime.env`
-(storage, token issuer/audience, production persistence, `extra_env`),
-`telemetry.env` (OTel endpoints and headers, RUM) for the API container only,
-`migration.env` (production migration role), `users.json` (previews) and
-`snapshot-source.json` (staging). Unchanged files are left alone; files for
-settings that were removed are deleted. The examples and the conventions table
-are in [GITHUB-SETUP.md](../GITHUB-SETUP.md).
+Repository variables and secrets prefixed `PREVIEW_`, `STAGING_` or
+`PRODUCTION_` name the host, the database URL, the S3 storage (or a preview
+volume directory), the OTLP collector, the RUM client and, per environment, the
+preview users, the staging backup bucket or the production migration role. The
+deploy jobs pass them as `DEPLOY_<NAME>`; the utility validates them (errors name
+the variable) and renders the files the Compose stacks read into the
+environment's private state directory: `runtime.env` (storage, token
+issuer/audience, production persistence), `telemetry.env` (OTel endpoints and
+headers, RUM) for the API container only, `migration.env` (production migration
+role), `users.json` (previews) and `snapshot-source.json` (staging). Unchanged
+files are left alone; files for settings that were removed are deleted. The full
+list and the conventions table are in [GITHUB-SETUP.md](../GITHUB-SETUP.md).
 
 ## Operator commands
 
 Any operation can run on the host as the deployment account from a checkout of
-the deployed commit, with the same JSON in a private file:
+the deployed commit, with the same values exported as `DEPLOY_<NAME>`:
 
 ```sh
-export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_CONFIG_FILE=/private/preview.json
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_HOST=preview.peoplegator.dev
+export DEPLOY_DATABASE_URL='postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr preflight
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr status --pr 123
 ```
@@ -110,7 +109,7 @@ its `--env-file` ([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)): Compose recreate
 PostgreSQL as `people-gator-postgres` on the `people-gator-db` network and
 `--remove-orphans` removes the former Fluent Forward collector (its
 `people-gator-preview-infra_otel-data` volume can be deleted; stale keys in the
-env file are ignored). Build the three JSON secrets from the old descriptors and
+env file are ignored). Set the variables and secrets from the old descriptors and
 env files (the admin password is `POSTGRES_ADMIN_PASSWORD` from that env file;
 storage, RUM and OTLP headers come from the old runtime/telemetry files), install
 the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's
@@ -202,7 +201,7 @@ Application S3 storage and all media/authentication objects are managed
 externally. Staging does not provision buckets/users/keys, copy or validate
 media, change storage generations, or impose S3 migration requirements. Missing
 media does not reject a database snapshot. Supply the running application's
-storage through `storage` in `STAGING_CONFIG`; application startup and routed
+storage through the `STAGING_S3_*` settings; application startup and routed
 readiness remain required. Normal updates and database refreshes leave that
 configuration and external storage untouched.
 
@@ -216,12 +215,12 @@ permissions. Keep the backup publisher's identity separate.
 
 Put the explicit HTTPS endpoint, region, bucket, prefix and the reader
 credentials — exactly those six fields, no restore database or target settings —
-in `backup_source` of `STAGING_CONFIG` ([example](../GITHUB-SETUP.md#staging_config)).
+in the `STAGING_BACKUP_S3_*` variables and secrets ([GITHUB-SETUP.md](../GITHUB-SETUP.md)).
 Use system-trusted TLS; a private CA can be supplied through `AWS_CA_BUNDLE`. No
 ambient AWS credentials, application settings or instance profile fill missing
-values. Do not put backup credentials in `storage` or workflow inputs.
+values. Do not put backup credentials in the `STAGING_S3_*` settings or workflow inputs.
 
-Changing `backup_source` does **not** refresh the running database. The next explicit
+Changing the backup settings does **not** refresh the running database. The next explicit
 `snapshot-init` or guarded `refresh` uses the source. Ordinary `update`,
 including automatic successful-main deployments, keeps staging edits and never
 reads the source or contacts the backup bucket. Existing initialization, refresh
@@ -293,8 +292,8 @@ The production stack has no reload, debug, seed or development mounts, but the
 current frontend build embeds demo auto-login credentials
 ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled credentials are not
 private authentication: place the release behind a reviewed access boundary (for
-example, proxy authentication or a private network) before creating
-`PRODUCTION_CONFIG`.
+example, proxy authentication or a private network) before creating the
+`PRODUCTION_*` settings.
 
 ## Development
 
@@ -338,7 +337,7 @@ boto3 and application dependencies; no real operator source is read.
 ## Browser RUM and API trace correlation
 
 See [OpenObserve runtime configuration](../../docs/OPENOBSERVE-RUM.md) for the
-`otel` and `rum` fields of each environment's configuration, collector
+`OTEL_*` and `RUM_*` settings of each environment, collector
 networking, credential boundaries and rollout. The browser receives a
 dedicated RUM client token through the API; backend OTLP authorization stays
 server-side. No frontend build secrets are required.

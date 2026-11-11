@@ -17,7 +17,7 @@ commands and operations in the [utility guide](README.md).
   `tlschallenge`; wildcard issuance needs DNS-01), `people-gator-db` for
   PostgreSQL (created by the shared stack, or `docker network create
   --internal people-gator-db`), and `logging` with the OTLP collector when
-  `otel` is configured.
+  `OTEL_ENDPOINT` is set.
 - DNS: `*.<preview host>`, the staging host, the production host and pgAdmin
   point at the Traefik host. The preview wildcard does not cover staging.
 
@@ -35,7 +35,7 @@ docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrast
 Rerun the same command after editing the file or pulling a newer `main`;
 passwords and volumes are kept. Back up the env file with the
 `people-gator-preview-infra_postgres-data` and `…_pgadmin-data` volumes. The
-admin URL for `PREVIEW_CONFIG` and `STAGING_CONFIG` is
+`PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is
 `postgresql://preview_admin:<POSTGRES_ADMIN_PASSWORD>@people-gator-postgres:5432/postgres`.
 Any other PostgreSQL 16 with pgvector works instead, attached to
 `people-gator-db` (`docker network connect people-gator-db <container>`), as does
@@ -117,13 +117,14 @@ and deployment jobs cannot reach your files or containers:
 
 Staging shares the preview PostgreSQL through the same admin URL and keeps its
 own database generations; its media, users and keys live in the S3 bucket named
-in `storage`. Sign in at `https://<host>/staging-login.html` with accounts
+in the `STAGING_S3_*` bucket. Sign in at `https://<host>/staging-login.html` with accounts
 provisioned in that bucket. Only database backup objects are downloaded by
 `snapshot-init`/`refresh` ([backup gathering](README.md#backup-gathering)).
 
 Releases need an external PostgreSQL on `people-gator-db` (already migrated or
-new) with the application role from `database` and, optionally, a separate
-migration role from `migration_database`; private object storage holding users,
+new) with the application role from `PRODUCTION_DATABASE_URL` and, optionally,
+a separate migration role from `PRODUCTION_MIGRATION_DATABASE_URL`; private
+object storage holding users,
 API keys and JWKs, preserved across releases; and a backup before any release
 that migrates ([backup](../backup/README.md)), recorded in a mode-600 host file
 for the workflow's `backup_record` input. The frontend embeds demo auto-login

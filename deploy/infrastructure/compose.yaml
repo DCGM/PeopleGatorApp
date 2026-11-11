@@ -12,7 +12,7 @@ services:
     image: pgvector/pgvector:pg16
     # Reachable as people-gator-postgres on the people-gator-db network; the
     # deploy utility provisions per-PR and staging databases through the admin
-    # URL in PREVIEW_CONFIG / STAGING_CONFIG.
+    # URL (PREVIEW_DATABASE_URL / STAGING_DATABASE_URL).
     container_name: people-gator-postgres
     restart: unless-stopped
     environment:

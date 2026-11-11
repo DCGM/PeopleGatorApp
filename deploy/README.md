@@ -3,9 +3,9 @@
 PR previews, staging from `main` and tagged releases are deploy jobs of the
 single [CI workflow](../.github/workflows/ci.yml). Each job runs the
 [`people-gator-deploy`](people-gator-deploy/README.md) utility from its own
-checkout, configured by one JSON secret per environment
-([`GITHUB-SETUP.md`](GITHUB-SETUP.md)); nothing is installed on the hosts beyond
-the shared PostgreSQL stack and the runners.
+checkout, configured by a short list of repository variables and secrets per
+environment ([`GITHUB-SETUP.md`](GITHUB-SETUP.md)); nothing is installed on the
+hosts beyond the shared PostgreSQL stack and the runners.
 PR previews use the automatic synthetic seed; staging retains its own
 original-data database snapshot with storage managed externally; releases run
 the tested tagged images against real, operator-provided data.
@@ -20,7 +20,7 @@ Compose Watch or native API/Vite development.
 | [`../compose.live-preview.yaml`](../compose.live-preview.yaml) | Existing shared development preview; external Traefik/S3 dependencies |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Tests, images and the preview/staging/release deploy jobs |
 | [`../.github/actions/deploy-tools`](../.github/actions/deploy-tools/action.yml) | Installs the utility into the job's temporary directory |
-| [`GITHUB-SETUP.md`](GITHUB-SETUP.md) | The three configuration secrets, the hosts and the conventions |
+| [`GITHUB-SETUP.md`](GITHUB-SETUP.md) | The configuration variables and secrets, the hosts and the conventions |
 | [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL and pgAdmin for previews and staging; the deploy jobs only check it |
 | [`runner/job-started.sh`](runner/job-started.sh) | Self-hosted runner hook admitting only this repository's events for the runner's environment |
 | [`people-gator-deploy/`](people-gator-deploy/README.md) | Package, CLI, lifecycle operations and recovery |

@@ -269,7 +269,7 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         self.assertNotIn("prepare", controller.events)
         controller.events.clear()
-        with self.assertRaisesRegex(DeployError, "backup_source in STAGING_CONFIG"):
+        with self.assertRaisesRegex(DeployError, "STAGING_BACKUP_S3_"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
 
@@ -335,7 +335,7 @@ class StagingTests(unittest.TestCase):
         del controller.config["snapshot"]
         with self.assertRaises(staging.StagingConfigurationError) as raised:
             controller.deploy(refresh=True)
-        self.assertIn("backup_source in STAGING_CONFIG", str(raised.exception))
+        self.assertIn("STAGING_BACKUP_S3_", str(raised.exception))
         self.assertNotIn("admin-pw", str(raised.exception))
 
 

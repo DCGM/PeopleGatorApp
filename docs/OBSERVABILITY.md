@@ -10,10 +10,10 @@ Health is available at `/api/v1/health` after lifespan initialization succeeds.
 It returns `status: ok`; it is not a continuous audit of every storage/external
 service or a metrics endpoint.
 
-With `otel` configured in an environment's secret, the deployment enables the
+With `OTEL_ENDPOINT` set for an environment, the deployment enables the
 backend's OpenTelemetry SDK, which sends application logs, traces and metrics
-**directly** to the operator-provided OTLP HTTP collector (`otel.endpoint`, on
-the `logging` network). There is no Docker log driver or
+**directly** to that operator-provided OTLP HTTP collector on the `logging`
+network. There is no Docker log driver or
 intermediate collector: container stdout/stderr stays on the host in rotating
 `json-file` logs for `docker logs`, which still covers frontend nginx output and
 the one-shot storage-init/migrate/seed containers.
@@ -38,7 +38,7 @@ in a private file ([operator commands](../deploy/people-gator-deploy/README.md#o
 use the actual PR number:
 
 ```sh
-export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_CONFIG_FILE=/private/preview.json
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_HOST=preview.peoplegator.dev DEPLOY_DATABASE_URL='postgresql://…'
 PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr status --pr 123
 PYTHONPATH=deploy/people-gator-deploy/src python3 -m people_gator_deploy pr logs --pr 123 --tail 100
 ```
@@ -77,8 +77,8 @@ archive. Preserve maintenance outcomes separately.
 ## Direct backend OTLP traces, metrics and logs
 
 The SDK is disabled by default in the application; the deployment enables it
-when the environment's configuration has an `otel` object, rendering these
-settings (omit `otel` to turn it off):
+when the environment has `OTEL_ENDPOINT` (and optionally `OTEL_HEADERS`),
+rendering these settings (unset it to turn the SDK off):
 
 ```dotenv
 PEOPLE_GATOR_API__OTEL__ENABLED=true

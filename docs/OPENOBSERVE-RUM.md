@@ -14,27 +14,20 @@ This token is browser-visible by design. Account passwords and server OTLP
 exporter authorization never belong in browser settings, Git, image build args
 or frontend `VITE_*` variables.
 
-Each environment's configuration secret (`PREVIEW_CONFIG`, `STAGING_CONFIG`,
-`PRODUCTION_CONFIG`, see [GitHub setup](../deploy/GITHUB-SETUP.md)) carries two
-optional objects:
+Each environment's settings ([GitHub setup](../deploy/GITHUB-SETUP.md)) carry
+two optional groups, prefixed `PREVIEW_`, `STAGING_` or `PRODUCTION_`:
 
-```json
-{
-  "otel": {"endpoint": "http://lgtm:4318", "headers": "Authorization=Basic REPLACE_IF_THE_COLLECTOR_REQUIRES_IT"},
-  "rum": {"client_token": "REPLACE_WITH_DEDICATED_RUM_TOKEN", "site": "openobserve.capturemyhand.com",
-          "organization_identifier": "default", "application_id": "people-gator-app",
-          "session_sample_rate": 100, "session_replay_sample_rate": 100}
-}
-```
+| Name | Kind | Meaning |
+| --- | --- | --- |
+| `OTEL_ENDPOINT` | variable | OTLP HTTP base URL on the `logging` network, for example `http://lgtm:4318`; the deployment derives the `/v1/traces`, `/v1/logs` and `/v1/metrics` endpoints and enables the SDK |
+| `OTEL_HEADERS` | secret | Becomes `OTEL_EXPORTER_OTLP_HEADERS`, for example `Authorization=Basic …` |
+| `RUM_CLIENT_TOKEN` | secret | The dedicated browser RUM token; enables RUM |
+| `RUM_SITE` | variable | RUM site, default `openobserve.capturemyhand.com` |
 
-`otel.endpoint` is the OTLP HTTP base URL on the `logging` network; the
-deployment derives the `/v1/traces`, `/v1/logs` and `/v1/metrics` endpoints and
-enables the SDK. `otel.headers` becomes `OTEL_EXPORTER_OTLP_HEADERS`. The `rum`
-object maps to the `PEOPLE_GATOR_API__RUM__*` settings; only `client_token` is
-required. The deploy job renders them into a private `telemetry.env` that only
-the API runtime container reads (not frontend, migration, seed, check or
-database snapshot workers). Omit an object to leave that feature off. Do not
-print the rendered file or Compose configuration into CI logs.
+The deploy job renders them into a private `telemetry.env` that only the API
+runtime container reads (not frontend, migration, seed, check or database
+snapshot workers). Leave a group unset to keep that feature off. Do not print the
+rendered file or Compose configuration into CI logs.
 
 ## Deployment identity
 
@@ -74,7 +67,7 @@ origins; ensure any proxy/CSP permits HTTPS connections to its host.
 
 The existing LGTM collector must have an OTLP HTTP receiver reachable from the
 `logging` network and a **traces** pipeline forwarding to OpenObserve. Every
-stack points the backend at `otel.endpoint` for logs, traces and metrics; there
+stack points the backend at `OTEL_ENDPOINT` for logs, traces and metrics; there
 is no separate container-log collector. Enable or adjust trace forwarding through an explicit
 operator change.
 
@@ -85,7 +78,7 @@ trace/span correlation and exception attributes. Container stdout/stderr collect
 is separate; see [backend versus container logs](OBSERVABILITY.md#direct-backend-otlp-traces-metrics-and-logs)
 for duplicate copies and the release diagnostic-log path. The collector must
 accept all configured signals. If server-side authorization is required,
-put the standard `OTEL_EXPORTER_OTLP_HEADERS` value in `otel.headers`. Endpoint settings contain complete URLs, passed unchanged to the
+put the standard `OTEL_EXPORTER_OTLP_HEADERS` value in the `OTEL_HEADERS` secret. Endpoint settings contain complete URLs, passed unchanged to the
 exporters:
 
 | API setting | Standard environment alias | Default |
@@ -98,7 +91,7 @@ Settings resolve the aliases; exporters do not read or combine endpoint parts.
 The API setting takes priority when both environment names are supplied. The
 former `HTTP_ENDPOINT` plus signal paths, unused gRPC/profile settings and generic
 backend base-URL expansion are removed. The deployment derives the three URLs
-from `otel.endpoint`. Prefer the existing LGTM collector for routing and
+from `OTEL_ENDPOINT`. Prefer the existing LGTM collector for routing and
 OpenObserve credentials.
 Never use the browser RUM token as OTLP credentials.
 
@@ -107,7 +100,7 @@ Never use the browser RUM token as OTLP credentials.
 1. Review and merge the implementation. A PR preview deploys with its own
    branch's deploy code, so the complete path can be verified on the PR before
    merge; staging and releases pick it up from `main` and the tag.
-2. Add `otel` and `rum` to each environment's configuration secret as described
+2. Add the `OTEL_*` and `RUM_*` settings for each environment as described
    above. Keep the shared infrastructure unchanged.
 3. Deploy a new eligible PR/main build or release through the normal lifecycle.
    Ensure backend startup and routed readiness succeed. No database migration,

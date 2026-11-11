@@ -73,9 +73,10 @@ migration/seed CLI twice in a separate `ci_seed` database and runs the seed
 integration tests with `PEOPLE_GATOR_SCHEMA_TEST_URL`. Its deploy jobs run
 `deploy/people-gator-deploy` from the checked-out commit (a PR deploys with its
 own branch's deploy code; staging uses `main`, releases the tag) configured by
-one JSON repository secret per environment (`PREVIEW_CONFIG`, `STAGING_CONFIG`,
-`PRODUCTION_CONFIG`), as described in `deploy/GITHUB-SETUP.md`. Keep that
-configuration minimal: prefer a convention over a new setting. The shared PostgreSQL/collector/pgAdmin
+a short list of repository variables and secrets per environment (`PREVIEW_*`,
+`STAGING_*`, `PRODUCTION_*`), as described in `deploy/GITHUB-SETUP.md`. Keep that
+list to the database, storage, telemetry and users; prefer a convention over a
+new setting. The shared PostgreSQL/collector/pgAdmin
 stack is operator-run (`deploy/infrastructure`); the utility only checks it. Deployment lifecycle,
 workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
 update them with any change to the workflow's deploy steps, the configuration

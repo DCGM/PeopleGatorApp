@@ -1,71 +1,58 @@
 # Deployment setup
 
-Three repository secrets configure the whole pipeline (Settings → Secrets and
-variables → Actions → New repository secret), one JSON document per
-environment. Everything not listed here is a fixed convention (table at the
-end).
+Each environment is configured by a short list of repository **variables**
+(Settings → Secrets and variables → Actions → Variables) and **secrets**
+(same page, Secrets), prefixed `PREVIEW_`, `STAGING_` or `PRODUCTION_`. Everything
+not listed here is a fixed convention (table at the end).
 
-## `PREVIEW_CONFIG`
+| Name (after the prefix) | Kind | Preview | Staging | Production | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| `HOST` | variable | required | required | required | Hostname; previews run at `https://pr-<N>.<HOST>` |
+| `DATABASE_URL` | secret | required | required | required | `postgresql://user:password@host:5432/db`; the shared server's admin URL for previews/staging (each gets its own databases), the application role for production |
+| `MIGRATION_DATABASE_URL` | secret | | | optional | A separate migration role; defaults to `DATABASE_URL` |
+| `STORAGE_DIR` | variable | optional | | | Media directory inside the container on a Docker volume (default `/data`) |
+| `S3_BUCKET`, `S3_REGION` | variable | optional | required | required | S3 media storage (previews use the volume unless set) |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | secret | with `S3_*` | required | required | |
+| `S3_ENDPOINT_URL` | variable | optional | optional | optional | For non-AWS S3 |
+| `BACKUP_S3_BUCKET`, `BACKUP_S3_PREFIX`, `BACKUP_S3_REGION`, `BACKUP_S3_ENDPOINT_URL` | variable | | optional | | Read-only bucket of production dumps for `snapshot-init` / `refresh` |
+| `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | secret | | with `BACKUP_S3_*` | | |
+| `OTEL_ENDPOINT` | variable | optional | optional | optional | OTLP HTTP collector, for example `http://lgtm:4318`; the backend sends logs, traces and metrics there |
+| `OTEL_HEADERS` | secret | optional | optional | optional | `Authorization=Basic …` if the collector needs it |
+| `RUM_CLIENT_TOKEN` | secret | optional | optional | optional | Enables browser RUM |
+| `RUM_SITE` | variable | optional | optional | optional | RUM site, default `openobserve.capturemyhand.com` |
+| `USERS_JSON` | secret | optional | | | Preview login accounts in the format of `people-gator-api/example.users.json`; that file is the default |
 
-```json
-{
-  "host": "preview.peoplegator.dev",
-  "database": "postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres",
-  "otel": {"endpoint": "http://lgtm:4318"},
-  "rum": {"client_token": "RUM_TOKEN", "site": "openobserve.capturemyhand.com"}
-}
-```
-
-Previews run at `https://pr-<N>.<host>`, each with its own database created
-through the admin `database` URL and media on a local volume. Logins use the
-repository's demo users (`people-gator-api/example.users.json`); add a
-`"users": {...}` object in the same format to change them.
-
-## `STAGING_CONFIG`
-
-```json
-{
-  "host": "staging.peoplegator.dev",
-  "database": "postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres",
-  "storage": {"s3": {"endpoint_url": "https://s3.example.org", "region": "us-east-1",
-              "bucket_name": "peoplegator-staging", "access_key_id": "KEY", "secret_access_key": "SECRET"}},
-  "backup_source": {"endpoint_url": "https://s3.example.org", "region": "us-east-1",
-                    "bucket": "peoplegator-db-backup", "prefix": "production/db-backups/",
-                    "access_key_id": "READ_ONLY_KEY", "secret_access_key": "READ_ONLY_SECRET"},
-  "otel": {"endpoint": "http://lgtm:4318"},
-  "rum": {"client_token": "RUM_TOKEN", "site": "openobserve.capturemyhand.com"}
-}
-```
-
-Staging shares the preview PostgreSQL and keeps its own database generation;
-`storage` is required for staging and production (`s3` or `local`), and
-`backup_source` is the read-only bucket of production dumps used by the manual
-`snapshot-init` / `refresh` runs. Users and keys live in the S3 bucket.
-
-## `PRODUCTION_CONFIG`
-
-```json
-{
-  "host": "people.example.org",
-  "database": "postgresql://people_gator:SECRET@people-gator-postgres:5432/people_gator",
-  "storage": {"s3": {"endpoint_url": "https://s3.example.org", "region": "us-east-1",
-              "bucket_name": "peoplegator", "access_key_id": "KEY", "secret_access_key": "SECRET"}},
-  "otel": {"endpoint": "http://lgtm:4318", "headers": "Authorization=Basic BASE64"},
-  "rum": {"client_token": "RUM_TOKEN", "site": "openobserve.capturemyhand.com"}
-}
-```
-
-Production uses the `database` URL as the application role; add
-`"migration_database": "postgresql://migrator:SECRET@…"` to migrate with a
-separate role. Use `{"local": {"root": "/data"}}` as `storage` to keep media on a
-Docker volume instead of S3. Omit `otel` or `rum` to leave that feature off; add
-`"extra_env": {"PEOPLE_GATOR_API__OPENROUTER__API_KEY": "…"}` for any other
-API setting.
+Omitting `OTEL_*` or `RUM_*` leaves that feature off. For example:
 
 ```sh
-gh secret set PREVIEW_CONFIG < preview.json
-gh secret set STAGING_CONFIG < staging.json
-gh secret set PRODUCTION_CONFIG < production.json
+gh variable set PREVIEW_HOST --body preview.peoplegator.dev
+gh secret set PREVIEW_DATABASE_URL --body 'postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
+gh variable set PREVIEW_OTEL_ENDPOINT --body http://lgtm:4318
+gh secret set PREVIEW_RUM_CLIENT_TOKEN --body RUM_TOKEN
+
+gh variable set STAGING_HOST --body staging.peoplegator.dev
+gh secret set STAGING_DATABASE_URL --body 'postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
+gh variable set STAGING_S3_BUCKET --body peoplegator-staging
+gh variable set STAGING_S3_REGION --body us-east-1
+gh variable set STAGING_S3_ENDPOINT_URL --body https://s3.example.org
+gh secret set STAGING_S3_ACCESS_KEY_ID --body KEY
+gh secret set STAGING_S3_SECRET_ACCESS_KEY --body SECRET
+gh variable set STAGING_BACKUP_S3_BUCKET --body peoplegator-db-backup
+gh variable set STAGING_BACKUP_S3_PREFIX --body production/db-backups/
+gh variable set STAGING_BACKUP_S3_REGION --body us-east-1
+gh variable set STAGING_BACKUP_S3_ENDPOINT_URL --body https://s3.example.org
+gh secret set STAGING_BACKUP_S3_ACCESS_KEY_ID --body READ_ONLY_KEY
+gh secret set STAGING_BACKUP_S3_SECRET_ACCESS_KEY --body READ_ONLY_SECRET
+gh variable set STAGING_OTEL_ENDPOINT --body http://lgtm:4318
+
+gh variable set PRODUCTION_HOST --body people.example.org
+gh secret set PRODUCTION_DATABASE_URL --body 'postgresql://people_gator:SECRET@people-gator-postgres:5432/people_gator'
+gh variable set PRODUCTION_S3_BUCKET --body peoplegator
+gh variable set PRODUCTION_S3_REGION --body us-east-1
+gh secret set PRODUCTION_S3_ACCESS_KEY_ID --body KEY
+gh secret set PRODUCTION_S3_SECRET_ACCESS_KEY --body SECRET
+gh variable set PRODUCTION_OTEL_ENDPOINT --body http://lgtm:4318
+gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
 ```
 
 ## Hosts
@@ -84,7 +71,7 @@ gh secret set PRODUCTION_CONFIG < production.json
 - **Traefik** on the `web` network with the `websecure` entrypoint and the
   `tlschallenge` resolver, and DNS for `*.<preview host>`, the staging host, the
   production host and pgAdmin pointing at it.
-- **OTLP collector** (for `otel`) reachable from the `logging` network.
+- **OTLP collector** (for `OTEL_ENDPOINT`) reachable from the `logging` network.
 - **Runners**: one self-hosted runner per host as the deployment account,
   labelled `people-gator-preview`, `people-gator-staging` and/or
   `people-gator-release`, with `docker context use rootless` done once and the
@@ -94,7 +81,7 @@ gh secret set PRODUCTION_CONFIG < production.json
 
 Then open a pull request or run **CI** manually on `main` (`operation=update`,
 or `snapshot-init` for a fresh staging database). A deploy job's `preflight`
-step fails with the secret name and field when something is missing; each
+step fails with the variable's name when something is missing or invalid; each
 success appears under the repository's Deployments.
 
 ## Conventions
@@ -106,6 +93,5 @@ success appears under the repository's Deployments.
 | Compose projects | `people-gator-pr-<N>`, `people-gator-staging`, `people-gator-release` |
 | State and generated files | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` on the host |
 | TLS | Traefik `tlschallenge` resolver |
-| Login tokens and CORS | issuer `https://<host>`, audience `<host>` |
-| Previews' media | local Docker volume per PR; `"storage"` overrides |
+| Login tokens and CORS | issuer `https://<HOST>`, audience `<HOST>` |
 | Images | `ghcr.io/<repo>-frontend` and `-backend`, tag `sha-<commit>` |

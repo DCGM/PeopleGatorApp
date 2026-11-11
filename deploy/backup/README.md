@@ -174,7 +174,7 @@ credentials.
 
 For staging initialization/refresh, put the restore-reader storage settings
 (endpoint, region, bucket, prefix and read-only credentials only) in
-`backup_source` of the `STAGING_CONFIG` secret once. The
+the `STAGING_BACKUP_S3_*` repository variables and secrets once. The
 deployment utility automatically lists all pages, selects the latest dated
 archive and performs a private, conditional, verified download before restoring
 a separate candidate database. No dated path/checksum/revision edits are
