@@ -26,12 +26,12 @@ Omitting `OTEL_*` or `RUM_*` leaves that feature off. For example:
 
 ```sh
 gh variable set PREVIEW_HOST --body preview.peoplegator.dev
-gh secret set PREVIEW_DATABASE_URL --body 'postgresql://preview_admin:SECRET@postgres:5432/postgres'
+gh secret set PREVIEW_DATABASE_URL --body 'postgresql://postgres:SECRET@postgres:5432/postgres'
 gh variable set PREVIEW_OTEL_ENDPOINT --body http://lgtm:4318
 gh secret set PREVIEW_RUM_CLIENT_TOKEN --body RUM_TOKEN
 
 gh variable set STAGING_HOST --body staging.peoplegator.dev
-gh secret set STAGING_DATABASE_URL --body 'postgresql://preview_admin:SECRET@postgres:5432/postgres'
+gh secret set STAGING_DATABASE_URL --body 'postgresql://postgres:SECRET@postgres:5432/postgres'
 gh variable set STAGING_S3_BUCKET --body peoplegator-staging
 gh variable set STAGING_S3_REGION --body us-east-1
 gh variable set STAGING_S3_ENDPOINT_URL --body https://s3.example.org
@@ -71,11 +71,7 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   with `tls.passthrough`) to `HTTPS_PORT`. The public URLs stay `https://<host>`
   without a port; the deploy's readiness check calls them. Point DNS for
   `*.<preview host>`, the staging host and the production host at the public
-  entry. Hosts upgraded from earlier releases reuse their volume: set
-  `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
-  before the upgrade keep working through the `preview-postgres` alias once the
-  server is also attached to their old network:
-  `docker network connect --alias preview-postgres people-gator-preview-db postgres`.
+  entry.
 - **OTLP collector** on the `logging` network, only when `OTEL_ENDPOINT` is set.
 - **Runners**: one self-hosted runner per host as the deployment account,
   labelled `people-gator-preview`, `people-gator-staging` and/or

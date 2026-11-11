@@ -71,7 +71,7 @@ class RuntimeTests(unittest.TestCase):
             ["docker", "context", "show"], text=True).strip()
         controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(state),
             "host": "staging-fixture.example.invalid", "docker_context": context,
-            "postgres": {"host": "preview-postgres", "port": 5432, "user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
+            "postgres": {"host": "postgres", "port": 5432, "user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
                          "password": os.environ.get("STAGING_TEST_DATABASE_PASSWORD", "ci"), "database": "ci"},
             "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
@@ -106,8 +106,6 @@ class RuntimeTests(unittest.TestCase):
             del controller.config["snapshot"]
             controller.config["snapshot_source_file"] = str(source_file)
         controller.sql = fixture.sql
-        controller.infra = lambda *args: ["docker", "exec", "-i", fixture.container,
-            *[fixture.username if arg == "preview_admin" else arg for arg in args[3:]]]
         override = state / "compose.test.json"
         override.write_text(json.dumps({"services": {name: {"logging": {"driver": "json-file", "options": {}},
             "environment": {"PEOPLE_GATOR_API__OTEL__ENABLED": "false"}, "restart": "no"}

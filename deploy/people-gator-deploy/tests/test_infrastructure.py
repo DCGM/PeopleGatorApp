@@ -21,11 +21,11 @@ class InfrastructureStackTests(unittest.TestCase):
                    if line and not line.startswith("#")}
         self.assertEqual(interpolated, example)
         document = yaml.safe_load(compose)
-        self.assertEqual(document["name"], "people-gator-preview-infra")  # existing volumes keep matching
+        self.assertEqual(document["name"], "peoplegator-infra")
         self.assertEqual(set(document["services"]), {"postgres", "traefik"})
         postgres = document["services"]["postgres"]
         self.assertEqual(postgres["container_name"], "postgres")
-        self.assertEqual(postgres["networks"]["db"]["aliases"], ["postgres", "preview-postgres"])
+        self.assertEqual(postgres["networks"], ["db"])
         self.assertEqual((document["networks"]["db"]["name"], document["networks"]["web"]["name"]), ("db", "web"))
         traefik = document["services"]["traefik"]
         self.assertEqual(traefik["command"], ["--configfile=/etc/traefik/traefik.yaml"])

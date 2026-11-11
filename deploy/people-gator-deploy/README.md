@@ -88,7 +88,7 @@ the deployed commit, with the same values exported as `DEPLOY_<NAME>`:
 
 ```sh
 export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_HOST=preview.peoplegator.dev
-export DEPLOY_DATABASE_URL='postgresql://preview_admin:SECRET@postgres:5432/postgres'
+export DEPLOY_DATABASE_URL='postgresql://postgres:SECRET@postgres:5432/postgres'
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr preflight
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr status --pr 123
 ```
@@ -101,25 +101,17 @@ venv with `pip install deploy/people-gator-deploy`. GitHub-reading operations
 `~/.local/opt/people-gator-deploy/state/<pr|staging|release>` (`DEPLOY_STATE_DIR`
 overrides it for unusual hosts).
 
-**Upgrading from descriptor-based hosts.** State directories keep their
-locations, and databases, media, passwords and generations are untouched. Run
-the shared stack once with the old
-`~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env` as
-its `--env-file` ([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)): Compose recreates
-PostgreSQL as `postgres` on the `db` network and
-`--remove-orphans` removes the former Fluent Forward collector (its
-`people-gator-preview-infra_otel-data` volume can be deleted; stale keys in the
-env file are ignored). Set the variables and secrets from the old descriptors and
-env files (the admin password is `POSTGRES_ADMIN_PASSWORD` from that env file;
-storage, RUM and OTLP headers come from the old runtime/telemetry files), install
-the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each runner's
-`.env`, run `docker context use rootless` once as the deployment account, then
-delete the descriptors (`~/.local/opt/people-gator-deploy/environments`), the
+**Moving a host from the descriptor-based setup.** Start fresh: stop and
+remove the old `people-gator-preview-infra` stack, the preview and staging
+containers and their volumes, then start the new shared stack
+([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)), set the variables and secrets,
+install the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each
+runner's `.env` and run `docker context use rootless` once as the deployment
+account. Delete the old descriptors (`~/.local/opt/people-gator-deploy/environments`),
 versioned installations (`~/.local/lib/people-gator-deploy`),
-`~/.local/bin/people-gator-deploy`, the old `owned.json` markers and the old
-users/runtime/migration/telemetry files once each environment has deployed
-successfully through the new workflow (their saved `compose.env` files reference
-them until then). Rerun open PRs' CI to redeploy their previews.
+`~/.local/bin/people-gator-deploy` and state directories. Then run the workflow
+manually on `main` with `operation=snapshot-init` for staging and rerun open
+PRs' CI to recreate their previews.
 
 ## Operations
 
@@ -316,12 +308,12 @@ runner-guard tests run `deploy/runner/job-started.sh` against a disposable Git
 origin.
 
 `test_staging_runtime.py` needs a backend image, an internal network aliasing
-PostgreSQL as `preview-postgres` and Docker. CI does not run it; from
+PostgreSQL as `postgres` and Docker. CI does not run it; from
 `people-gator-api`, with a disposable PostgreSQL container and its published port:
 
 ```sh
 docker network create --internal staging-gate
-docker network connect --alias preview-postgres staging-gate "$POSTGRES_CONTAINER"
+docker network connect --alias postgres staging-gate "$POSTGRES_CONTAINER"
 docker build -t people-gator-staging-gate .
 STAGING_TEST_NETWORK=staging-gate STAGING_TEST_IMAGE=people-gator-staging-gate \
 STAGING_TEST_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" STAGING_TEST_DATABASE_PORT=… \

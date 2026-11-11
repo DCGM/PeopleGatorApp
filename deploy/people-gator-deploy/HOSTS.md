@@ -50,7 +50,7 @@ and the inner routers. Test with Let's Encrypt's staging CA (`caServer` in
 Rootless Docker needs `net.ipv4.ip_unprivileged_port_start` at or below
 `HTTPS_PORT` when it is under 1024.
 
-Back up the env files with the `people-gator-preview-infra_postgres-data`
+Back up the env files with the `peoplegator-infra_postgres-data`
 volume. `PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is then
 `postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres`.
 For a database shell use `docker exec -it postgres psql -U <POSTGRES_USER>`; a
