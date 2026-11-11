@@ -75,23 +75,39 @@ events:
 
 Labels only select a runner: in a public repository any workflow in a PR, branch
 or tag can request them, and a pull request's workflow file is the pull request's
-own. Install the job-started guard on every self-hosted runner. It admits only
-this repository's events for the environments listed for that runner
+own. Every runner therefore runs the job-started guard, which admits only this
+repository's events for the environments listed for that runner
 (same-repository pull requests and `main` for `preview`, `main` for `staging`,
 `v*` tags whose commit is on `main` for `release`) and refuses fork pull requests
-from the event payload, whatever the workflow says:
+from the event payload, whatever the workflow says.
+
+[`deploy/runner/install.sh`](../runner/install.sh) sets a runner up as the
+deployment account, as a `systemctl --user` service that keeps running without a
+login. Enable lingering once as root (`sudo loginctl enable-linger <account>`),
+select the Docker context (`docker context use rootless`), take a registration
+token from **Settings → Actions → Runners → New self-hosted runner** (valid for an
+hour; a `gh` login with admin rights works instead), then run from anywhere:
 
 ```sh
-install -D -m 755 deploy/runner/job-started.sh ~/.local/libexec/people-gator/job-started.sh
-# In each runner directory; the script itself must live outside it:
-echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$HOME/.local/libexec/people-gator/job-started.sh" >> .env
-echo "PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview,staging" >> .env   # the environments whose labels this runner carries
+ref=main; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && RUNNER_TOKEN=<token> $t/deploy/runner/install.sh preview,staging; rm -rf $t
 ```
 
-Restart each runner service while idle so it reads `.env` (`sudo ./svc.sh stop &&
-sudo ./svc.sh start`, or `systemctl --user restart github-runner@<runner>` for a
-user unit). A job for an unlisted environment is refused and GitHub does not move
-it to another runner. Refresh the script copy when `main` changes it. Also set
+Use `release` instead of `preview,staging` on the production host. The script
+checks the prerequisites (Docker with Compose on the current context, Python with
+venv, git, lingering, a user session), downloads the latest official runner and
+verifies its SHA-256, registers it as `<host>-<environments>` with the matching
+labels, installs the guard as `~/.local/libexec/people-gator/job-started.sh`,
+writes `ACTIONS_RUNNER_HOOK_JOB_STARTED` and `PEOPLE_GATOR_RUNNER_ENVIRONMENT` to
+the runner's `.env` and enables `github-runner@<name>` from
+[`github-runner@.service`](../runner/github-runner@.service). Rerunning it (without
+a token) refreshes the guard, the environment and the service of an existing
+runner. Status and logs: `systemctl --user status github-runner@<name>` and
+`journalctl --user -u github-runner@<name>`. To remove a runner, stop it with
+`systemctl --user disable --now github-runner@<name>`, unregister it with
+`~/actions-runner/<name>/config.sh remove --token <token>` (from the same
+Settings page) and delete `~/actions-runner/<name>`.
+
+Also set
 **Settings → Actions → General → Fork pull request workflows** to require
 approval for all outside contributors, and protect `v*` tags with a ruleset.
 Deploy jobs use only `GITHUB_TOKEN` (contents, pull-requests and packages read,

@@ -22,6 +22,7 @@ Compose Watch or native API/Vite development.
 | [`../.github/actions/deploy-tools`](../.github/actions/deploy-tools/action.yml) | Installs the utility into the job's temporary directory |
 | [`GITHUB-SETUP.md`](GITHUB-SETUP.md) | The configuration variables and secrets, the hosts and the conventions |
 | [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL and Traefik for previews and staging; the deploy jobs only check it |
+| [`runner/install.sh`](runner/install.sh) | Installs a self-hosted runner as a lingering `systemctl --user` service with the guard |
 | [`runner/job-started.sh`](runner/job-started.sh) | Self-hosted runner hook admitting only this repository's events for the runner's environment |
 | [`people-gator-deploy/`](people-gator-deploy/README.md) | Package, CLI, lifecycle operations and recovery |
 | [`people-gator-deploy/HOSTS.md`](people-gator-deploy/HOSTS.md) | Docker, networks, shared PostgreSQL, runners and account isolation |

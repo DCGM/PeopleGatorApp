@@ -84,12 +84,19 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   `*.<preview host>`, the staging host and the production host at the public
   entry.
 - **OTLP collector** on the `logging` network, only when `OTEL_ENDPOINT` is set.
-- **Runners**: one self-hosted runner per host as the deployment account,
-  labelled `people-gator-preview`, `people-gator-staging` and/or
-  `people-gator-release`, with `docker context use rootless` done once and the
-  [job-started guard](runner/job-started.sh) in its `.env`
-  (`PEOPLE_GATOR_RUNNER_ENVIRONMENT=preview,staging`). Settings → Actions →
-  General: require approval for all outside collaborators.
+- **Runners**: one self-hosted runner per host, installed as the deployment
+  account with [`deploy/runner/install.sh`](runner/install.sh) as a lingering
+  `systemctl --user` service with the job-started guard. Once as root:
+  `sudo loginctl enable-linger <account>`; once as the account:
+  `docker context use rootless`. Then, with a registration token from Settings →
+  Actions → Runners → New self-hosted runner:
+
+  ```sh
+  ref=main; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && RUNNER_TOKEN=<token> $t/deploy/runner/install.sh preview,staging; rm -rf $t
+  ```
+
+  Use `release` on the production host. Settings → Actions → General: require
+  approval for all outside collaborators.
 
 Then open a pull request or run **CI** manually on `main` (`operation=update`,
 or `snapshot-init` for a fresh staging database). A deploy job's `preflight`
