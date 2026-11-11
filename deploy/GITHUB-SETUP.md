@@ -58,18 +58,20 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
 ## Hosts
 
 - **PostgreSQL and Traefik** on each host, from
-  [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml). From the
-  repository root, as the deployment account:
+  [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml). As the
+  deployment account, from anywhere:
 
   ```sh
-  d=~/.config/peoplegator-infra; install -d -m 700 $d && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" deploy/infrastructure/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp deploy/infrastructure/traefik.example.yaml $d/traefik.yaml; } && docker compose -f deploy/infrastructure/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+  ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
   ```
 
-  It creates `~/.config/peoplegator-infra/infra.env` (from
-  [`example.env`](infrastructure/example.env), with a generated PostgreSQL
+  It shallow-clones the repository (`ref` selects the branch), copies
+  `compose.yaml` and the examples into `~/peoplegator-infra`, creates `infra.env`
+  (from [`example.env`](infrastructure/example.env), with a generated PostgreSQL
   password and the current Docker socket) and `traefik.yaml` (from
   [`traefik.example.yaml`](infrastructure/traefik.example.yaml)) only if they do
-  not exist yet, then starts the stack. Set the ACME e-mail in `traefik.yaml` and,
+  not exist yet, then starts the stack. Reruns refresh `compose.yaml` and keep
+  your two files. Set the ACME e-mail in `traefik.yaml` and,
   if needed, `HTTPS_PORT` in `infra.env`, and rerun to apply. The database URLs use
   `POSTGRES_PASSWORD` from `infra.env`.
   PostgreSQL runs as `postgres` on the internal `db` network. Traefik serves only

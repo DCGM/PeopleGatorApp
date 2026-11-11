@@ -3,11 +3,12 @@
 # Start it once as the deployment account and leave it running; the deploy jobs
 # only check it.
 #
-# From the repository root, as the deployment account (safe to rerun: the env
-# file with its generated password and the Traefik config are created only once,
-# in ~/.config/peoplegator-infra; edit them there and rerun to apply changes):
+# As the deployment account, from anywhere (safe to rerun: it refreshes
+# compose.yaml and the examples in ~/peoplegator-infra from the repository, and
+# creates infra.env with a generated password and traefik.yaml only once; edit
+# those two there and rerun to apply changes):
 #
-#   d=~/.config/peoplegator-infra; install -d -m 700 $d && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" deploy/infrastructure/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp deploy/infrastructure/traefik.example.yaml $d/traefik.yaml; } && docker compose -f deploy/infrastructure/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 #
 # The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
 # postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres
