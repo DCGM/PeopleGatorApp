@@ -11,7 +11,6 @@ import {
   FlexRender,
   type ColumnDef,
   type ColumnVisibilityState,
-  type ColumnSizingState,
   type Header,
 } from '@tanstack/vue-table'
 import {
@@ -39,6 +38,8 @@ import {
   DOCUMENT_ANNOTATION_STATES,
   defaultDocumentColumns,
   defaultDocumentColumnOrder,
+  normalizeDocumentColumnSizing,
+  useDocumentColumnSizing,
   appendDocumentColumn,
   moveDocumentColumn,
   stepDocumentColumn,
@@ -109,7 +110,7 @@ const link = (document: DocumentResponse, text: string) =>
     },
     () => text,
   )
-const sizing = ref<ColumnSizingState>({})
+const sizing = useDocumentColumnSizing()
 const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   {
     id: 'identity',
@@ -224,12 +225,7 @@ const table = useTable({
   })),
   onColumnSizingChange: (next) => {
     const requested = typeof next === 'function' ? next(sizing.value) : next
-    sizing.value = Object.fromEntries(
-      Object.entries(requested).map(([id, value]) => {
-        const { minSize, maxSize } = documentColumnSizing(id)
-        return [id, Math.min(maxSize, Math.max(minSize, value))]
-      }),
-    )
+    sizing.value = normalizeDocumentColumnSizing(requested)
   },
   onColumnVisibilityChange: (next) => {
     visibility.value = typeof next === 'function' ? next(visibility.value) : next
@@ -312,6 +308,7 @@ function addColumn(id: string) {
 function restoreDefaults() {
   visibility.value = defaultDocumentColumns()
   order.value = defaultDocumentColumnOrder()
+  sizing.value = {}
 }
 
 // Removal sits behind the label's menu, so one stray click cannot remove a column.

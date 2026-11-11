@@ -122,6 +122,9 @@ PEOPLE = (
     # Issue #66: evidence written by a reviewer who was deactivated afterwards.
     Person("deactivated-olga", "Olga Expiry", (),
            "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
+    # Issue #137: direct document evidence is a member without matching any page.
+    Person("sidebar-direct", "Dora Document", (),
+           "Synthetic person linked only to the scan-sidebar document.", "reviewer"),
     # Issue #103: page, document and other people for the scan sidebar.
     Person("sidebar-hana", "Hana Sidebar", (),
            "Synthetic scan-sidebar person with faces and repeated mentions on one page.", "importer"),
@@ -222,7 +225,6 @@ class Face:
     box: tuple[int, int, int, int] | None = None
     confidence: float = 0.97
     models: tuple[str, ...] = (MODEL, SECOND_MODEL)
-    zero_vector: bool = False
     coincident_keypoints: bool = False
 
 
@@ -603,11 +605,12 @@ PAGES = (
         Face("discovery-other-model", "discovery", 1, 0, models=(DISCOVERY_OTHER_MODEL,)),
     )),
     Page("discovery-8", "discovery", 8, (
-        Face("discovery-zero-reference", "discovery", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        # #134: formerly zero vectors; the API and database now refuse them.
+        Face("discovery-zero-reference", "discovery", 0, 0, embedded=False),
         Face("discovery-face-match", "discovery-face", 1, 0, models=(DISCOVERY_MODEL,)),
     )),
     Page("discovery-9", "discovery", 9, (
-        Face("discovery-zero-candidate", "discovery-face", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        Face("discovery-zero-candidate", "discovery-face", 0, 0, embedded=False),
         Face("discovery-name-match", "discovery-name", 1, 1, models=(DISCOVERY_MODEL,)),
     )),
     Page("discovery-10", "discovery", 10, (

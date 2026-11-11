@@ -110,6 +110,7 @@ async function scrollToEnd() {
 
 beforeEach(() => {
   window.sessionStorage.clear()
+  window.localStorage.clear()
   vi.clearAllMocks()
   desktop.value = true
   api.libraries.mockResolvedValue(response([{ library: 'a' }, { library: 'b' }]))

@@ -1,4 +1,5 @@
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
+import { AxiosError, type AxiosResponse } from 'axios'
 import { mount, shallowMount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   assignFace: vi.fn(),
   unassignFace: vi.fn(),
   createAndAssign: vi.fn(),
+  documentLookup: vi.fn(),
+  getFace: vi.fn(),
+  listEntities: vi.fn(),
+  searchEntities: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: mocks.route,
@@ -33,6 +38,9 @@ vi.mock('@/client', async (original) => ({
   deleteFaceRouteApiV1FacesDetectionIdDelete: mocks.deleteFace,
   patchFaceRouteApiV1FacesDetectionIdPatch: mocks.patchFace,
   getTextMentionRouteApiV1TextMentionsMentionIdGet: mocks.mention,
+  getFaceRouteApiV1FacesDetectionIdGet: mocks.getFace,
+  listEntitiesRouteApiV1EntitiesGet: mocks.listEntities,
+  searchEntitiesGetApiV1SearchEntitiesGet: mocks.searchEntities,
 }))
 vi.mock('@/composables/can-annotate', () => ({
   useCanAnnotate: () => ref(true),
@@ -44,7 +52,7 @@ vi.mock('@/query/entities', async (original) => ({
   useEntityQuery: () => ({ data: ref(null) }),
 }))
 vi.mock('@/query/media', () => ({
-  useDocumentLookupQuery: () => ({ isPending: ref(false), error: ref(null), data: ref(null) }),
+  useDocumentLookupQuery: mocks.documentLookup,
 }))
 vi.mock('@/query/translation', () => ({
   useTranslationQuery: () => ({ data: ref(null), isFetching: ref(false) }),
@@ -97,6 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   route = reactive({ params: { libraryId: 'lib', documentId: 'doc', pageId: 'one' }, query: {} })
   mocks.route.mockReturnValue(route)
+  mocks.documentLookup.mockReturnValue({ isPending: ref(false), error: ref(null), data: ref(null) })
   mocks.gallery.mockReturnValue({
     items: ref([]),
     totalCount: ref(null),
@@ -874,7 +883,7 @@ describe('scan sidebar (#103)', () => {
     wrapper.unmount()
   })
 
-  it('searches by the selected face: one attachment, no name text, Similarity, same scope', async () => {
+  it('searches by the selected face: one attachment, no name text, global Similarity', async () => {
     route.query = {
       people_scope: 'document',
       candidate_text: 'Novak',
@@ -898,8 +907,8 @@ describe('scan sidebar (#103)', () => {
       panel: undefined,
       candidate_face: 'a',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
-      people_scope: 'document',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     // Unlike Link/Reassign, Search leaves focus where it is, even once People opens.
     route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
@@ -919,7 +928,8 @@ describe('scan sidebar (#103)', () => {
     expect(lastQuery(mocks.push)).toMatchObject({
       candidate_face: 'b',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     wrapper.unmount()
   })
@@ -998,4 +1008,59 @@ it('selects the line of an unlinked mention requested from the Mentions tab (#10
     expect.objectContaining({ query: expect.objectContaining({ mention: undefined }) }),
   )
   wrapper.unmount()
+})
+
+describe('face search with an unusable reference (#134)', () => {
+  it('drops the face and lists people on this page, the document, then everyone', async () => {
+    mocks.documentLookup.mockReturnValue({
+      isPending: ref(false),
+      error: ref(null),
+      data: ref({ source_id: 'document-source' }),
+    })
+    // The face record lists its model, but the stored vector is all zeros.
+    mocks.getFace.mockResolvedValue({ data: { detection_id: 'zero', embeddings: ['model'] } })
+    mocks.searchEntities.mockRejectedValue(
+      new AxiosError('Unprocessable Content', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status: 422,
+        data: {
+          detail: {
+            code: 'invalid_search',
+            message: "reference face has an unusable cosine embedding 'model': zero",
+          },
+        },
+      } as AxiosResponse),
+    )
+    mocks.listEntities.mockResolvedValue({
+      data: { items: [], cursor: null, total_count: 0 },
+    })
+    // The router commits navigation into the route, like the real one.
+    const navigate = ({ query }: { query: Record<string, string | undefined> }) => {
+      route.query = Object.fromEntries(
+        Object.entries(query).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      )
+    }
+    mocks.push.mockImplementation(navigate)
+    mocks.replace.mockImplementation(navigate)
+    route.query = { candidate_face: 'zero', candidate_sort: 'relevance' }
+
+    const wrapper = await mountView()
+    await settleFocus()
+
+    expect(mocks.searchEntities).toHaveBeenCalledTimes(1)
+    // The fallback replaces the Search entry, so Back leaves the page.
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(mocks.replace).toHaveBeenCalled()
+    expect(route.query.candidate_face).toBeUndefined()
+    expect(route.query.candidate_sort).toBeUndefined()
+    const scopes = mocks.listEntities.mock.calls.map(([{ query }]) => query)
+    expect(scopes).toContainEqual(
+      expect.objectContaining({
+        'filter.entity_type': ['person'],
+        'filter.page_source_id': ['source'],
+        sort: 'name',
+        sort_direction: 'asc',
+      }),
+    )
+    wrapper.unmount()
+  })
 })

@@ -488,6 +488,11 @@ class FaceEmbedding(Base):
             "vector_dims(embedding) > 0",
             name="ck_pg_demo_face_embedding_nonempty",
         ),
+        # Cosine search is undefined for a zero vector (#134).
+        CheckConstraint(
+            "vector_norm(embedding) > 0",
+            name="ck_pg_demo_face_embedding_nonzero",
+        ),
     )
 
     face_id: Mapped[uuid.UUID] = mapped_column(

@@ -393,13 +393,23 @@ const scanFaces = reactive(
     enabled: () => sidebarState.value.tab === 'faces',
   }),
 )
-function removeSearchFace() {
-  // Typed name text stays; Similarity needs a name or face to score.
-  sidebar.update({
-    searchFaceId: null,
-    searchModel: null,
-    ...(!sidebarState.value.peopleText.trim() && { peopleOrder: 'context' as const }),
-  })
+// A face the API cannot search with falls back to the People list (#134). Like
+// the drop above, this replaces the entry so Back does not repeat the search.
+watch(
+  () => people.faceRejected,
+  (rejected) => {
+    if (rejected) removeSearchFace('replace')
+  },
+)
+function removeSearchFace(history: 'push' | 'replace' = 'push') {
+  // Typed name text stays; clearing the last input restores document browsing.
+  sidebar.update(
+    {
+      searchFaceId: null,
+      searchModel: null,
+    },
+    history,
+  )
 }
 const focusPeopleRequested = ref(false)
 function applyPeopleFocus() {
@@ -1063,7 +1073,7 @@ onBeforeUnmount(() => {
               :assignment-pending="actionBusy"
               :load-more="people.loadMore"
               :retry="people.retry"
-              @remove-face="removeSearchFace"
+              @remove-face="removeSearchFace()"
               @attach-selected-face="selectedFace && searchByFace(selectedFace)"
               @preview="previewSimilarPerson"
               @assign="assignSimilarPerson"

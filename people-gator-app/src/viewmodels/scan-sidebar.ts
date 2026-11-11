@@ -1,4 +1,4 @@
-import { computed, type InjectionKey, type Ref } from 'vue'
+import { computed, watch, type InjectionKey, type Ref } from 'vue'
 import { useRoute, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 
 import type { TextMentionGroupSortField, TextMentionSortField, FaceSortField } from '@/client'
@@ -101,20 +101,23 @@ export function readTab(query: LocationQuery, hash = ''): SidebarTab {
 export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarState {
   // Former "Similar faces" links attached the selected face to the candidate search.
   const legacyFace = single(query.candidate_mode) === 'face' ? single(query.person) : undefined
+  const peopleText = single(query.candidate_text) ?? ''
+  const searchFaceId = single(query.candidate_face) || legacyFace || null
+  const defaults = peopleDefaults({ peopleText, searchFaceId })
   return {
     tab: readTab(query, hash),
-    peopleText: single(query.candidate_text) ?? '',
-    searchFaceId: single(query.candidate_face) || legacyFace || null,
+    peopleText,
+    searchFaceId,
     searchModel: single(query.face_model) || null,
     peopleScope: oneOf(
       single(query.people_scope),
       PEOPLE_SCOPES.map((scope) => scope.value),
-      'all',
+      defaults.peopleScope,
     ),
     peopleOrder: oneOf(
       single(query.candidate_sort),
       PEOPLE_ORDERS.map((order) => order.value),
-      'context',
+      defaults.peopleOrder,
     ),
     faceScope: oneOf(single(query.face_scope), ['page', 'document'] as const, 'page'),
     faceView: oneOf(single(query.face_view), ['flat', 'person'] as const, 'flat'),
@@ -174,9 +177,38 @@ export function effectivePeopleOrder(order: PeopleOrder, scored: boolean): Peopl
   return order === 'relevance' && !scored ? 'context' : order
 }
 
-/** URL values for a changed setting; defaults are omitted so links stay short. */
-export function sidebarQuery(changes: Partial<ScanSidebarState>): LocationQueryRaw {
+type PeopleInput = Pick<ScanSidebarState, 'peopleText' | 'searchFaceId'>
+
+export function hasPeopleSearch(input: Partial<PeopleInput>): boolean {
+  return Boolean(input.peopleText?.trim() || input.searchFaceId)
+}
+
+function peopleDefaults(
+  input: Partial<PeopleInput>,
+): Pick<ScanSidebarState, 'peopleScope' | 'peopleOrder'> {
+  return hasPeopleSearch(input)
+    ? { peopleScope: 'all', peopleOrder: 'relevance' }
+    : { peopleScope: 'document', peopleOrder: 'context' }
+}
+
+/** Entering/leaving search changes defaults once, preserving later explicit choices. */
+export function peopleSearchChanges(
+  current: ScanSidebarState,
+  changes: Partial<ScanSidebarState>,
+): Partial<ScanSidebarState> {
+  const next = { ...current, ...changes }
+  return hasPeopleSearch(current) === hasPeopleSearch(next)
+    ? changes
+    : { ...peopleDefaults(next), ...changes }
+}
+
+/** URL defaults depend on whether a name or face search is active. */
+export function sidebarQuery(
+  changes: Partial<ScanSidebarState>,
+  next: Partial<PeopleInput> = changes,
+): LocationQueryRaw {
   const query: LocationQueryRaw = {}
+  const defaults = peopleDefaults(next)
   if ('tab' in changes) {
     query.panel = changes.tab === 'people' ? undefined : changes.tab
   }
@@ -187,9 +219,11 @@ export function sidebarQuery(changes: Partial<ScanSidebarState>): LocationQueryR
     query.candidate_mode = undefined
   }
   if ('peopleScope' in changes)
-    query.people_scope = changes.peopleScope === 'all' ? undefined : changes.peopleScope
+    query.people_scope =
+      changes.peopleScope === defaults.peopleScope ? undefined : changes.peopleScope
   if ('peopleOrder' in changes) {
-    query.candidate_sort = changes.peopleOrder === 'context' ? undefined : changes.peopleOrder
+    query.candidate_sort =
+      changes.peopleOrder === defaults.peopleOrder ? undefined : changes.peopleOrder
     query.candidate_dir = undefined
   }
   if ('faceScope' in changes)
@@ -223,19 +257,39 @@ export function useScanSidebarState() {
   if (route.query.candidate_mode !== undefined)
     patch({ candidate_mode: undefined, candidate_face: state.value.searchFaceId ?? undefined })
 
+  // Several controls may update before navigation commits; base the next change
+  // on already-requested settings so a second event cannot undo a mode transition.
+  let requested: ScanSidebarState | null = null
+  watch(
+    () => route.query,
+    () => {
+      requested = null
+    },
+    { flush: 'sync' },
+  )
+
   /** Settings changes are history entries; typing replaces the current entry. */
   function update(changes: Partial<ScanSidebarState>, history: 'push' | 'replace' = 'push') {
     // Opening a tab from the statistics anchor leaves the anchor behind.
     const hash = 'tab' in changes && route.hash === '#link-statistics' ? '' : undefined
-    patch(sidebarQuery(changes), history, hash)
+    const current = requested ?? state.value
+    const adjusted = peopleSearchChanges(current, changes)
+    requested = { ...current, ...adjusted }
+    patch(sidebarQuery(adjusted, requested), history, hash)
   }
 
   /**
    * Face Search: the face becomes the sole reference, name text clears and
-   * Similarity ranks the results. The selected scope is kept.
+   * Similarity ranks all people, including when replacing an existing search.
    */
   function searchByFace(faceId: string) {
-    update({ tab: 'people', searchFaceId: faceId, peopleText: '', peopleOrder: 'relevance' })
+    update({
+      tab: 'people',
+      searchFaceId: faceId,
+      peopleText: '',
+      peopleScope: 'all',
+      peopleOrder: 'relevance',
+    })
   }
 
   return { state, update, searchByFace, patch }
