@@ -38,13 +38,14 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(set(config["entryPoints"]), {"websecure"})
         websecure = config["entryPoints"]["websecure"]
         self.assertEqual(websecure["address"], ":443")
-        self.assertEqual(websecure["http"]["tls"]["certResolver"], "letsencrypt")
-        self.assertIn({"main": "preview.peoplegator.dev", "sans": ["*.preview.peoplegator.dev"]}, websecure["http"]["tls"]["domains"])
+        # Per-host certificates on first request: no fixed domain list to maintain.
+        self.assertEqual(websecure["http"]["tls"], {"certResolver": "letsencrypt"})
         self.assertEqual(config["providers"]["docker"], {"endpoint": "unix:///var/run/docker.sock", "exposedByDefault": False, "network": "web"})
         acme = config["certificatesResolvers"]["letsencrypt"]["acme"]
         self.assertEqual(acme["storage"], "/acme/acme.json")  # the traefik-acme volume
-        self.assertIn("provider", acme["dnsChallenge"])  # DNS-01 works on any port and issues the wildcard
+        self.assertEqual(acme["tlsChallenge"], {})  # TLS-ALPN-01 on public 443: no HTTP port, no DNS credentials
         self.assertNotIn("httpChallenge", acme)
+        self.assertNotIn("dnsChallenge", acme)
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_stack_keeps_the_database_private_and_routes_only_through_traefik(self):

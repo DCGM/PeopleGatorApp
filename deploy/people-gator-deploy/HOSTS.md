@@ -14,8 +14,8 @@ commands and operations in the [utility guide](README.md).
   the shared stack under that account and daemon; containers on one daemon cannot
   join another daemon's networks.
 - Networks: `web` with Traefik (HTTPS-only entry point `websecure` whose ACME
-  resolver also issues the preview wildcard), `db` for PostgreSQL (both created
-  by the shared stack), and `logging` with the OTLP collector when
+  resolver issues a certificate per host name), `db` for PostgreSQL (both
+  created by the shared stack), and `logging` with the OTLP collector when
   `OTEL_ENDPOINT` is set.
 - DNS: `*.<preview host>`, the staging host and the production host point at
   the Traefik host. The preview wildcard does not cover staging.
@@ -24,27 +24,30 @@ commands and operations in the [utility guide](README.md).
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
 PostgreSQL 16 with pgvector as `postgres` on the internal `db` network (no
-published port) and Traefik on `web`. Prepare three private files:
+published port) and Traefik on `web`. Prepare two private files:
 
 - a copy of [`example.env`](../infrastructure/example.env): PostgreSQL password
-  and user, `HTTPS_PORT`, the paths below and the Docker socket;
+  and user, `HTTPS_PORT`, the path below and the Docker socket;
 - a copy of [`traefik.example.yaml`](../infrastructure/traefik.example.yaml): the
   static Traefik configuration with the HTTPS-only `websecure` entry point, the
-  Docker provider and the `letsencrypt` resolver (ACME e-mail, DNS provider and
-  the domains, for example the preview wildcard and the staging host);
-- the ACME env file with the DNS provider's credentials (Cloudflare:
-  `CF_DNS_API_TOKEN=…`), mode 600.
+  Docker provider and the `letsencrypt` resolver (set the ACME e-mail).
 
 ```sh
 docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 ```
 
 Rerun the same command after editing a file or pulling a newer `main`; passwords,
-certificates (`traefik-acme` volume) and data are kept. Test with Let's Encrypt's
-staging CA (`caServer` in `traefik.yaml`) before switching to production, and
-delete the `traefik-acme` volume when switching. DNS-01 works with HTTPS on any
-port; the public URLs stay on 443, so forward public 443 to `HTTPS_PORT` when it
-differs. Rootless Docker needs `net.ipv4.ip_unprivileged_port_start` at or below
+certificates (`traefik-acme` volume) and data are kept. Certificates come from
+Let's Encrypt's TLS-ALPN-01 challenge, one per host name on its first request
+(each new preview's first page load waits for issuance; Let's Encrypt allows 50
+new certificates per week per registered domain, renewals exempt). The challenge
+reaches the host name on public port 443: expose Traefik there directly, or
+forward the TLS stream unchanged from an edge proxy, for example an edge Traefik
+TCP router with `HostSNI(…)` / `HostSNIRegexp(…)` rules and `tls.passthrough: true`
+pointing at `HTTPS_PORT`. An edge that terminates TLS itself breaks the challenge
+and the inner routers. Test with Let's Encrypt's staging CA (`caServer` in
+`traefik.yaml`) first and delete the `traefik-acme` volume when switching.
+Rootless Docker needs `net.ipv4.ip_unprivileged_port_start` at or below
 `HTTPS_PORT` when it is under 1024.
 
 Back up the env files with the `people-gator-preview-infra_postgres-data`

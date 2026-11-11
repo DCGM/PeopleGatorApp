@@ -61,17 +61,18 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml) with private
   copies of [`example.env`](infrastructure/example.env) (PostgreSQL password,
   HTTPS port, paths) and [`traefik.example.yaml`](infrastructure/traefik.example.yaml)
-  (ACME e-mail, DNS provider, domains), plus an ACME env file with the DNS
-  provider's credentials:
+  (ACME e-mail):
   `docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans`.
   PostgreSQL runs as `postgres` on the internal `db` network. Traefik serves only
-  HTTPS on `HTTPS_PORT` and gets certificates (including the preview wildcard)
-  from Let's Encrypt through DNS-01, which works on any port. The public URLs
-  stay `https://<host>` without a port, so if `HTTPS_PORT` is not 443, forward
-  public 443 to it (router, firewall or tunnel); the deploy's readiness check
-  calls the public URL. Point DNS for `*.<preview host>`, the staging host and the
-  production host at it. Hosts upgraded from earlier releases reuse their volume:
-  set `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
+  HTTPS on `HTTPS_PORT` and gets a Let's Encrypt certificate for each host name
+  on its first request through the TLS-ALPN-01 challenge, which needs Let's
+  Encrypt to reach the host name on public port 443: either this Traefik
+  directly, or an edge proxy that forwards the TLS stream unchanged (TCP router
+  with `tls.passthrough`) to `HTTPS_PORT`. The public URLs stay `https://<host>`
+  without a port; the deploy's readiness check calls them. Point DNS for
+  `*.<preview host>`, the staging host and the production host at the public
+  entry. Hosts upgraded from earlier releases reuse their volume: set
+  `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
   before the upgrade keep working through the `preview-postgres` alias once the
   server is also attached to their old network:
   `docker network connect --alias preview-postgres people-gator-preview-db postgres`.
