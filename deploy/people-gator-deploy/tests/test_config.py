@@ -12,15 +12,15 @@ from people_gator_deploy.core import DeployError
 
 SETUP_PAGE = Path(__file__).resolve().parents[3] / "deploy/GITHUB-SETUP.md"
 REPOSITORY = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"}
-PREVIEW = {"HOST": "preview.peoplegator.dev", "DATABASE_URL": "postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres",
+PREVIEW = {"HOST": "preview.peoplegator.dev", "DATABASE_URL": "postgresql://preview_admin:SECRET@postgres:5432/postgres",
            "OTEL_ENDPOINT": "http://lgtm:4318", "RUM_CLIENT_TOKEN": "RUM_TOKEN"}
-STAGING = {"HOST": "staging.peoplegator.dev", "DATABASE_URL": "postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres",
+STAGING = {"HOST": "staging.peoplegator.dev", "DATABASE_URL": "postgresql://preview_admin:SECRET@postgres:5432/postgres",
            "S3_BUCKET": "peoplegator-staging", "S3_REGION": "us-east-1", "S3_ENDPOINT_URL": "https://s3.example.org",
            "S3_ACCESS_KEY_ID": "KEY", "S3_SECRET_ACCESS_KEY": "SECRET",
            "BACKUP_S3_BUCKET": "peoplegator-db-backup", "BACKUP_S3_PREFIX": "production/db-backups/", "BACKUP_S3_REGION": "us-east-1",
            "BACKUP_S3_ENDPOINT_URL": "https://s3.example.org", "BACKUP_S3_ACCESS_KEY_ID": "READ_ONLY_KEY",
            "BACKUP_S3_SECRET_ACCESS_KEY": "READ_ONLY_SECRET", "OTEL_ENDPOINT": "http://lgtm:4318"}
-PRODUCTION = {"HOST": "people.example.org", "DATABASE_URL": "postgresql://people_gator:SECRET@people-gator-postgres:5432/people_gator",
+PRODUCTION = {"HOST": "people.example.org", "DATABASE_URL": "postgresql://people_gator:SECRET@postgres:5432/people_gator",
               "S3_BUCKET": "peoplegator", "S3_REGION": "us-east-1", "S3_ACCESS_KEY_ID": "KEY", "S3_SECRET_ACCESS_KEY": "SECRET",
               "OTEL_ENDPOINT": "http://lgtm:4318", "OTEL_HEADERS": "Authorization=Basic BASE64"}
 EXAMPLES = {"pr": PREVIEW, "staging": STAGING, "release": PRODUCTION}
@@ -54,7 +54,7 @@ class ConfigurationTests(unittest.TestCase):
             with self.subTest(environment=environment):
                 settings = self.load(environment, values)
                 self.assertEqual(settings["environment"], environment)
-                self.assertEqual(settings["postgres"]["host"], "people-gator-postgres")
+                self.assertEqual(settings["postgres"]["host"], "postgres")
                 self.assertEqual(settings["otel"]["endpoint"], "http://lgtm:4318")
         preview = self.load("pr", PREVIEW)
         self.assertEqual((preview["domain"], preview["storage"], preview["rum"]), ("preview.peoplegator.dev", {"local": {"root": "/data"}}, {"client_token": "RUM_TOKEN"}))

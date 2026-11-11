@@ -18,9 +18,9 @@ from people_gator_deploy.environments import Environment
 
 SHA = "a" * 40
 DOCUMENTS = {
-    "pr": {"HOST": "preview.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
+    "pr": {"HOST": "preview.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@postgres:5432/postgres",
            "OTEL_ENDPOINT": "http://lgtm:4318"},
-    "staging": {"HOST": "staging.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@people-gator-postgres:5432/postgres",
+    "staging": {"HOST": "staging.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@postgres:5432/postgres",
                 "S3_REGION": "r", "S3_BUCKET": "staging", "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s",
                 "BACKUP_S3_ENDPOINT_URL": "https://s3.example.invalid", "BACKUP_S3_REGION": "r", "BACKUP_S3_BUCKET": "backups",
                 "BACKUP_S3_PREFIX": "p/", "BACKUP_S3_ACCESS_KEY_ID": "reader", "BACKUP_S3_SECRET_ACCESS_KEY": "reader-secret"},
@@ -119,14 +119,14 @@ class EnvironmentTests(unittest.TestCase):
         environment = self.environment()
         result = environment.preflight()
         self.assertEqual(result["host"], "preview.example.invalid")
-        self.assertEqual(result["database"], {"database": "people-gator-postgres:5432/postgres as preview_admin", "network": "db"})
+        self.assertEqual(result["database"], {"database": "postgres:5432/postgres as preview_admin", "network": "db"})
         docker = environment.docker
         for network in ("web", "db", "logging"):
             self.assertIn(["docker", "network", "inspect", network], docker.calls)
         psql = docker.commands("psql")[0]
         self.assertEqual(psql[:8], ["docker", "run", "--rm", "-i", "--network", "db", "-e", "PGPASSWORD"])
         self.assertEqual(psql[8], "pgvector/pgvector:pg16")
-        self.assertEqual(psql[psql.index("-h") + 1], "people-gator-postgres")
+        self.assertEqual(psql[psql.index("-h") + 1], "postgres")
         self.assertEqual(psql[psql.index("-U") + 1], "preview_admin")
         self.assertNotIn("admin-pw", " ".join(psql))  # the password only travels through the environment
         self.assertEqual(docker.environments[docker.calls.index(psql)], {"PGPASSWORD": "admin-pw"})
@@ -149,7 +149,7 @@ class EnvironmentTests(unittest.TestCase):
         self.configure()
         environment = self.environment()
         environment.docker.psql_error = "FATAL"
-        with self.assertRaisesRegex(DeployError, "Cannot connect to people-gator-postgres:5432/postgres as preview_admin") as raised:
+        with self.assertRaisesRegex(DeployError, "Cannot connect to postgres:5432/postgres as preview_admin") as raised:
             environment.update(sha=SHA, pr=7)
         self.assertNotIn("admin-pw", str(raised.exception))
         self.assertEqual([call for call in environment.docker.commands("compose") if "version" not in call], [])
@@ -176,7 +176,7 @@ class EnvironmentTests(unittest.TestCase):
         self.configure("staging")
         environment = self.environment("staging")
         result = environment.preflight()
-        self.assertEqual(result["database"]["database"], "people-gator-postgres:5432/postgres as preview_admin")
+        self.assertEqual(result["database"]["database"], "postgres:5432/postgres as preview_admin")
         root = environment.root
         self.assertIn('"bucket_name": "staging"', (root / "runtime.env").read_text())
         self.assertIn("PEOPLE_GATOR_API__JWK__ISSUER=https://staging.example.invalid", (root / "runtime.env").read_text())

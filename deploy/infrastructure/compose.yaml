@@ -10,10 +10,10 @@ name: people-gator-preview-infra
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    # Reachable as people-gator-postgres on the db network; the
+    # Reachable as postgres on the db network; the
     # deploy utility provisions per-PR and staging databases through the admin
     # URL (PREVIEW_DATABASE_URL / STAGING_DATABASE_URL).
-    container_name: people-gator-postgres
+    container_name: postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: preview_admin
@@ -24,7 +24,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       database:
-        aliases: [preview-postgres]
+        aliases: [postgres, preview-postgres]
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U preview_admin -d postgres']
       interval: 2s

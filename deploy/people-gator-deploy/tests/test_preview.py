@@ -26,7 +26,7 @@ RUN = {"id": 100, "run_attempt": 1, "head_sha": SHA}  # this workflow run's buil
 
 
 CONFIG = {"repository": "DCGM/PeopleGatorApp", "domain": "preview.peoplegator.dev", "docker_context": "rootless",
-          "postgres": {"host": "people-gator-postgres", "port": 5432, "user": "preview_admin", "password": "admin-pw", "database": "postgres"}}
+          "postgres": {"host": "postgres", "port": 5432, "user": "preview_admin", "password": "admin-pw", "database": "postgres"}}
 
 
 def pull_request(*, state="open", sha=SHA, repository="DCGM/PeopleGatorApp"):
@@ -579,14 +579,14 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(service["labels"]["people-gator.preview.pr"], "123")
         backend = config["services"]["backend"]["environment"]
         self.assertEqual(backend["PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER"], "123")
-        self.assertEqual(backend["PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST"], "people-gator-postgres")
+        self.assertEqual(backend["PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST"], "postgres")
         self.assertEqual(backend["PEOPLE_GATOR_API__STORAGE"], '{"local": {"root": "/data"}, "s3": null}')
         self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", backend)  # telemetry comes only from the rendered file
 
     def test_compose_environment_points_at_the_configured_database_and_rendered_files(self):
         self.controller.config.update(telemetry_file=str(self.root / "telemetry.env"), otel_network="logging")
         environment = self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA)
-        for line in ("DB_HOST='people-gator-postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='db'", "APPLICATION_OTEL_NETWORK='web'",
+        for line in ("DB_HOST='postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='db'", "APPLICATION_OTEL_NETWORK='web'",
                      f"RUNTIME_FILE='{self.root / 'runtime.env'}'", f"TELEMETRY_FILE='{self.root / 'telemetry.env'}'",
                      "PREVIEW_HOST='pr-123.preview.peoplegator.dev'"):
             self.assertIn(line, environment)

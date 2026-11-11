@@ -29,7 +29,7 @@ class FakeStaging(staging.Staging):
         archive.chmod(0o600)
         super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"), "docker_context": "rootless",
                           "host": "staging.peoplegator.dev", "database_network": "db",
-                          "postgres": {"host": "people-gator-postgres", "port": 5432, "user": "preview_admin",
+                          "postgres": {"host": "postgres", "port": 5432, "user": "preview_admin",
                                        "password": "admin-pw", "database": "postgres"},
                           "runtime_file": str(runtime), "snapshot": {"path": str(archive),
                               "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA}})

@@ -88,7 +88,7 @@ the deployed commit, with the same values exported as `DEPLOY_<NAME>`:
 
 ```sh
 export GITHUB_REPOSITORY=DCGM/PeopleGatorApp DEPLOY_HOST=preview.peoplegator.dev
-export DEPLOY_DATABASE_URL='postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
+export DEPLOY_DATABASE_URL='postgresql://preview_admin:SECRET@postgres:5432/postgres'
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr preflight
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m people_gator_deploy pr status --pr 123
 ```
@@ -106,7 +106,7 @@ locations, and databases, media, passwords and generations are untouched. Run
 the shared stack once with the old
 `~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env` as
 its `--env-file` ([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)): Compose recreates
-PostgreSQL as `people-gator-postgres` on the `db` network and
+PostgreSQL as `postgres` on the `db` network and
 `--remove-orphans` removes the former Fluent Forward collector (its
 `people-gator-preview-infra_otel-data` volume can be deleted; stale keys in the
 env file are ignored). Set the variables and secrets from the old descriptors and

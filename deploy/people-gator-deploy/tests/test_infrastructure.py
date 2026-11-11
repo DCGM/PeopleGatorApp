@@ -22,9 +22,9 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(interpolated, example)
         document = yaml.safe_load(compose)
         self.assertEqual(document["name"], "people-gator-preview-infra")  # existing volumes keep matching
-        self.assertEqual(document["services"]["postgres"]["container_name"], "people-gator-postgres")
+        self.assertEqual(document["services"]["postgres"]["container_name"], "postgres")
         self.assertEqual(document["networks"]["database"]["name"], "db")
-        self.assertEqual(document["services"]["postgres"]["networks"]["database"]["aliases"], ["preview-postgres"])
+        self.assertEqual(document["services"]["postgres"]["networks"]["database"]["aliases"], ["postgres", "preview-postgres"])
         self.assertNotIn("otel-collector", compose)  # the backend exports telemetry itself
         self.assertEqual(json.loads((INFRASTRUCTURE / "pgadmin-servers.json").read_text())["Servers"]["1"]["Host"], "preview-postgres")
 
@@ -37,8 +37,8 @@ class InfrastructureStackTests(unittest.TestCase):
         postgres = config["services"]["postgres"]
         self.assertFalse(postgres.get("ports"))
         self.assertNotIn("web", postgres["networks"])
-        self.assertEqual(postgres["container_name"], "people-gator-postgres")
-        self.assertEqual(postgres["networks"]["database"]["aliases"], ["preview-postgres"])
+        self.assertEqual(postgres["container_name"], "postgres")
+        self.assertEqual(postgres["networks"]["database"]["aliases"], ["postgres", "preview-postgres"])
         pgadmin = config["services"]["pgadmin"]
         self.assertFalse(pgadmin.get("ports"))
         self.assertEqual(set(pgadmin["networks"]), {"database", "web"})

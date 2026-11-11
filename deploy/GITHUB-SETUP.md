@@ -26,12 +26,12 @@ Omitting `OTEL_*` or `RUM_*` leaves that feature off. For example:
 
 ```sh
 gh variable set PREVIEW_HOST --body preview.peoplegator.dev
-gh secret set PREVIEW_DATABASE_URL --body 'postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
+gh secret set PREVIEW_DATABASE_URL --body 'postgresql://preview_admin:SECRET@postgres:5432/postgres'
 gh variable set PREVIEW_OTEL_ENDPOINT --body http://lgtm:4318
 gh secret set PREVIEW_RUM_CLIENT_TOKEN --body RUM_TOKEN
 
 gh variable set STAGING_HOST --body staging.peoplegator.dev
-gh secret set STAGING_DATABASE_URL --body 'postgresql://preview_admin:SECRET@people-gator-postgres:5432/postgres'
+gh secret set STAGING_DATABASE_URL --body 'postgresql://preview_admin:SECRET@postgres:5432/postgres'
 gh variable set STAGING_S3_BUCKET --body peoplegator-staging
 gh variable set STAGING_S3_REGION --body us-east-1
 gh variable set STAGING_S3_ENDPOINT_URL --body https://s3.example.org
@@ -46,7 +46,7 @@ gh secret set STAGING_BACKUP_S3_SECRET_ACCESS_KEY --body READ_ONLY_SECRET
 gh variable set STAGING_OTEL_ENDPOINT --body http://lgtm:4318
 
 gh variable set PRODUCTION_HOST --body people.example.org
-gh secret set PRODUCTION_DATABASE_URL --body 'postgresql://people_gator:SECRET@people-gator-postgres:5432/people_gator'
+gh secret set PRODUCTION_DATABASE_URL --body 'postgresql://people_gator:SECRET@postgres:5432/people_gator'
 gh variable set PRODUCTION_S3_BUCKET --body peoplegator
 gh variable set PRODUCTION_S3_REGION --body us-east-1
 gh secret set PRODUCTION_S3_ACCESS_KEY_ID --body KEY
@@ -66,7 +66,7 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   including the production database. Hosts upgraded from earlier releases reuse
   their existing env file; previews and staging deployed before the upgrade keep
   working if the recreated server is also attached to their old network:
-  `docker network connect --alias preview-postgres people-gator-preview-db people-gator-postgres`
+  `docker network connect --alias preview-postgres people-gator-preview-db postgres`
   (drop it once they have been redeployed or closed).
 - **Traefik** on the `web` network with the `websecure` entrypoint and its own
   certificates (the stacks only enable TLS on their routers), and DNS for

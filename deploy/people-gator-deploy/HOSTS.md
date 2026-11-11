@@ -23,7 +23,7 @@ commands and operations in the [utility guide](README.md).
 ## Shared PostgreSQL and pgAdmin
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
-PostgreSQL 16 with pgvector as `people-gator-postgres` on `db` (no
+PostgreSQL 16 with pgvector as `postgres` on `db` (no
 published port) and pgAdmin behind Traefik, with a private copy of
 [`example.env`](../infrastructure/example.env) holding the two passwords:
 
@@ -35,7 +35,7 @@ Rerun the same command after editing the file or pulling a newer `main`;
 passwords and volumes are kept. Back up the env file with the
 `people-gator-preview-infra_postgres-data` and `…_pgadmin-data` volumes. The
 `PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is
-`postgresql://preview_admin:<POSTGRES_ADMIN_PASSWORD>@people-gator-postgres:5432/postgres`.
+`postgresql://preview_admin:<POSTGRES_ADMIN_PASSWORD>@postgres:5432/postgres`.
 Any other PostgreSQL 16 with pgvector works instead, attached to
 `db` (`docker network connect db <container>`), as does
 the production database with its application and optional migration roles.
