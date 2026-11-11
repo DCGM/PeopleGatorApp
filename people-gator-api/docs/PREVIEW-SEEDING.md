@@ -1479,6 +1479,8 @@ pages, showing its actual title and a Documents link. `document-browse-unregiste
 resolves a source archive containing a stored page even when no parent document
 record exists. Every example uses deterministic existing records and local media.
 No fake first page is created for an empty or unavailable document.
+The empty-document link is added only when its fixture is present, so upgrading
+an older preview without that example remains valid.
 
 The standalone Scans screen and cross-document scan-search UI are retired.
 Documents and People are the top-level destinations. Page breadcrumbs return to

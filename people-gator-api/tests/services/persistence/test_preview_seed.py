@@ -4671,6 +4671,7 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
         old.setattr(preview, "DOCUMENTS", tuple(d for d in DOCUMENTS if not d.key.startswith("table-nav-")))
         old.setattr(preview, "PAGES", tuple(p for p in PAGES if not p.key.startswith("table-nav-")))
         previous = await preview.seed_preview(database, filesystem)
+    assert "document-browse-empty" not in previous.filter_examples
     ledger_before = await database.sources.get_document(previous.documents["table-ledger"])
     seeded = await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(previous.documents["table-ledger"]) == ledger_before
@@ -4682,6 +4683,9 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
     assert len(second.items) == 7 and second.cursor is None
     rows = {row.source_id: row for row in [*first.items, *second.items]}
     empty = rows[seeded.documents["table-nav-empty"]]
+    assert seeded.filter_examples["document-browse-empty"] == (
+        f"/documents/{empty.source_id}?pages_view=expanded"
+    )
     missing = rows[seeded.documents["table-nav-missing"]]
     assert empty.registered_page_count == 0 and empty.first_page_source_id is None
     assert empty.linked_entity_count == 0
@@ -4705,6 +4709,7 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
     edited = await database.sources.get_document(ledger.source_id)
     rerun = await preview.seed_preview(database, filesystem)
     assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    assert rerun.filter_examples["document-browse-empty"] == seeded.filter_examples["document-browse-empty"]
     assert await database.sources.get_document(ledger.source_id) == edited
     assert (await database.text_mentions.get(seeded.mentions["table-manual-mention"])).entity_id is None
 

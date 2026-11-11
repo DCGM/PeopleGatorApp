@@ -623,7 +623,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # and a registered empty document. Older /scans examples below are
             # retained as explicit compatibility links handled by redirects.
             "document-browse": f"/documents/{documents['page-gallery']}?pages_view=expanded",
-            "document-browse-empty": f"/documents/{documents['table-nav-empty']}?pages_view=expanded",
+            **({
+                "document-browse-empty": f"/documents/{documents['table-nav-empty']}?pages_view=expanded",
+            } if "table-nav-empty" in documents else {}),
             "document-browse-unregistered": (
                 f"/libraries/{next(d.library for d in DOCUMENTS if d.key == 'scan-only')}"
                 f"/documents/{next(d.document_id for d in DOCUMENTS if d.key == 'scan-only')}?pages_view=expanded"
