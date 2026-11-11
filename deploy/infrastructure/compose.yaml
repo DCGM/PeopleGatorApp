@@ -1,8 +1,10 @@
 # Shared infrastructure of a deploy host (previews and staging, or production):
-# PostgreSQL on the `db` network and Traefik on the `web` network. Start it once
-# as the deployment account and leave it running; the deploy jobs only check it.
+# PostgreSQL on the `db` network and an HTTPS-only Traefik on the `web` network.
+# Start it once as the deployment account and leave it running; the deploy jobs
+# only check it.
 #
-#   cp deploy/infrastructure/example.env /private/infrastructure.env   # set the password
+#   cp deploy/infrastructure/example.env /private/infrastructure.env        # password, port, paths
+#   cp deploy/infrastructure/traefik.example.yaml /private/traefik.yaml     # e-mail, DNS provider, domains
 #   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 #
 # The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
@@ -36,29 +38,25 @@ services:
   traefik:
     image: traefik:v3.5
     restart: unless-stopped
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=web
-      # Certificates: drop a dynamic config (tls.certificates) and the files into
-      # the certs directory, or terminate TLS in front of Traefik (for example a
-      # tunnel); without either, Traefik serves its default self-signed certificate.
-      - --providers.file.directory=/certs
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
+    # All settings live in traefik.yaml (copy traefik.example.yaml): HTTPS-only
+    # `websecure` entry point, Docker provider and the ACME resolver.
+    command: [--configfile=/etc/traefik/traefik.yaml]
+    env_file:
+      # DNS provider credentials for the ACME DNS-01 challenge.
+      - path: ${ACME_ENV_FILE:-/dev/null}
+        format: raw
     ports:
-      - '80:80'
-      - '443:443'
+      - '${HTTPS_PORT:-443}:443'
     volumes:
       # Rootless Docker: DOCKER_SOCKET=$XDG_RUNTIME_DIR/docker.sock in the env file.
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
-      - ${CERTS_DIR:-./certs}:/certs:ro
+      - ${TRAEFIK_CONFIG:?set TRAEFIK_CONFIG to your traefik.yaml}:/etc/traefik/traefik.yaml:ro
+      - traefik-acme:/acme
     networks: [web]
 
 volumes:
   postgres-data:
+  traefik-acme:
 
 networks:
   db:

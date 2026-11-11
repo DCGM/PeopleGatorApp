@@ -27,13 +27,32 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(postgres["container_name"], "postgres")
         self.assertEqual(postgres["networks"]["db"]["aliases"], ["postgres", "preview-postgres"])
         self.assertEqual((document["networks"]["db"]["name"], document["networks"]["web"]["name"]), ("db", "web"))
-        self.assertNotIn("certresolver", compose)  # Traefik serves the operator's certificates
+        traefik = document["services"]["traefik"]
+        self.assertEqual(traefik["command"], ["--configfile=/etc/traefik/traefik.yaml"])
+        self.assertEqual(traefik["ports"], ["${HTTPS_PORT:-443}:443"])  # HTTPS only, on a chosen host port
+        self.assertNotIn("certresolver", compose)  # certificates come from traefik.yaml's entry point
+
+    def test_example_traefik_config_serves_only_https_with_an_acme_resolver(self):
+        config = yaml.safe_load((INFRASTRUCTURE / "traefik.example.yaml").read_text())
+        # The application stacks route on `websecure`; there is no HTTP entry point.
+        self.assertEqual(set(config["entryPoints"]), {"websecure"})
+        websecure = config["entryPoints"]["websecure"]
+        self.assertEqual(websecure["address"], ":443")
+        self.assertEqual(websecure["http"]["tls"]["certResolver"], "letsencrypt")
+        self.assertIn({"main": "preview.peoplegator.dev", "sans": ["*.preview.peoplegator.dev"]}, websecure["http"]["tls"]["domains"])
+        self.assertEqual(config["providers"]["docker"], {"endpoint": "unix:///var/run/docker.sock", "exposedByDefault": False, "network": "web"})
+        acme = config["certificatesResolvers"]["letsencrypt"]["acme"]
+        self.assertEqual(acme["storage"], "/acme/acme.json")  # the traefik-acme volume
+        self.assertIn("provider", acme["dnsChallenge"])  # DNS-01 works on any port and issues the wildcard
+        self.assertNotIn("httpChallenge", acme)
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_stack_keeps_the_database_private_and_routes_only_through_traefik(self):
-        with tempfile.TemporaryDirectory() as certs:
+        with tempfile.TemporaryDirectory() as private:
+            config = Path(private) / "traefik.yaml"
+            config.write_text((INFRASTRUCTURE / "traefik.example.yaml").read_text())
             environment = {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
-            environment.update(POSTGRES_PASSWORD="synthetic", CERTS_DIR=certs)
+            environment.update(POSTGRES_PASSWORD="synthetic", TRAEFIK_CONFIG=str(config), HTTPS_PORT="8443")
             result = subprocess.run(["docker", "compose", "-f", str(INFRASTRUCTURE / "compose.yaml"), "config", "--format", "json"],
                                     env=environment, text=True, capture_output=True, check=True)
         config = json.loads(result.stdout)
@@ -44,11 +63,11 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertTrue(config["networks"]["db"]["internal"])
         traefik = config["services"]["traefik"]
         self.assertEqual(set(traefik["networks"]), {"web"})
-        self.assertEqual(sorted(port["published"] for port in traefik["ports"]), ["443", "80"])
-        self.assertIn("--providers.docker.exposedbydefault=false", traefik["command"])
-        self.assertIn("--entrypoints.websecure.address=:443", traefik["command"])
-        socket = next(mount for mount in traefik["volumes"] if mount["target"] == "/var/run/docker.sock")
-        self.assertTrue(socket["read_only"])
+        self.assertEqual([(port["published"], port["target"]) for port in traefik["ports"]], [("8443", 443)])
+        mounts = {mount["target"]: mount for mount in traefik["volumes"]}
+        self.assertTrue(mounts["/var/run/docker.sock"]["read_only"])
+        self.assertTrue(mounts["/etc/traefik/traefik.yaml"]["read_only"])
+        self.assertEqual(mounts["/acme"]["type"], "volume")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,42 @@
+# Static Traefik configuration for a PeopleGator deploy host. Copy it to a
+# private path, point TRAEFIK_CONFIG at it, and set the e-mail, DNS provider and
+# domains. Only HTTPS is served: the application stacks route on the
+# `websecure` entry point. Traefik listens on 443 inside its container; the host
+# port is HTTPS_PORT in the stack's env file.
+entryPoints:
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        # Every router on this entry point gets its certificate from the resolver
+        # below, so the application stacks need no certificate labels.
+        certResolver: letsencrypt
+        domains:
+          # One wildcard certificate for all previews (pr-<N>.preview…).
+          - main: preview.peoplegator.dev
+            sans: ["*.preview.peoplegator.dev"]
+          - main: staging.peoplegator.dev
+          # Production host: list peoplegator.dev here on the production server.
+
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+    network: web
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@peoplegator.dev
+      storage: /acme/acme.json
+      # DNS-01 works with HTTPS on any port and is the only challenge that issues
+      # wildcards. The provider's credentials come from ACME_ENV_FILE (Cloudflare:
+      # CF_DNS_API_TOKEN=…; see https://doc.traefik.io/traefik/https/acme/#providers).
+      dnsChallenge:
+        provider: cloudflare
+        resolvers: ["1.1.1.1:53", "8.8.8.8:53"]
+      # Uncomment while testing to avoid Let's Encrypt rate limits:
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+log:
+  level: INFO

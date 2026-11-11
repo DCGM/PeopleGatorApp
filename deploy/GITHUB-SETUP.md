@@ -58,17 +58,20 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
 ## Hosts
 
 - **PostgreSQL and Traefik** on each host, from
-  [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml) with a
-  private copy of [`example.env`](infrastructure/example.env) (the PostgreSQL
-  password, the rootless Docker socket and a certificates directory):
+  [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml) with private
+  copies of [`example.env`](infrastructure/example.env) (PostgreSQL password,
+  HTTPS port, paths) and [`traefik.example.yaml`](infrastructure/traefik.example.yaml)
+  (ACME e-mail, DNS provider, domains), plus an ACME env file with the DNS
+  provider's credentials:
   `docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans`.
-  PostgreSQL runs as `postgres` on the internal `db` network; Traefik listens on
-  80/443 on the `web` network and serves the certificates you place in the
-  certificates directory (or sits behind a TLS-terminating tunnel). Point DNS for
-  `*.<preview host>`, the staging host and the production host at it. Your own
-  PostgreSQL 16 with pgvector and Traefik work too, as long as they use these
-  names. Hosts upgraded from earlier releases reuse their volume: set
-  `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
+  PostgreSQL runs as `postgres` on the internal `db` network. Traefik serves only
+  HTTPS on `HTTPS_PORT` and gets certificates (including the preview wildcard)
+  from Let's Encrypt through DNS-01, which works on any port. The public URLs
+  stay `https://<host>` without a port, so if `HTTPS_PORT` is not 443, forward
+  public 443 to it (router, firewall or tunnel); the deploy's readiness check
+  calls the public URL. Point DNS for `*.<preview host>`, the staging host and the
+  production host at it. Hosts upgraded from earlier releases reuse their volume:
+  set `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
   before the upgrade keep working through the `preview-postgres` alias once the
   server is also attached to their old network:
   `docker network connect --alias preview-postgres people-gator-preview-db postgres`.
@@ -93,6 +96,6 @@ success appears under the repository's Deployments.
 | Networks | `web` (Traefik), `db` (PostgreSQL), `logging` (collector, only with `OTEL_ENDPOINT`) |
 | Compose projects | `people-gator-pr-<N>`, `people-gator-staging`, `people-gator-release` |
 | State and generated files | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` on the host |
-| TLS | routers enable TLS; Traefik supplies the certificates |
+| TLS | HTTPS only on Traefik's `websecure` entry point; certificates from its ACME resolver |
 | Login tokens and CORS | issuer `https://<HOST>`, audience `<HOST>` |
 | Images | `ghcr.io/<repo>-frontend` and `-backend`, tag `sha-<commit>` |

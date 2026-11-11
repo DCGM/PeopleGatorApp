@@ -13,10 +13,10 @@ commands and operations in the [utility guide](README.md).
   use rootless` once for rootless Docker). Run the runner service, Traefik and
   the shared stack under that account and daemon; containers on one daemon cannot
   join another daemon's networks.
-- Networks: `web` with an existing Traefik (entrypoint `websecure`, serving
-  its own certificates, including the preview wildcard), `db` for PostgreSQL
-  (created by the shared stack, or `docker network create --internal db`), and
-  `logging` with the OTLP collector when `OTEL_ENDPOINT` is set.
+- Networks: `web` with Traefik (HTTPS-only entry point `websecure` whose ACME
+  resolver also issues the preview wildcard), `db` for PostgreSQL (both created
+  by the shared stack), and `logging` with the OTLP collector when
+  `OTEL_ENDPOINT` is set.
 - DNS: `*.<preview host>`, the staging host and the production host point at
   the Traefik host. The preview wildcard does not cover staging.
 
@@ -24,23 +24,35 @@ commands and operations in the [utility guide](README.md).
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
 PostgreSQL 16 with pgvector as `postgres` on the internal `db` network (no
-published port) and Traefik on `web` (ports 80/443, Docker provider, certificates
-from a directory), with a private copy of
-[`example.env`](../infrastructure/example.env):
+published port) and Traefik on `web`. Prepare three private files:
+
+- a copy of [`example.env`](../infrastructure/example.env): PostgreSQL password
+  and user, `HTTPS_PORT`, the paths below and the Docker socket;
+- a copy of [`traefik.example.yaml`](../infrastructure/traefik.example.yaml): the
+  static Traefik configuration with the HTTPS-only `websecure` entry point, the
+  Docker provider and the `letsencrypt` resolver (ACME e-mail, DNS provider and
+  the domains, for example the preview wildcard and the staging host);
+- the ACME env file with the DNS provider's credentials (Cloudflare:
+  `CF_DNS_API_TOKEN=…`), mode 600.
 
 ```sh
 docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 ```
 
-Rerun the same command after editing the file or pulling a newer `main`;
-passwords and volumes are kept. Back up the env file with the
-`people-gator-preview-infra_postgres-data` volume. `PREVIEW_DATABASE_URL` /
-`STAGING_DATABASE_URL` is then
+Rerun the same command after editing a file or pulling a newer `main`; passwords,
+certificates (`traefik-acme` volume) and data are kept. Test with Let's Encrypt's
+staging CA (`caServer` in `traefik.yaml`) before switching to production, and
+delete the `traefik-acme` volume when switching. DNS-01 works with HTTPS on any
+port; the public URLs stay on 443, so forward public 443 to `HTTPS_PORT` when it
+differs. Rootless Docker needs `net.ipv4.ip_unprivileged_port_start` at or below
+`HTTPS_PORT` when it is under 1024.
+
+Back up the env files with the `people-gator-preview-infra_postgres-data`
+volume. `PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is then
 `postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres`.
-For a database GUI, connect any client through `docker exec -it postgres psql`
-or a temporary container on `db`; a PR-only connection uses role/database
-`preview_pr_<N>` and the password in `<state dir>/pr-<N>/state.json`. Never print
-these files in Actions.
+For a database shell use `docker exec -it postgres psql -U <POSTGRES_USER>`; a
+PR-only connection uses role/database `preview_pr_<N>` and the password in
+`<state dir>/pr-<N>/state.json`. Never print these files in Actions.
 
 ## GitHub runners
 
