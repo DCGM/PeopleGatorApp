@@ -46,8 +46,13 @@ docker info >/dev/null 2>&1 || fail "docker info failed on context '$(docker con
 docker compose version >/dev/null 2>&1 || fail "missing the Docker Compose plugin"
 [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" = yes ] \
     || fail "enable lingering once as root, so the runner survives logout: sudo loginctl enable-linger $USER"
+# Shells opened with su or sudo -u lack XDG_RUNTIME_DIR, which systemctl --user
+# needs to reach the account's (lingering) user manager.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
+fi
 systemctl --user show-environment >/dev/null 2>&1 \
-    || fail "no systemd user session; log in as $USER (for example: sudo machinectl shell $USER@)"
+    || fail "cannot reach the systemd user manager of $USER; check lingering (loginctl show-user $USER) or log in with: sudo machinectl shell $USER@"
 
 # 1. The official runner, verified against the release's SHA-256.
 if [ ! -x "$dir/config.sh" ]; then
