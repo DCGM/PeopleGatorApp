@@ -114,8 +114,9 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (46, 168, 122)
+    assert await counts(database) == (47, 168, 123)
     assert len(result.documents) == 59 and len(result.pages) == 136
+
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -178,7 +179,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
              "sidebar-rosa", "sidebar-karel", "strip-other-person"},
 
         ),
-        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas",
+        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas", "sidebar-direct",
                                                                        *(f"pagination-{i}" for i in range(1, 15))}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
         (
@@ -398,7 +399,8 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (46, 168, 122)
+    assert await counts(database) == (47, 168, 123)
+
 
 
 @pytest.mark.asyncio
@@ -418,7 +420,8 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (46, 168, 122)
+    assert await counts(database) == (47, 168, 123)
+
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -441,7 +444,8 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (47, 168, 122)
+    assert await counts(database) == (48, 168, 123)
+
 
 
 
@@ -466,8 +470,9 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 46 and len(result.faces) == 168
-    assert await counts(database) == (46, 168, 122)
+    assert len(result.entities) == 47 and len(result.faces) == 168
+    assert await counts(database) == (47, 168, 123)
+
 
 
 
@@ -475,6 +480,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
 async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_target):
     database, filesystem, _ = seed_target
     first = await preview.seed_preview(database, filesystem)
+    original_counts = await counts(database)
     actor = GenericActor(user_id=first.users["reviewer"])
     await database.entities.merge(
         first.entities["ada"], first.entities["ada-candidate"], context=actor
@@ -488,7 +494,8 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (45, 167, 121)
+    assert await counts(database) == tuple(value - 1 for value in original_counts)
+
 
 
 
@@ -3616,7 +3623,8 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (46, 168, 122)
+    assert await counts(db) == (47, 168, 123)
+
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4291,7 +4299,8 @@ async def test_replay_journey_has_linked_person_page_and_local_media(seed_target
 
 
 @pytest.mark.asyncio
-async def test_document_width_scenario_is_additive_readable_and_preserves_edits(seed_target, monkeypatch):
+@pytest.mark.parametrize("scenario", ["document-table-widths", "document-table-persistence"])
+async def test_document_width_scenario_is_additive_readable_and_preserves_edits(seed_target, monkeypatch, scenario):
     from people_gator_api.schemas.sources import DocumentListFilter
     database, filesystem, _ = seed_target
     # Retained preview upgrade: existing fixtures and checkpoints remain intact.
@@ -4303,7 +4312,7 @@ async def test_document_width_scenario_is_additive_readable_and_preserves_edits(
     existing = await database.sources.get_document(previous.documents["table-ledger"])
     seeded = await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(previous.documents["table-ledger"]) == existing
-    query = parse_qs(urlsplit(seeded.filter_examples["document-table-widths"]).query)
+    query = parse_qs(urlsplit(seeded.filter_examples[scenario]).query)
     request = DocumentListRequest(limit=12, sort="name", filter_=DocumentListFilter(library=query["library"]))
     first = await database.sources.list_documents(request)
     second = await database.sources.list_documents(request.model_copy(update={"cursor": first.cursor}))
@@ -4736,7 +4745,7 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
     page = await database.sources.get_page(seed.pages["scan-sidebar-1"])
     document = seed.documents["scan-sidebar"]
     people = {key: seed.entities[key] for key in (
-        "sidebar-hana", "sidebar-tomas", "sidebar-rosa", "sidebar-karel")}
+        "sidebar-hana", "sidebar-tomas", "sidebar-rosa", "sidebar-karel", "sidebar-direct")}
 
     async def members(**scope):
         items = (await database.entities.list(EntityListRequest(
@@ -4749,14 +4758,14 @@ async def test_scan_sidebar_scopes_groups_search_and_pagination(seed_target):
     on_page = await members(page_source_id=[page.source_id])
     assert on_page == [people["sidebar-hana"], people["sidebar-tomas"]]
     in_document = await members(document_source_id=[document])
-    assert set(in_document) == set(people.values()) and len(in_document) == 4
+    assert set(in_document) == set(people.values()) and len(in_document) == 5
     everyone = await members()
     assert set(in_document) < set(everyone)
     # Context order: page people, then the rest of the document, then others.
     context = [*on_page, *(i for i in in_document if i not in on_page),
                *(i for i in everyone if i not in in_document)]
-    assert context[:4] == [people[key] for key in (
-        "sidebar-hana", "sidebar-tomas", "sidebar-karel", "sidebar-rosa")]
+    assert context[:5] == [people[key] for key in (
+        "sidebar-hana", "sidebar-tomas", "sidebar-direct", "sidebar-karel", "sidebar-rosa")]
     assert len(set(context)) == len(everyone)
 
     # Grouped document faces arrive person by person across 30-face batches.
@@ -5127,6 +5136,62 @@ async def test_expanded_page_browser_links_resolve_media_membership_and_preserve
     assert preserved.page_number == 88
     assert preserved.last_touched_at == edited.last_touched_at
 
+
+@pytest.mark.asyncio
+async def test_scan_people_document_default_global_search_and_direct_seed_preservation(seed_target):
+    """#137: local membership across cursors, global candidates and additive reruns."""
+    from people_gator_api.schemas.search import EntitySearchQuery
+
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    page_id = seed.pages["scan-sidebar-1"]
+    document_id = seed.documents["scan-sidebar"]
+    on_page = [item.entity_id for batch in await _all_items(
+        database.entities.list, EntityListRequest, 1, sort="name",
+        filter_=EntityListFilter(entity_type=["person"], page_source_id=[page_id]),
+    ) for item in batch]
+    document_batches = await _all_items(
+        database.entities.list, EntityListRequest, 2, sort="name",
+        filter_=EntityListFilter(entity_type=["person"], document_source_id=[document_id]),
+    )
+    assert [len(batch) for batch in document_batches] == [2, 2, 1]
+    document_people = [item.entity_id for batch in document_batches for item in batch]
+    context = [*on_page, *(identifier for identifier in document_people if identifier not in on_page)]
+    assert context == [seed.entities[key] for key in (
+        "sidebar-hana", "sidebar-tomas", "sidebar-direct", "sidebar-karel", "sidebar-rosa")]
+    assert seed.entities["shared-hana"] not in document_people
+    direct = await database.text_mentions.get(seed.mentions["sidebar-direct-mention"])
+    assert direct.source_id == document_id and direct.entity_id == seed.entities["sidebar-direct"]
+    assert direct.entity_id not in on_page
+
+    global_batches = await _all_items(
+        database.entities.search, SearchEntitiesRequest, 2,
+        query=EntitySearchQuery(text=["Hana"]), sort="relevance", sort_direction="desc",
+        filter_=EntityListFilter(entity_type=["person"]),
+    )
+    matches = [item for batch in global_batches for item in batch]
+    assert {seed.entities["shared-hana"], seed.entities["sidebar-hana"]} <= {
+        item.entity_id for item in matches}
+    assert len(matches) == len({item.entity_id for item in matches})
+    assert [item.score for item in matches] == sorted((item.score for item in matches), reverse=True)
+    assert parse_qs(urlsplit(seed.filter_examples["scan-sidebar-global-text"]).query) == {
+        "candidate_text": ["Hana"]}
+    assert parse_qs(urlsplit(seed.filter_examples["scan-sidebar-document-only"]).query) == {
+        "candidate_text": ["Dora Document"], "people_scope": ["document"]}
+
+    # A reviewer can unlink direct evidence; reruns do not restore membership.
+    reviewer = GenericActor(user_id=seed.users["reviewer"])
+    await database.text_mentions.patch(direct.mention_id, TextMentionPatchRequest(entity_id=None), reviewer)
+    unlinked = await database.text_mentions.get(direct.mention_id)
+    repeated = await preview.seed_preview(database, filesystem)
+    assert repeated.mentions["sidebar-direct-mention"] == direct.mention_id
+    preserved = await database.text_mentions.get(direct.mention_id)
+    assert preserved.entity_id is None
+    assert preserved.last_touched_at == unlinked.last_touched_at
+    remaining = (await database.entities.list(EntityListRequest(
+        limit=100, filter_=EntityListFilter(document_source_id=[document_id]),
+    ))).items
+    assert seed.entities["sidebar-direct"] not in {item.entity_id for item in remaining}
 
 @pytest.mark.asyncio
 async def test_document_first_entries_cover_pages_empty_and_orphan_documents(seed_target):

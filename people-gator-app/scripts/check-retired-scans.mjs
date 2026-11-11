@@ -24,7 +24,13 @@ try {
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (error) => errors.push(error.message))
-    const capture = async (name) => page.screenshot({ path: `${output}/${label}-${name}.png` })
+    const capture = async (name) => {
+      // Grid presence precedes the local media queries; capture settled thumbnails.
+      await page.waitForFunction(() => !document.querySelector(
+        '.document-page-gallery [data-slot="loadable-image"][data-state="loading"], tbody [data-slot="loadable-image"][data-state="loading"]',
+      ))
+      await page.screenshot({ path: `${output}/${label}-${name}.png`, animations: 'disabled' })
+    }
     await page.goto(origin + entry('document-browse'))
     const grid = page.locator('[aria-label="Document pages grid"]')
     await grid.waitFor()

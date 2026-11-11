@@ -346,8 +346,18 @@ tags and query keys. Test actual AND/OR results, same-link restrictions, own-rec
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
 
-The scan editor's right panel shows entities on the current page, or text/face
-search results across all accessible data. It does not inherit workspace source,
+The scan editor's People panel defaults to this document's people, with current-page
+people first and the rest of the document next (names A–Z within each tier).
+Membership comes from either a linked face or text mention, including direct
+document evidence; unrelated database people are excluded. Starting text search
+or explicit face Search switches to **All people / Similarity** across accessible
+data, ranked before pagination. Clearing the final text/reference restores
+**This document / Page, document, others** (the context order ends at the document).
+Whitespace-only text is not a search. A copied active-search URL defaults to
+all/relevance; explicit `people_scope` and `candidate_sort` values still restore.
+Manual scope/sort changes remain usable while refining a search; starting a new
+explicit face Search resets to global similarity. Ordinary face selection leaves
+the search attachment alone. It does not inherit workspace source,
 assignment, actor/date or API key predicates, and shows no workspace tags or
 validation messages. Copied workspace URL values are not forwarded to other views. Invalid workspace values cannot block page entities or
 search. Text lookup works without selecting a face. The explicit page annotation
