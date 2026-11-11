@@ -5203,7 +5203,7 @@ async def test_document_first_entries_cover_pages_empty_and_orphan_documents(see
         assert parse_qs(entry.query) == {"pages_view": ["expanded"]}
         document = await database.sources.get_document(seed.documents[fixture])
         pages = await database.sources.list_pages(PageListRequest(
-            limit=100, return_total_count=True,
+            limit=100, return_total_count=True, sort="page_number", sort_direction="asc",
             filter_=PageListFilter(document_source_id=[document.source_id]),
         ))
         if fixture == "table-nav-empty":
@@ -5211,6 +5211,9 @@ async def test_document_first_entries_cover_pages_empty_and_orphan_documents(see
         else:
             assert pages.total_count == 14
             page = pages.items[0]
+            # Match entry navigation order; UUID order can start at page 9,
+            # whose absent media is a deliberate preview fallback scenario.
+            assert page.source_id == seed.pages["page-gallery-1"]
             assert (await get_page_image(page.library, page.document_id, page.page_id, max_width=256)).content
     orphan = next(d for d in DOCUMENTS if d.key == "scan-only")
     entry = urlsplit(seed.filter_examples["document-browse-unregistered"])
