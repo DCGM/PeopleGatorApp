@@ -1,79 +1,68 @@
-# Shared PostgreSQL and pgAdmin for PR previews and staging (deploy/GITHUB-SETUP.md).
-# An operator runs this stack once per host and keeps it running; the deploy
-# jobs only check it (see deploy/people-gator-deploy/HOSTS.md):
+# Shared infrastructure of a deploy host (previews and staging, or production):
+# PostgreSQL on the `db` network and Traefik on the `web` network. Start it once
+# as the deployment account and leave it running; the deploy jobs only check it.
 #
+#   cp deploy/infrastructure/example.env /private/infrastructure.env   # set the password
 #   docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
 #
-# The project name is kept from earlier releases so existing volumes match.
-name: people-gator-preview-infra
+# The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
+# postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres
+name: people-gator-preview-infra  # kept from earlier releases so existing volumes match
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    # Reachable as postgres on the db network; the
-    # deploy utility provisions per-PR and staging databases through the admin
-    # URL (PREVIEW_DATABASE_URL / STAGING_DATABASE_URL).
     container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: preview_admin
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?required}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}
       POSTGRES_DB: postgres
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
-      database:
+      db:
+        # preview-postgres keeps stacks deployed before this layout working.
         aliases: [postgres, preview-postgres]
     healthcheck:
-      test: [CMD-SHELL, 'pg_isready -U preview_admin -d postgres']
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d postgres']
       interval: 2s
       timeout: 3s
       retries: 30
       start_period: 10s
-    # PostgreSQL has no published host port and never joins Traefik's network.
+    # No published port: only containers on the db network reach PostgreSQL.
 
-  pgadmin:
-    image: dpage/pgadmin4:9.18
+  traefik:
+    image: traefik:v3.5
     restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@peoplegator.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?required}
-      PGADMIN_DISABLE_POSTFIX: '1'
-      PGADMIN_LISTEN_PORT: '5050'
-      PGADMIN_CONFIG_PROXY_X_PROTO_COUNT: '1'
-      PGADMIN_CONFIG_PROXY_X_HOST_COUNT: '1'
-      PGADMIN_CONFIG_SESSION_COOKIE_SECURE: 'True'
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=web
+      # Certificates: drop a dynamic config (tls.certificates) and the files into
+      # the certs directory, or terminate TLS in front of Traefik (for example a
+      # tunnel); without either, Traefik serves its default self-signed certificate.
+      - --providers.file.directory=/certs
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+    ports:
+      - '80:80'
+      - '443:443'
     volumes:
-      - pgadmin-data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
-    networks: [database, web]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [CMD, /venv/bin/python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/misc/ping', timeout=3)"]
-      interval: 10s
-      timeout: 5s
-      retries: 18
-      start_period: 30s
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=web
-      - traefik.http.routers.pg-preview-pgadmin.entrypoints=websecure
-      - 'traefik.http.routers.pg-preview-pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)'
-      - traefik.http.routers.pg-preview-pgadmin.service=pg-preview-pgadmin
-      - traefik.http.routers.pg-preview-pgadmin.tls=true
-      - traefik.http.services.pg-preview-pgadmin.loadbalancer.server.port=5050
+      # Rootless Docker: DOCKER_SOCKET=$XDG_RUNTIME_DIR/docker.sock in the env file.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      - ${CERTS_DIR:-./certs}:/certs:ro
+    networks: [web]
 
 volumes:
-  pgadmin-data:
   postgres-data:
 
 networks:
-  database:
+  db:
     name: db
     internal: true
   web:
-    external: true
     name: web

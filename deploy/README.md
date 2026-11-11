@@ -21,7 +21,7 @@ Compose Watch or native API/Vite development.
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Tests, images and the preview/staging/release deploy jobs |
 | [`../.github/actions/deploy-tools`](../.github/actions/deploy-tools/action.yml) | Installs the utility into the job's temporary directory |
 | [`GITHUB-SETUP.md`](GITHUB-SETUP.md) | The configuration variables and secrets, the hosts and the conventions |
-| [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL and pgAdmin for previews and staging; the deploy jobs only check it |
+| [`infrastructure/`](infrastructure/compose.yaml) | Operator-run shared PostgreSQL and Traefik for previews and staging; the deploy jobs only check it |
 | [`runner/job-started.sh`](runner/job-started.sh) | Self-hosted runner hook admitting only this repository's events for the runner's environment |
 | [`people-gator-deploy/`](people-gator-deploy/README.md) | Package, CLI, lifecycle operations and recovery |
 | [`people-gator-deploy/HOSTS.md`](people-gator-deploy/HOSTS.md) | Docker, networks, shared PostgreSQL, runners and account isolation |

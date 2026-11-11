@@ -17,15 +17,16 @@ commands and operations in the [utility guide](README.md).
   its own certificates, including the preview wildcard), `db` for PostgreSQL
   (created by the shared stack, or `docker network create --internal db`), and
   `logging` with the OTLP collector when `OTEL_ENDPOINT` is set.
-- DNS: `*.<preview host>`, the staging host, the production host and pgAdmin
-  point at the Traefik host. The preview wildcard does not cover staging.
+- DNS: `*.<preview host>`, the staging host and the production host point at
+  the Traefik host. The preview wildcard does not cover staging.
 
-## Shared PostgreSQL and pgAdmin
+## Shared PostgreSQL and Traefik
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
-PostgreSQL 16 with pgvector as `postgres` on `db` (no
-published port) and pgAdmin behind Traefik, with a private copy of
-[`example.env`](../infrastructure/example.env) holding the two passwords:
+PostgreSQL 16 with pgvector as `postgres` on the internal `db` network (no
+published port) and Traefik on `web` (ports 80/443, Docker provider, certificates
+from a directory), with a private copy of
+[`example.env`](../infrastructure/example.env):
 
 ```sh
 docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans
@@ -33,17 +34,13 @@ docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrast
 
 Rerun the same command after editing the file or pulling a newer `main`;
 passwords and volumes are kept. Back up the env file with the
-`people-gator-preview-infra_postgres-data` and `…_pgadmin-data` volumes. The
-`PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is
-`postgresql://preview_admin:<POSTGRES_ADMIN_PASSWORD>@postgres:5432/postgres`.
-Any other PostgreSQL 16 with pgvector works instead, attached to
-`db` (`docker network connect db <container>`), as does
-the production database with its application and optional migration roles.
-
-pgAdmin: `https://<PGADMIN_HOST>`, login `PGADMIN_DEFAULT_EMAIL` with
-`PGADMIN_DEFAULT_PASSWORD`. Its preconfigured server connects as `preview_admin`.
-A PR-only connection uses role/database `preview_pr_<N>` and the password in
-`<state dir>/pr-<N>/state.json`. Never print these files in Actions.
+`people-gator-preview-infra_postgres-data` volume. `PREVIEW_DATABASE_URL` /
+`STAGING_DATABASE_URL` is then
+`postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres`.
+For a database GUI, connect any client through `docker exec -it postgres psql`
+or a temporary container on `db`; a PR-only connection uses role/database
+`preview_pr_<N>` and the password in `<state dir>/pr-<N>/state.json`. Never print
+these files in Actions.
 
 ## GitHub runners
 

@@ -220,10 +220,9 @@ each deploy appears under the repository's **Deployments**; after success only
 the current deployment per environment (per PR for previews) stays active.
 Closing a PR removes that PR's containers, storage, database and role and sets
 its deployments inactive; the daily and post-staging prune repeats both for any
-preview whose PR is no longer open. Shared PostgreSQL, pgAdmin and logging
-remain running. A failed migration has no automatic schema rollback.
+preview whose PR is no longer open. Shared PostgreSQL and Traefik remain running. A failed migration has no automatic schema rollback.
 
-The shared PostgreSQL and pgAdmin are an operator-run Compose stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
+The shared PostgreSQL and Traefik are an operator-run Compose stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
 ([hosts](../deploy/GITHUB-SETUP.md#hosts)); the utility installs nothing and every operation first checks that the stack,
 networks and Docker are up, failing with the remedy otherwise. GHCR image
 names are derived from the repository. Provision the documented DNS, Traefik,

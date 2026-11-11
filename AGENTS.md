@@ -76,8 +76,7 @@ own branch's deploy code; staging uses `main`, releases the tag) configured by
 a short list of repository variables and secrets per environment (`PREVIEW_*`,
 `STAGING_*`, `PRODUCTION_*`), as described in `deploy/GITHUB-SETUP.md`. Keep that
 list to the database, storage, telemetry and users; prefer a convention over a
-new setting. The shared PostgreSQL/collector/pgAdmin
-stack is operator-run (`deploy/infrastructure`); the utility only checks it. Deployment lifecycle,
+new setting. The shared PostgreSQL/Traefik stack is operator-run (`deploy/infrastructure`); the utility only checks it. Deployment lifecycle,
 workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
 update them with any change to the workflow's deploy steps, the configuration
 schema or the runner guard. Keep credentials in GitHub Environment secrets

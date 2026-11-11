@@ -57,21 +57,21 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
 
 ## Hosts
 
-- **Shared PostgreSQL and pgAdmin** on the preview/staging host, once:
-  `docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans`
-  with a copy of [`deploy/infrastructure/example.env`](infrastructure/example.env)
-  (keep that file: it holds the PostgreSQL and pgAdmin passwords, the pgAdmin
-  login and host). Any PostgreSQL 16 with pgvector works instead, attached to
-  the `db` network (`docker network connect db <container>`),
-  including the production database. Hosts upgraded from earlier releases reuse
-  their existing env file; previews and staging deployed before the upgrade keep
-  working if the recreated server is also attached to their old network:
-  `docker network connect --alias preview-postgres people-gator-preview-db postgres`
-  (drop it once they have been redeployed or closed).
-- **Traefik** on the `web` network with the `websecure` entrypoint and its own
-  certificates (the stacks only enable TLS on their routers), and DNS for
-  `*.<preview host>`, the staging host, the production host and pgAdmin pointing
-  at it.
+- **PostgreSQL and Traefik** on each host, from
+  [`deploy/infrastructure/compose.yaml`](infrastructure/compose.yaml) with a
+  private copy of [`example.env`](infrastructure/example.env) (the PostgreSQL
+  password, the rootless Docker socket and a certificates directory):
+  `docker compose -f deploy/infrastructure/compose.yaml --env-file /private/infrastructure.env up -d --wait --remove-orphans`.
+  PostgreSQL runs as `postgres` on the internal `db` network; Traefik listens on
+  80/443 on the `web` network and serves the certificates you place in the
+  certificates directory (or sits behind a TLS-terminating tunnel). Point DNS for
+  `*.<preview host>`, the staging host and the production host at it. Your own
+  PostgreSQL 16 with pgvector and Traefik work too, as long as they use these
+  names. Hosts upgraded from earlier releases reuse their volume: set
+  `POSTGRES_USER=preview_admin` and the old admin password. Previews deployed
+  before the upgrade keep working through the `preview-postgres` alias once the
+  server is also attached to their old network:
+  `docker network connect --alias preview-postgres people-gator-preview-db postgres`.
 - **OTLP collector** on the `logging` network, only when `OTEL_ENDPOINT` is set.
 - **Runners**: one self-hosted runner per host as the deployment account,
   labelled `people-gator-preview`, `people-gator-staging` and/or

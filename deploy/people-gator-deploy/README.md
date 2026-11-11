@@ -11,7 +11,7 @@ the commit being deployed**: a PR preview uses the PR's own deploy code, staging
 uses `main`, a release uses the tagged commit. Each environment is configured by
 a short list of repository variables and secrets
 ([`deploy/GITHUB-SETUP.md`](../GITHUB-SETUP.md)); everything else is a convention. The utility installs and provisions nothing: the shared
-PostgreSQL and pgAdmin are an operator-run Compose stack
+PostgreSQL and Traefik are an operator-run Compose stack
 ([`deploy/infrastructure`](../infrastructure/compose.yaml)) that every operation
 only **checks**, and the application stacks are plain frontend + backend Compose
 files.
