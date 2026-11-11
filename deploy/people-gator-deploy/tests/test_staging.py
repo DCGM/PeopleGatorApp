@@ -28,7 +28,7 @@ class FakeStaging(staging.Staging):
         archive.write_bytes(b"PGDMP synthetic original database")
         archive.chmod(0o600)
         super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"), "docker_context": "rootless",
-                          "host": "staging.peoplegator.dev", "database_network": "people-gator-db",
+                          "host": "staging.peoplegator.dev", "database_network": "db",
                           "postgres": {"host": "people-gator-postgres", "port": 5432, "user": "preview_admin",
                                        "password": "admin-pw", "database": "postgres"},
                           "runtime_file": str(runtime), "snapshot": {"path": str(archive),

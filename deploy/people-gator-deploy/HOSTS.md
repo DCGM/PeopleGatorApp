@@ -13,18 +13,17 @@ commands and operations in the [utility guide](README.md).
   use rootless` once for rootless Docker). Run the runner service, Traefik and
   the shared stack under that account and daemon; containers on one daemon cannot
   join another daemon's networks.
-- Networks: `web` with an existing Traefik (entrypoint `websecure`, resolver
-  `tlschallenge`; wildcard issuance needs DNS-01), `people-gator-db` for
-  PostgreSQL (created by the shared stack, or `docker network create
-  --internal people-gator-db`), and `logging` with the OTLP collector when
-  `OTEL_ENDPOINT` is set.
+- Networks: `web` with an existing Traefik (entrypoint `websecure`, serving
+  its own certificates, including the preview wildcard), `db` for PostgreSQL
+  (created by the shared stack, or `docker network create --internal db`), and
+  `logging` with the OTLP collector when `OTEL_ENDPOINT` is set.
 - DNS: `*.<preview host>`, the staging host, the production host and pgAdmin
   point at the Traefik host. The preview wildcard does not cover staging.
 
 ## Shared PostgreSQL and pgAdmin
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
-PostgreSQL 16 with pgvector as `people-gator-postgres` on `people-gator-db` (no
+PostgreSQL 16 with pgvector as `people-gator-postgres` on `db` (no
 published port) and pgAdmin behind Traefik, with a private copy of
 [`example.env`](../infrastructure/example.env) holding the two passwords:
 
@@ -38,7 +37,7 @@ passwords and volumes are kept. Back up the env file with the
 `PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is
 `postgresql://preview_admin:<POSTGRES_ADMIN_PASSWORD>@people-gator-postgres:5432/postgres`.
 Any other PostgreSQL 16 with pgvector works instead, attached to
-`people-gator-db` (`docker network connect people-gator-db <container>`), as does
+`db` (`docker network connect db <container>`), as does
 the production database with its application and optional migration roles.
 
 pgAdmin: `https://<PGADMIN_HOST>`, login `PGADMIN_DEFAULT_EMAIL` with
@@ -121,7 +120,7 @@ in the `STAGING_S3_*` bucket. Sign in at `https://<host>/staging-login.html` wit
 provisioned in that bucket. Only database backup objects are downloaded by
 `snapshot-init`/`refresh` ([backup gathering](README.md#backup-gathering)).
 
-Releases need an external PostgreSQL on `people-gator-db` (already migrated or
+Releases need an external PostgreSQL on `db` (already migrated or
 new) with the application role from `PRODUCTION_DATABASE_URL` and, optionally,
 a separate migration role from `PRODUCTION_MIGRATION_DATABASE_URL`; private
 object storage holding users,

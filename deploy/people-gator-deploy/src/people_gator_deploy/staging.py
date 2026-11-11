@@ -111,12 +111,12 @@ class Staging(Host):
                 "DB_HOST": self.config["postgres"]["host"], "DB_PORT": str(self.config["postgres"]["port"]),
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
                 "DB_PASSWORD": generation["password"], "RUNTIME_FILE": self.config["runtime_file"],
-                "DATABASE_NETWORK": self.config.get("database_network", "people-gator-db"),
+                "DATABASE_NETWORK": self.config.get("database_network", "db"),
                 "WEB_NETWORK": self.config.get("web_network", "web"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
                 "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"],
                 "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", "logging")}
+                "APPLICATION_OTEL_NETWORK": self.config["otel_network"] if "otel" in self.config else self.config.get("web_network", "web")}
 
     def provision(self, values):
         name, password = values["DB_NAME"], values["DB_PASSWORD"]

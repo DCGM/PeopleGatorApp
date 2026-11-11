@@ -584,9 +584,9 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", backend)  # telemetry comes only from the rendered file
 
     def test_compose_environment_points_at_the_configured_database_and_rendered_files(self):
-        self.controller.config.update(telemetry_file=str(self.root / "telemetry.env"))
+        self.controller.config.update(telemetry_file=str(self.root / "telemetry.env"), otel_network="logging")
         environment = self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA)
-        for line in ("DB_HOST='people-gator-postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='people-gator-db'",
+        for line in ("DB_HOST='people-gator-postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='db'", "APPLICATION_OTEL_NETWORK='web'",
                      f"RUNTIME_FILE='{self.root / 'runtime.env'}'", f"TELEMETRY_FILE='{self.root / 'telemetry.env'}'",
                      "PREVIEW_HOST='pr-123.preview.peoplegator.dev'"):
             self.assertIn(line, environment)

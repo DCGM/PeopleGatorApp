@@ -74,8 +74,8 @@ class TelemetryTests(unittest.TestCase):
                     if name != 'release':
                         self.assertEqual((env['PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST'], env['PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT']),
                                          ('pg.internal', '6432'))
-                    self.assertEqual(rendered['networks']['telemetry']['name'], 'logging')
-                    self.assertEqual(rendered['networks']['database']['name'], 'people-gator-db')
+                    self.assertEqual(rendered['networks']['telemetry']['name'], 'web')  # only otel moves it to the collector network
+                    self.assertEqual(rendered['networks']['database']['name'], 'db')
                     self.assertEqual(backend['logging']['driver'], 'json-file')
                     for service, settings in rendered['services'].items():
                         if service != 'backend':

@@ -192,7 +192,7 @@ class Host:
         password travels through the environment (``-e PGPASSWORD``), never argv.
         """
         connection = self.config[role]
-        return ["docker", "run", "--rm", "-i", "--network", self.config.get("database_network", "people-gator-db"),
+        return ["docker", "run", "--rm", "-i", "--network", self.config.get("database_network", "db"),
                 "-e", "PGPASSWORD", self.config.get("postgres_image", "pgvector/pgvector:pg16"), tool,
                 "-h", connection["host"], "-p", str(connection["port"]), "-U", connection["user"], *args]
 
@@ -219,10 +219,10 @@ class Host:
             self.command(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-d", connection["database"], role=role),
                          sql="SELECT 1;", env=self.postgres_env(role))
         except DeployError:
-            raise DeployError(f"Cannot connect to {where} from the {self.config.get('database_network', 'people-gator-db')} "
+            raise DeployError(f"Cannot connect to {where} from the {self.config.get('database_network', 'db')} "
                               f"network; check the database URL and that the server joins that network "
                               "(deploy/GITHUB-SETUP.md)") from None
-        return {"database": where, "network": self.config.get("database_network", "people-gator-db")}
+        return {"database": where, "network": self.config.get("database_network", "db")}
 
     def image(self, component: str, run: dict) -> str:
         """Pull the tested commit's tag and return its digest after verifying the revision label."""

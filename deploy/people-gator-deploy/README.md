@@ -45,8 +45,8 @@ build only; no fork event reaches a self-hosted runner (the
 [runner guard](HOSTS.md#github-runners) enforces this too).
 
 **Prerequisite checks.** `preflight` and every operation first verify the
-Docker context, Compose 2.32+, the `web`, `people-gator-db` and `logging`
-networks, and that the configured database answers `SELECT 1` from the database
+Docker context, Compose 2.32+, the `web` and `db` networks (and `logging` with
+`OTEL_ENDPOINT`), and that the configured database answers `SELECT 1` from the database
 network (both roles for production). Failures name the variable or the missing
 network before any Compose command runs. Secret values are never printed.
 
@@ -106,7 +106,7 @@ locations, and databases, media, passwords and generations are untouched. Run
 the shared stack once with the old
 `~/.local/opt/people-gator-deploy/state/infrastructure/infrastructure.env` as
 its `--env-file` ([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)): Compose recreates
-PostgreSQL as `people-gator-postgres` on the `people-gator-db` network and
+PostgreSQL as `people-gator-postgres` on the `db` network and
 `--remove-orphans` removes the former Fluent Forward collector (its
 `people-gator-preview-infra_otel-data` volume can be deleted; stale keys in the
 env file are ignored). Set the variables and secrets from the old descriptors and

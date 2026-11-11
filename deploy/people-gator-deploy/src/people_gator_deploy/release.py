@@ -69,12 +69,12 @@ class Release(Host):
         return {"RELEASE_TAG": tag, "COMMIT_SHA": commit, "RELEASE_HOST": self.host,
                 "BACKEND_IMAGE": images["backend"], "FRONTEND_IMAGE": images["frontend"],
                 "RUNTIME_FILE": self.config["runtime_file"], "MIGRATION_FILE": self.config["migration_file"],
-                "DATABASE_NETWORK": self.config.get("database_network", "people-gator-db"),
+                "DATABASE_NETWORK": self.config.get("database_network", "db"),
                 "WEB_NETWORK": self.config.get("web_network", "web"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
                 "BACKEND_MEMORY": self.config.get("backend_memory", "4g"),
                 "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", "logging")}
+                "APPLICATION_OTEL_NETWORK": self.config["otel_network"] if "otel" in self.config else self.config.get("web_network", "web")}
 
     def state(self, name="state.json"):
         path = self.root / name

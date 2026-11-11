@@ -85,7 +85,6 @@ services:
       - traefik.http.routers.pg-release-api.priority=100
       - traefik.http.routers.pg-release-api.service=pg-release-api
       - traefik.http.routers.pg-release-api.tls=true
-      - traefik.http.routers.pg-release-api.tls.certresolver=tlschallenge
       - traefik.http.services.pg-release-api.loadbalancer.server.port=8000
 
   frontend:
@@ -114,16 +113,15 @@ services:
       - traefik.http.routers.pg-release-app.priority=10
       - traefik.http.routers.pg-release-app.service=pg-release-app
       - traefik.http.routers.pg-release-app.tls=true
-      - traefik.http.routers.pg-release-app.tls.certresolver=tlschallenge
       - traefik.http.services.pg-release-app.loadbalancer.server.port=8080
 
 networks:
   database:
     external: true
-    name: ${DATABASE_NETWORK:-people-gator-db}
+    name: ${DATABASE_NETWORK:-db}
   web:
     external: true
     name: ${WEB_NETWORK:-web}
   telemetry:
     external: true
-    name: ${APPLICATION_OTEL_NETWORK:-logging}
+    name: ${APPLICATION_OTEL_NETWORK:-${WEB_NETWORK:-web}}

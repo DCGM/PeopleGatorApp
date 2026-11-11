@@ -10,7 +10,7 @@ name: people-gator-preview-infra
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    # Reachable as people-gator-postgres on the people-gator-db network; the
+    # Reachable as people-gator-postgres on the db network; the
     # deploy utility provisions per-PR and staging databases through the admin
     # URL (PREVIEW_DATABASE_URL / STAGING_DATABASE_URL).
     container_name: people-gator-postgres
@@ -64,7 +64,6 @@ services:
       - 'traefik.http.routers.pg-preview-pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)'
       - traefik.http.routers.pg-preview-pgadmin.service=pg-preview-pgadmin
       - traefik.http.routers.pg-preview-pgadmin.tls=true
-      - traefik.http.routers.pg-preview-pgadmin.tls.certresolver=tlschallenge
       - traefik.http.services.pg-preview-pgadmin.loadbalancer.server.port=5050
 
 volumes:
@@ -73,7 +72,7 @@ volumes:
 
 networks:
   database:
-    name: people-gator-db
+    name: db
     internal: true
   web:
     external: true

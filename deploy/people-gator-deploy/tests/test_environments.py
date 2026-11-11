@@ -119,12 +119,12 @@ class EnvironmentTests(unittest.TestCase):
         environment = self.environment()
         result = environment.preflight()
         self.assertEqual(result["host"], "preview.example.invalid")
-        self.assertEqual(result["database"], {"database": "people-gator-postgres:5432/postgres as preview_admin", "network": "people-gator-db"})
+        self.assertEqual(result["database"], {"database": "people-gator-postgres:5432/postgres as preview_admin", "network": "db"})
         docker = environment.docker
-        for network in ("web", "people-gator-db", "logging"):
+        for network in ("web", "db", "logging"):
             self.assertIn(["docker", "network", "inspect", network], docker.calls)
         psql = docker.commands("psql")[0]
-        self.assertEqual(psql[:8], ["docker", "run", "--rm", "-i", "--network", "people-gator-db", "-e", "PGPASSWORD"])
+        self.assertEqual(psql[:8], ["docker", "run", "--rm", "-i", "--network", "db", "-e", "PGPASSWORD"])
         self.assertEqual(psql[8], "pgvector/pgvector:pg16")
         self.assertEqual(psql[psql.index("-h") + 1], "people-gator-postgres")
         self.assertEqual(psql[psql.index("-U") + 1], "preview_admin")
@@ -137,12 +137,12 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual((root / "runtime.env").read_text(), 'PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         self.assertIn("PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT=http://lgtm:4318/v1/logs", (root / "telemetry.env").read_text())
         self.assertFalse((root / "owned.json").exists())
-        # Without otel no telemetry file is rendered (a stale one is removed); the
-        # stacks still declare the logging network, so it is still checked.
+        # Without otel no telemetry file is rendered (a stale one is removed) and
+        # the collector network is not required.
         self.configure(OTEL_ENDPOINT=None)
         environment = self.environment()
         environment.preflight()
-        self.assertIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
+        self.assertNotIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
         self.assertFalse((environment.root / "telemetry.env").exists())
 
     def test_unreachable_database_fails_before_any_compose_command(self):
@@ -211,7 +211,7 @@ class EnvironmentTests(unittest.TestCase):
         result = environment.preflight()
         self.assertEqual(result["database"]["database"], "db.internal:5432/people as app")
         self.assertEqual(result["migration_database"]["database"], "db.internal:5432/people as migrator")
-        self.assertIn(["docker", "network", "inspect", "people-gator-db"], environment.docker.calls)
+        self.assertIn(["docker", "network", "inspect", "db"], environment.docker.calls)
         passwords = [env.get("PGPASSWORD") for env in environment.docker.environments if env]
         self.assertEqual(passwords, ["app-pw", "mig-pw"])
         root = environment.root

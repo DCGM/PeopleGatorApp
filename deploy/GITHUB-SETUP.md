@@ -16,7 +16,7 @@ not listed here is a fixed convention (table at the end).
 | `S3_ENDPOINT_URL` | variable | optional | optional | optional | For non-AWS S3 |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_PREFIX`, `BACKUP_S3_REGION`, `BACKUP_S3_ENDPOINT_URL` | variable | | optional | | Read-only bucket of production dumps for `snapshot-init` / `refresh` |
 | `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | secret | | with `BACKUP_S3_*` | | |
-| `OTEL_ENDPOINT` | variable | optional | optional | optional | OTLP HTTP collector, for example `http://lgtm:4318`; the backend sends logs, traces and metrics there |
+| `OTEL_ENDPOINT` | variable | optional | optional | optional | OTLP HTTP collector on the `logging` network, for example `http://lgtm:4318`; the backend sends logs, traces and metrics there |
 | `OTEL_HEADERS` | secret | optional | optional | optional | `Authorization=Basic …` if the collector needs it |
 | `RUM_CLIENT_TOKEN` | secret | optional | optional | optional | Enables browser RUM |
 | `RUM_SITE` | variable | optional | optional | optional | RUM site, default `openobserve.capturemyhand.com` |
@@ -62,16 +62,17 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   with a copy of [`deploy/infrastructure/example.env`](infrastructure/example.env)
   (keep that file: it holds the PostgreSQL and pgAdmin passwords, the pgAdmin
   login and host). Any PostgreSQL 16 with pgvector works instead, attached to
-  the `people-gator-db` network (`docker network connect people-gator-db <container>`),
+  the `db` network (`docker network connect db <container>`),
   including the production database. Hosts upgraded from earlier releases reuse
   their existing env file; previews and staging deployed before the upgrade keep
   working if the recreated server is also attached to their old network:
   `docker network connect --alias preview-postgres people-gator-preview-db people-gator-postgres`
   (drop it once they have been redeployed or closed).
-- **Traefik** on the `web` network with the `websecure` entrypoint and the
-  `tlschallenge` resolver, and DNS for `*.<preview host>`, the staging host, the
-  production host and pgAdmin pointing at it.
-- **OTLP collector** (for `OTEL_ENDPOINT`) reachable from the `logging` network.
+- **Traefik** on the `web` network with the `websecure` entrypoint and its own
+  certificates (the stacks only enable TLS on their routers), and DNS for
+  `*.<preview host>`, the staging host, the production host and pgAdmin pointing
+  at it.
+- **OTLP collector** on the `logging` network, only when `OTEL_ENDPOINT` is set.
 - **Runners**: one self-hosted runner per host as the deployment account,
   labelled `people-gator-preview`, `people-gator-staging` and/or
   `people-gator-release`, with `docker context use rootless` done once and the
@@ -89,9 +90,9 @@ success appears under the repository's Deployments.
 | Fixed by the deployment | Value |
 | --- | --- |
 | Docker daemon | the runner account's current context |
-| Networks | `web` (Traefik), `people-gator-db` (PostgreSQL), `logging` (collector) |
+| Networks | `web` (Traefik), `db` (PostgreSQL), `logging` (collector, only with `OTEL_ENDPOINT`) |
 | Compose projects | `people-gator-pr-<N>`, `people-gator-staging`, `people-gator-release` |
 | State and generated files | `~/.local/opt/people-gator-deploy/state/<pr\|staging\|release>` on the host |
-| TLS | Traefik `tlschallenge` resolver |
+| TLS | routers enable TLS; Traefik supplies the certificates |
 | Login tokens and CORS | issuer `https://<HOST>`, audience `<HOST>` |
 | Images | `ghcr.io/<repo>-frontend` and `-backend`, tag `sha-<commit>` |

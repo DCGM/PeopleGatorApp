@@ -24,7 +24,7 @@ GITHUB_PREFIX = {"pr": "PREVIEW", "staging": "STAGING", "release": "PRODUCTION"}
 
 # Conventions shared by every environment (see deploy/GITHUB-SETUP.md).
 WEB_NETWORK = "web"
-DATABASE_NETWORK = "people-gator-db"
+DATABASE_NETWORK = "db"
 OTEL_NETWORK = "logging"
 POSTGRES_IMAGE = "pgvector/pgvector:pg16"
 EXAMPLE_USERS = Path(__file__).with_name("assets") / "users.example.json"

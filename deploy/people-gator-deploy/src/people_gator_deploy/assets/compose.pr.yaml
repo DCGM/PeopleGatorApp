@@ -110,7 +110,6 @@ services:
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.priority=100
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.service=pg-pr-${PR_NUMBER}-api
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls=true
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls.certresolver=tlschallenge
       - traefik.http.services.pg-pr-${PR_NUMBER}-api.loadbalancer.server.port=8000
 
   frontend:
@@ -138,7 +137,6 @@ services:
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.priority=10
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.service=pg-pr-${PR_NUMBER}-app
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls=true
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls.certresolver=tlschallenge
       - traefik.http.services.pg-pr-${PR_NUMBER}-app.loadbalancer.server.port=8080
 
 volumes:
@@ -147,10 +145,10 @@ volumes:
 networks:
   database:
     external: true
-    name: ${DATABASE_NETWORK:-people-gator-db}
+    name: ${DATABASE_NETWORK:-db}
   web:
     external: true
     name: ${WEB_NETWORK:-web}
   telemetry:
     external: true
-    name: ${APPLICATION_OTEL_NETWORK:-logging}
+    name: ${APPLICATION_OTEL_NETWORK:-${WEB_NETWORK:-web}}
