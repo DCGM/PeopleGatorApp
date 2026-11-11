@@ -184,6 +184,70 @@ describe('useScanPeople (#103)', () => {
     client.clear()
   })
 
+  it('keeps default document browsing local across tier cursor batches', async () => {
+    api.entities.mockImplementation(({ query }) => {
+      expect(query['filter.page_source_id'] || query['filter.document_source_id']).toBeTruthy()
+      const page = query['filter.page_source_id']
+      return Promise.resolve({
+        data: page
+          ? { items: [person('page-person')], cursor: null, total_count: 1 }
+          : query.cursor
+            ? { items: [person('document-only')], cursor: null, total_count: 3 }
+            : {
+                items: [person('mention-only'), person('page-person')],
+                cursor: 'next',
+                total_count: 3,
+              },
+      })
+    })
+    const { model, wrapper, client } = mountPeople({ scope: 'document' })
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual(['page-person', 'mention-only'])
+    expect(model().totalCount.value).toBe(3)
+    await model().loadMore()
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual([
+      'page-person',
+      'mention-only',
+      'document-only',
+    ])
+    expect(model().hasNextPage.value).toBe(false)
+    expect(api.search).not.toHaveBeenCalled()
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('uses one global relevance cursor rather than prioritizing local tiers during search', async () => {
+    api.search.mockImplementation(({ query }) => {
+      expect(query).toMatchObject({
+        sort: 'relevance',
+        sort_direction: 'desc',
+        'query.text': ['Hana'],
+      })
+      expect(query).not.toHaveProperty('filter.page_source_id')
+      expect(query).not.toHaveProperty('filter.document_source_id')
+      return Promise.resolve({
+        data: query.cursor
+          ? { items: [person('page-match', { score: 0.7 })], cursor: null, total_count: 2 }
+          : { items: [person('outside-match', { score: 0.9 })], cursor: 'next', total_count: 2 },
+      })
+    })
+    api.entities.mockResolvedValue({ data: { items: [], cursor: null } })
+    const { model, wrapper, client } = mountPeople({
+      scope: 'all',
+      order: 'relevance',
+      search: { text: 'Hana' },
+    })
+    await flushPromises()
+    await model().loadMore()
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual(['outside-match', 'page-match'])
+    expect(model().totalCount.value).toBe(2)
+    expect(api.search).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+    client.clear()
+  })
+
   it('combines name text and the attached face in one ranked search per scope', async () => {
     api.entities.mockResolvedValue({ data: { items: [], cursor: null } })
     api.search.mockResolvedValue({

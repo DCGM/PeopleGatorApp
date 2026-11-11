@@ -120,6 +120,9 @@ PEOPLE = (
     # Issue #66: evidence written by a reviewer who was deactivated afterwards.
     Person("deactivated-olga", "Olga Expiry", (),
            "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
+    # Issue #137: direct document evidence is a member without matching any page.
+    Person("sidebar-direct", "Dora Document", (),
+           "Synthetic person linked only to the scan-sidebar document.", "reviewer"),
     # Issue #103: page, document and other people for the scan sidebar.
     Person("sidebar-hana", "Hana Sidebar", (),
            "Synthetic scan-sidebar person with faces and repeated mentions on one page.", "importer"),

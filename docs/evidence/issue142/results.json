@@ -1,0 +1,32 @@
+[
+  {
+    "viewport": "desktop",
+    "width": 1440,
+    "height": 900,
+    "restoredWidth": "440px",
+    "checks": [
+      "keyboard reorder/resize",
+      "add/remove",
+      "reload",
+      "new tab",
+      "browser restart",
+      "full reset",
+      "no page overflow"
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "width": 390,
+    "height": 844,
+    "restoredWidth": "440px",
+    "checks": [
+      "keyboard reorder/resize",
+      "add/remove",
+      "reload",
+      "new tab",
+      "browser restart",
+      "full reset",
+      "no page overflow"
+    ]
+  }
+]

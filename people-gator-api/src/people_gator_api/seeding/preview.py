@@ -462,6 +462,25 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await checkpoint()
     if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
         active_mentions[key] = manifest.mentions[key]
+    # Issue #137: add a direct-document-only person without changing existing
+    # page membership. Recover a write before checkpoint and preserve review edits.
+    key = "sidebar-direct-mention"
+    if key not in manifest.mentions and "sidebar-direct" in active_entities and "scan-sidebar" in documents:
+        source_id = documents["scan-sidebar"]
+        records = (await database.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
+        ))).items
+        context = "Dora Document catalogued the sidebar ledger without appearing on a page."
+        record = next((item for item in records if item.context == context), None)
+        if record is None:
+            record = await database.text_mentions.create(TextMentionCreateRequest(
+                name="Dora Document", context=context, entity_id=active_entities["sidebar-direct"],
+                entity_link_state=EntityLinkState.manual, source_id=source_id,
+            ), actors["reviewer"])
+        manifest.mentions[key] = record.mention_id
+        await checkpoint()
+    if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
+        active_mentions[key] = manifest.mentions[key]
     # Explicit, checkpointed additive upgrade for #35. Use existing synthetic
     # linked media; preserve manual choices and every choice after this upgrade.
     # Record the precondition BEFORE writing, so an interrupted checkpoint cannot
@@ -582,6 +601,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         sidebar_face = str(active_faces.get("sidebar-hana-left", ""))
         sidebar_examples = {
             "scan-sidebar-people": sidebar_path,
+            "scan-sidebar-global-text": sidebar_path + "?" + urlencode({
+                "candidate_text": "Hana",
+            }),
+            "scan-sidebar-document-only": sidebar_path + "?" + urlencode({
+                "candidate_text": "Dora Document", "people_scope": "document",
+            }),
             # #138: show Page (Hana/Tomas), Document (Rosa/Karel), and
             # DB (other seeded people) with existing local portraits/evidence.
             "scan-source-tags": sidebar_path + "?" + urlencode({
@@ -950,6 +975,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "library": ["preview-table-navigation", "preview-table", "preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination"],
             }, doseq=True),
             "document-table-widths": "/documents?" + urlencode({
+                "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
+                "sort": "name",
+            }, doseq=True),
+            # #142: reuse the contrasting titles, counts and local page media
+            # to exercise persisted visibility, order and resized widths.
+            "document-table-persistence": "/documents?" + urlencode({
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",
             }, doseq=True),
