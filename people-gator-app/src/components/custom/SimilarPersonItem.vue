@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Check, ExternalLink, FileText, LetterText, ScanFace, Search, UserRound } from '@lucide/vue'
+import { Check, ExternalLink, LetterText, ScanFace } from '@lucide/vue'
+import { computed } from 'vue'
 
 import type {
   SimilarPersonCandidate,
@@ -8,9 +9,9 @@ import type {
 import PersonNameTitle from './PersonNameTitle.vue'
 import PersonPortrait from './PersonPortrait.vue'
 import IdentityFacePreview from './IdentityFacePreview.vue'
-import { Badge } from '@/components/ui/badge'
+import EvidenceSourceBadge from './EvidenceSourceBadge.vue'
 import { Button } from '@/components/ui/button'
-import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia } from '@/components/ui/item'
+import { Item, ItemContent, ItemFooter, ItemMedia } from '@/components/ui/item'
 
 const props = defineProps<{
   person: SimilarPersonCandidate
@@ -40,7 +41,7 @@ function sourceLabel(source: SimilarPersonMatchSource) {
     case 'text-search':
       return `Text search score ${formatTextScore(source.score)}`
     case 'face-match':
-      return `Face match cosine distance ${source.distance.toFixed(2)}`
+      return `Face similarity ${faceSimilarity(source.distance)}%`
     case 'scan-text':
       return 'Mentioned on this page'
     case 'scan-face':
@@ -51,8 +52,18 @@ function sourceLabel(source: SimilarPersonMatchSource) {
 }
 
 function formatTextScore(score: number) {
-  return Math.round(score).toString().padStart(2, '0')
+  return Math.round(score).toString()
 }
+
+function faceSimilarity(distance: number) {
+  return Math.round((1 - distance) * 1000) / 10
+}
+
+const scores = computed(() =>
+  (props.person.matchSources ?? []).filter(
+    (source) => source.type === 'text-search' || source.type === 'face-match',
+  ),
+)
 </script>
 
 <template>
@@ -69,52 +80,38 @@ function formatTextScore(score: number) {
       @click="emit('preview', person)"
     ></button>
 
-    <ItemMedia class="relative self-start">
-      <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
-      <!-- Above the card's preview layer, like the card's other controls. -->
-      <span v-if="person.linkedFaces !== 0" class="absolute -right-1 -bottom-1 z-20">
-        <IdentityFacePreview :person-id="person.id" :name="person.name" />
-      </span>
-    </ItemMedia>
-    <ItemActions
-      v-if="person.matchSources?.length"
-      class="absolute self-start flex-row items-end gap-1 pt-0.5 pr-0.5 right-0 top-0"
-      aria-label="Match sources"
-    >
-      <Badge
-        v-for="(source, index) in person.matchSources"
-        :key="`${source.type}-${index}`"
-        variant="outline"
-        class="min-h-5 font-mono text-xs py-0 text-muted-foreground border-none"
-        :aria-label="sourceLabel(source)"
-        :title="sourceLabel(source)"
+    <ItemMedia class="w-24 shrink-0 flex-col items-center gap-2 self-start">
+      <div class="relative">
+        <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
+        <!-- Above the card's preview layer, like the card's other controls. -->
+        <span v-if="person.linkedFaces !== 0" class="absolute -right-1 -bottom-1 z-20">
+          <IdentityFacePreview :person-id="person.id" :name="person.name" />
+        </span>
+      </div>
+      <EvidenceSourceBadge :source="person.source" />
+      <div
+        v-if="scores.length"
+        class="flex flex-col items-center gap-1"
+        aria-label="Similarity scores"
       >
-        <template v-if="source.type === 'text-search'">
-          <Search aria-hidden="true" />
-          <span class="inline-block w-[3ch] text-right tabular-nums">
+        <small
+          v-for="source in scores"
+          :key="source.type"
+          class="flex items-center gap-1 text-muted-foreground tabular-nums"
+          :aria-label="sourceLabel(source)"
+          :title="sourceLabel(source)"
+        >
+          <template v-if="source.type === 'text-search'">
+            <LetterText class="size-3.5 shrink-0" aria-hidden="true" />
             {{ formatTextScore(source.score) }}
-          </span>
-        </template>
-        <template v-else-if="source.type === 'face-match'">
-          <ScanFace aria-hidden="true" />
-          <span class="inline-block w-[4ch] text-right tabular-nums">
-            {{ source.distance.toFixed(2) }}
-          </span>
-        </template>
-        <template v-else-if="source.type === 'scan-text'">
-          <LetterText aria-hidden="true" />
-          <span class="sr-only">Mentioned on this page</span>
-        </template>
-        <template v-else-if="source.type === 'scan-face'">
-          <UserRound aria-hidden="true" />
-          <span class="sr-only">Face on this page</span>
-        </template>
-        <template v-else>
-          <FileText aria-hidden="true" />
-          <span class="sr-only">In this document</span>
-        </template>
-      </Badge>
-    </ItemActions>
+          </template>
+          <template v-else>
+            <ScanFace class="size-3.5 shrink-0" aria-hidden="true" />
+            {{ faceSimilarity(source.distance) }}%
+          </template>
+        </small>
+      </div>
+    </ItemMedia>
 
     <ItemContent class="min-w-0 gap-1 overflow-hidden pt-1">
       <PersonNameTitle

@@ -1500,6 +1500,30 @@ load a Scans component. The backend search API remains unchanged.
 Repository/media tests verify document identity, all 14 registered pages, the
 empty count, orphan page media and stable entries/source metadata on rerun.
 
+### Page, document and database source tags (#138)
+
+Open `scan-source-tags`. Hana Sidebar has linked faces and mentions on the
+current page, while Tomas Lettered has only a linked text mention: both use the
+double-orange **Page** tag. Rosa Elsewhere and Karel Crowd belong to sibling
+pages and show a single-orange **Document** tag. People from other documents
+show the neutral gray **DB** tag. The tag sits directly below each portrait;
+selecting a person is still indicated separately by the card's selection outline.
+
+Open `scan-source-tags-text`, `scan-source-tags-face` and
+`scan-source-tags-combined` to compare text-only, face-only and combined scores
+below the source tag. Face scores are cosine similarity expressed as a
+percentage (not probability), converted from the existing cosine distance; text
+scores keep their existing scale and are labeled separately. A pending or
+unavailable membership lookup shows **Unknown**, never a premature DB label.
+Membership is checked in bounded page/document queries independently of loaded
+or filtered face/mention batches. Existing portrait browsing, preview, profile
+and assignment actions remain independent.
+
+The seed test checks face-or-mention membership through repositories, sibling
+versus outside-document context, local page/crop media and preservation of a
+reviewed unlink and page metadata on rerun. These links reuse stable existing
+fixtures without modifying their reviewed evidence.
+
 ### Persistent document layout (#142)
 
 Open the `document-table-persistence` manifest link. It reuses the stable width
