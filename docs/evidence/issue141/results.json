@@ -1,0 +1,34 @@
+[
+  {
+    "viewport": "desktop",
+    "width": 1440,
+    "height": 900,
+    "checks": [
+      "document browser entry",
+      "page open/back/reload",
+      "source UUID legacy link",
+      "archive/library legacy link",
+      "orphan pages",
+      "empty document",
+      "missing document",
+      "global/multidocument redirect",
+      "no Scans tab or page overflow"
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "width": 390,
+    "height": 844,
+    "checks": [
+      "document browser entry",
+      "page open/back/reload",
+      "source UUID legacy link",
+      "archive/library legacy link",
+      "orphan pages",
+      "empty document",
+      "missing document",
+      "global/multidocument redirect",
+      "no Scans tab or page overflow"
+    ]
+  }
+]

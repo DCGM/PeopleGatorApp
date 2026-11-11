@@ -462,6 +462,25 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await checkpoint()
     if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
         active_mentions[key] = manifest.mentions[key]
+    # Issue #137: add a direct-document-only person without changing existing
+    # page membership. Recover a write before checkpoint and preserve review edits.
+    key = "sidebar-direct-mention"
+    if key not in manifest.mentions and "sidebar-direct" in active_entities and "scan-sidebar" in documents:
+        source_id = documents["scan-sidebar"]
+        records = (await database.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
+        ))).items
+        context = "Dora Document catalogued the sidebar ledger without appearing on a page."
+        record = next((item for item in records if item.context == context), None)
+        if record is None:
+            record = await database.text_mentions.create(TextMentionCreateRequest(
+                name="Dora Document", context=context, entity_id=active_entities["sidebar-direct"],
+                entity_link_state=EntityLinkState.manual, source_id=source_id,
+            ), actors["reviewer"])
+        manifest.mentions[key] = record.mention_id
+        await checkpoint()
+    if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
+        active_mentions[key] = manifest.mentions[key]
     # Explicit, checkpointed additive upgrade for #35. Use existing synthetic
     # linked media; preserve manual choices and every choice after this upgrade.
     # Record the precondition BEFORE writing, so an interrupted checkpoint cannot
@@ -582,6 +601,27 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         sidebar_face = str(active_faces.get("sidebar-hana-left", ""))
         sidebar_examples = {
             "scan-sidebar-people": sidebar_path,
+            "scan-sidebar-global-text": sidebar_path + "?" + urlencode({
+                "candidate_text": "Hana",
+            }),
+            "scan-sidebar-document-only": sidebar_path + "?" + urlencode({
+                "candidate_text": "Dora Document", "people_scope": "document",
+            }),
+            # #138: show Page (Hana/Tomas), Document (Rosa/Karel), and
+            # DB (other seeded people) with existing local portraits/evidence.
+            "scan-source-tags": sidebar_path + "?" + urlencode({
+                "people_scope": "all", "candidate_sort": "context",
+            }),
+            "scan-source-tags-text": sidebar_path + "?" + urlencode({
+                "candidate_text": "Hana", "people_scope": "all", "candidate_sort": "relevance",
+            }),
+            "scan-source-tags-face": sidebar_path + "?" + urlencode({
+                "candidate_face": sidebar_face, "people_scope": "all", "candidate_sort": "relevance",
+            }),
+            "scan-source-tags-combined": sidebar_path + "?" + urlencode({
+                "candidate_face": sidebar_face, "candidate_text": "Hana",
+                "people_scope": "all", "candidate_sort": "relevance",
+            }),
             "scan-sidebar-card": sidebar_path + "?" + urlencode({"person": sidebar_face}),
             "scan-sidebar-face-search": sidebar_path + "?" + urlencode({
                 "person": sidebar_face, "candidate_face": sidebar_face,
@@ -602,6 +642,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "lines": "person", "panel": "mentions", "mention_scope": "document",
             }),
         }
+        # Exercise the same preserved panel state beside the expanded page browser.
+        sidebar_examples["page-panel-layout-expanded"] = (
+            sidebar_examples["page-panel-layout"] + "&pages_view=expanded"
+        )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
@@ -626,6 +670,17 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # #141: document-first entry points backed by existing local pages
+            # and a registered empty document. Older /scans examples below are
+            # retained as explicit compatibility links handled by redirects.
+            "document-browse": f"/documents/{documents['page-gallery']}?pages_view=expanded",
+            **({
+                "document-browse-empty": f"/documents/{documents['table-nav-empty']}?pages_view=expanded",
+            } if "table-nav-empty" in documents else {}),
+            "document-browse-unregistered": (
+                f"/libraries/{next(d.library for d in DOCUMENTS if d.key == 'scan-only')}"
+                f"/documents/{next(d.document_id for d in DOCUMENTS if d.key == 'scan-only')}?pages_view=expanded"
+            ),
             "people-search-merge": "/people?q=Rina+Merge&sort=name",
             "people-search-merge-paginated": "/people?sort=name",
             # #109: reuse linked local media in both libraries. Defaults include
@@ -849,9 +904,44 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             ),
             **teleprompter_examples,
             **sidebar_examples,
+            # #131: indicators and face-or-mention filtering in the bottom strip.
+            "page-strip-review": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+            ),
+            "page-strip-current-assigned": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-2')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
+            "page-strip-selected-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
+            "page-strip-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
+            ),
+            # #140: expanded entry points reuse the stable, media-backed #131
+            # document and its face-or-mention membership beyond the first batch.
+            "document-page-browser": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"pages_view": "expanded"})
+            ),
+            "document-page-browser-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"pages_view": "expanded", "selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
+            ),
+            "document-page-browser-missing-media": (
+                f"/pages/{pages['page-gallery-9']}"
+                + "?" + urlencode({"pages_view": "expanded"})
+            ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
-            # page 9 has no media. List order follows internal source keys, so
-            # any page may need a further batch; the gallery loads until found.
+            # page 9 has no media. The gallery loads until the current page is found.
             "document-page-gallery": (
                 f"/libraries/{gallery_document.library}/documents/{gallery_document.document_id}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-gallery-13')}"
@@ -942,6 +1032,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "library": ["preview-table-navigation", "preview-table", "preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination"],
             }, doseq=True),
             "document-table-widths": "/documents?" + urlencode({
+                "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
+                "sort": "name",
+            }, doseq=True),
+            # #142: reuse the contrasting titles, counts and local page media
+            # to exercise persisted visibility, order and resized widths.
+            "document-table-persistence": "/documents?" + urlencode({
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",
             }, doseq=True),

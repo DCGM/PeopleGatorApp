@@ -149,3 +149,95 @@ describe('scan sidebar navigation (#103)', () => {
     expect(outer).toHaveBeenCalledTimes(1)
   })
 })
+
+// Real router coverage keeps input defaults, explicit choices and history aligned.
+describe('People search mode navigation (#137)', () => {
+  it('restores document browsing, global search and explicit overrides through history', async () => {
+    const { useScanSidebarState, readSidebarState } = await import('@/viewmodels/scan-sidebar')
+    const router = scanRouter()
+    await router.push('/')
+    let sidebar!: ReturnType<typeof useScanSidebarState>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          sidebar = useScanSidebarState()
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [router] } },
+    )
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'document', peopleOrder: 'context' })
+    sidebar.update({ peopleText: 'Hana' })
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'all', peopleOrder: 'relevance' })
+    sidebar.update({ peopleScope: 'page', peopleOrder: 'name' })
+    await flushPromises()
+    sidebar.update({ peopleText: 'Hana Sidebar' }, 'replace')
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'page', peopleOrder: 'name' })
+    const copied = router.currentRoute.value.fullPath
+    expect(readSidebarState(router.resolve(copied).query)).toMatchObject({
+      peopleScope: 'page',
+      peopleOrder: 'name',
+      peopleText: 'Hana Sidebar',
+    })
+    sidebar.update({ peopleText: '' })
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'document', peopleOrder: 'context' })
+    router.back()
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({
+      peopleScope: 'page',
+      peopleOrder: 'name',
+      peopleText: 'Hana Sidebar',
+    })
+    router.forward()
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'document', peopleOrder: 'context' })
+    sidebar.update({ peopleText: 'Hana', peopleScope: 'document' })
+    await flushPromises()
+    sidebar.searchByFace('f')
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({
+      peopleScope: 'all',
+      peopleOrder: 'relevance',
+      peopleText: '',
+      searchFaceId: 'f',
+    })
+    sidebar.update({ peopleText: 'Hana' })
+    await flushPromises()
+    sidebar.update({ searchFaceId: null })
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'all', peopleOrder: 'relevance' })
+    sidebar.update({ peopleText: ' ' })
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({ peopleScope: 'document', peopleOrder: 'context' })
+    wrapper.unmount()
+  })
+
+  it('keeps consecutive pending input changes in the same search mode', async () => {
+    const { useScanSidebarState } = await import('@/viewmodels/scan-sidebar')
+    const router = scanRouter()
+    await router.push('/')
+    let sidebar!: ReturnType<typeof useScanSidebarState>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          sidebar = useScanSidebarState()
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [router] } },
+    )
+    sidebar.update({ peopleText: 'Hana' }, 'replace')
+    sidebar.update({ peopleScope: 'page' })
+    sidebar.update({ peopleText: 'Hana Sidebar' }, 'replace')
+    await flushPromises()
+    expect(sidebar.state.value).toMatchObject({
+      peopleScope: 'page',
+      peopleOrder: 'relevance',
+      peopleText: 'Hana Sidebar',
+    })
+    wrapper.unmount()
+  })
+})

@@ -1,4 +1,4 @@
-export type SimilarPersonSource = 'page' | 'database'
+export type SimilarPersonSource = 'page' | 'document' | 'database' | 'unknown'
 
 export type SimilarPersonMatchSource =
   | { type: 'text-search'; score: number }

@@ -33,7 +33,6 @@ vi.mock('@vueuse/core', async (original) => ({
 }))
 import DocumentListView from '@/views/DocumentListView.vue'
 import { documentTitle } from '@/viewmodels/document-list'
-import { useDocumentSearch } from '@/viewmodels/document-search'
 
 const doc = (library: string, id = 'shared', name: string | null = 'Album') => ({
   source_id: `${library}-${id}`,
@@ -63,7 +62,11 @@ async function render(url = '/documents') {
     history: createMemoryHistory(),
     routes: [
       { path: '/documents', name: 'document-list', component: DocumentListView },
-      { path: '/scans', name: 'document-search', component: defineComponent(() => () => h('div')) },
+      {
+        path: '/documents/:documentSourceId',
+        name: 'document-source',
+        component: defineComponent(() => () => h('div')),
+      },
       {
         path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
         name: 'document-page',
@@ -110,6 +113,7 @@ async function scrollToEnd() {
 
 beforeEach(() => {
   window.sessionStorage.clear()
+  window.localStorage.clear()
   vi.clearAllMocks()
   desktop.value = true
   api.libraries.mockResolvedValue(response([{ library: 'a' }, { library: 'b' }]))
@@ -132,8 +136,8 @@ describe('document table results', () => {
       'Document shared',
     ])
     expect(
-      wrapper.findAll('tbody a[href^="/scans"]').map((link) => link.attributes('href')),
-    ).toEqual(['/scans?document=a-shared', '/scans?document=b-shared'])
+      wrapper.findAll('tbody a[href^="/documents/"]').map((link) => link.attributes('href')),
+    ).toEqual(['/documents/a-shared?pages_view=expanded', '/documents/b-shared?pages_view=expanded'])
     expect(wrapper.get('[data-slot="input-group"] [role="status"]').text()).toBe('2 results')
     expect(api.pages).not.toHaveBeenCalled()
     expect(api.entities).not.toHaveBeenCalled()
@@ -147,9 +151,9 @@ describe('document table results', () => {
     )
     await wrapper.get('tbody a').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({
-      document: 'a-shared',
-    })
+    expect(router.currentRoute.value.name).toBe('document-source')
+    expect(router.currentRoute.value.params).toEqual({ documentSourceId: 'a-shared' })
+    expect(router.currentRoute.value.query).toEqual({ pages_view: 'expanded' })
   })
   it('loads the next cursor on scroll, keeping rows and one aligned skeleton until it resolves', async () => {
     let complete!: (value: ReturnType<typeof response>) => void
@@ -379,27 +383,6 @@ describe('document table results', () => {
     expect(tags).toContain('Faces ≥ 5')
     expect(tags).toContain('Faces ≤ 7')
     expect(tags).toContain('People ≤ 0')
-  })
-  it('keeps scan result envelopes separate from raw page list cache entries', async () => {
-    const { queryClient, wrapper } = await render()
-    let search: ReturnType<typeof useDocumentSearch> | undefined
-    const harness = mount(
-      defineComponent({
-        setup() {
-          search = useDocumentSearch('', 'all', 12, {
-            'filter.library': ['a'],
-            'filter.document_id': ['shared'],
-          })
-          return () => h('div')
-        },
-      }),
-      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
-    )
-    cleanups.push(() => harness.unmount())
-    await flushPromises()
-    expect(search!.resultCount.value).toBe(1)
-    expect(search!.cards.value[0]?.library).toBe('a')
-    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
   })
 })
 

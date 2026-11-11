@@ -26,6 +26,8 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("strip-other-person", "Otto Page", (), "Synthetic other-person contrast confined to the bottom-strip scenario.", "reviewer"),
+    Person("strip-person", "Nora Page", (), "Synthetic bottom-strip face and mention filtering example.", "reviewer"),
     *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
              "Synthetic duplicate for first/last-selected merge practice.", "importer")
       for i in range(1, 4)),
@@ -120,6 +122,9 @@ PEOPLE = (
     # Issue #66: evidence written by a reviewer who was deactivated afterwards.
     Person("deactivated-olga", "Olga Expiry", (),
            "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
+    # Issue #137: direct document evidence is a member without matching any page.
+    Person("sidebar-direct", "Dora Document", (),
+           "Synthetic person linked only to the scan-sidebar document.", "reviewer"),
     # Issue #103: page, document and other people for the scan sidebar.
     Person("sidebar-hana", "Hana Sidebar", (),
            "Synthetic scan-sidebar person with faces and repeated mentions on one page.", "importer"),
@@ -147,6 +152,8 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("page-strip", "preview-page-strip", "Page strip review practice"),
+    Document("page-strip-mirror", "preview-page-strip-mirror", "Page strip isolation mirror", "page-strip"),
     Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
@@ -322,6 +329,24 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
     return Face(f"sidebar-crowd-{page}-{index}", person, index, 1,
                 ("automatic", "manual", "verified")[index % 3], embedded=False,
                 box=(50 + index % 6 * 120, 190 + index // 6 * 160, 110, 140))
+
+
+PAGE_STRIP_PAGES = (
+    # #131: independent unassigned-face highlights and person matches by either
+    # face or mention; >12 matches exercise filtered cursor pagination.
+    Page("page-strip-1", "page-strip", 1, (Face("strip-unassigned", None, 0, 0, embedded=False),)),
+    Page("page-strip-2", "page-strip", 2, (Face("strip-assigned", "strip-person", 0, 0, embedded=False),)),
+    Page("page-strip-3", "page-strip", 3, mentions=(Mention("strip-mentioned", "strip-person", "Nora Page signed the register."),)),
+    Page("page-strip-4", "page-strip", 4,
+         (Face("strip-mixed-assigned", "strip-person", 0, 0, embedded=False),
+          Face("strip-mixed-unassigned", None, 1, 0, embedded=False))),
+    Page("page-strip-5", "page-strip", 5, (Face("strip-other", "strip-other-person", 0, 0, embedded=False),)),
+    Page("page-strip-6", "page-strip", 6),
+    *(Page(f"page-strip-{i}", "page-strip", i, mentions=(
+        Mention(f"strip-more-{i}", "strip-person", f"Nora Page reviewed entry {i}."),)) for i in range(7, 19)),
+    Page("page-strip-mirror-1", "page-strip-mirror", 1,
+         (Face("strip-mirror", "strip-person", 0, 0, embedded=False),)),
+)
 
 
 # Issue #103: one page with face and text-only people, two of Hana's faces, an
@@ -634,6 +659,7 @@ PAGES = (
     Page("teleprompter-wrap-2", "teleprompter", 2, (),
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
          lines=TELEPROMPTER_WRAPPED_LINES),
+    *PAGE_STRIP_PAGES,
     *SIDEBAR_PAGES,
 )
 

@@ -257,8 +257,9 @@ watch(groups, (items) => {
               class="min-w-0 flex-1 font-sans"
               ><RouterLink
                 :to="{
-                  name: 'document-search',
-                  query: { document: group.source_id! },
+                  name: 'document-source',
+                  params: { documentSourceId: group.source_id! },
+                  query: { selectedPerson: personId, pages_view: 'expanded' },
                 }"
                 class="block truncate underline"
                 :title="`${group.library} · ${group.document_id}`"

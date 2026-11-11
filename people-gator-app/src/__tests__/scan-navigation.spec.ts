@@ -1,78 +1,91 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, ref } from 'vue'
-import { createMemoryHistory, createRouter, type LocationQuery } from 'vue-router'
-import { describe, expect, it, vi } from 'vitest'
-
-vi.mock('@/viewmodels/document-search', () => ({
-  useDocumentSearch: () => ({
-    cards: ref([
-      {
-        sourceId: '00000000-0000-4000-8000-000000000001',
-        library: 'preview-mzk',
-        documentId: 'document',
-        pageId: 'page',
-        names: [],
-      },
-    ]),
-    error: ref(null),
-    hasNextPage: ref(false),
-    isFetchingNextPage: ref(false),
-    isLoading: ref(false),
-    loadMore: vi.fn(),
-    resultCount: ref(1),
-  }),
-}))
-
-const media = vi.hoisted(() => ({ fetchDocuments: vi.fn() }))
+import type { LocationQuery } from 'vue-router'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { legacyScanLocation, resolveDocumentEntry } from '@/viewmodels/document-navigation'
+const media = vi.hoisted(() => ({ fetchDocuments: vi.fn(), fetchPages: vi.fn() }))
 vi.mock('@/query/media', () => media)
-vi.mock('@/query/search/pages', () => ({ fetchPageSearch: vi.fn() }))
-const registered = '00000000-0000-4000-8000-000000000003'
-media.fetchDocuments.mockImplementation(async ({ 'filter.source_id': ids = [] }) => ({
-  items: ids.includes(registered)
-    ? [{ source_id: registered, library: 'preview-mzk', document_id: 'archive', name: 'Ledger' }]
-    : [],
-}))
-import DocumentSearchView from '@/views/DocumentSearchView.vue'
-import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
-
-describe('opening a scan from search', () => {
+beforeEach(() => {
+  vi.resetAllMocks()
+  media.fetchDocuments.mockResolvedValue({ items: [] })
+  media.fetchPages.mockResolvedValue({ items: [] })
+})
+describe('retired Scans entry links', () => {
+  it('retains one document and supported gallery context, dropping global search filters', () => {
+    expect(
+      legacyScanLocation({
+        document: 'source',
+        selectedPerson: 'ada',
+        gallery_person_only: '1',
+        q: 'name',
+        link_state: 'manual',
+      }),
+    ).toEqual({
+      name: 'document-source',
+      params: { documentSourceId: 'source' },
+      query: { selectedPerson: 'ada', gallery_person_only: '1', pages_view: 'expanded' },
+    })
+    expect(legacyScanLocation({ library: 'lib', archive_document: 'archive' })).toEqual({
+      name: 'document-pages',
+      params: { libraryId: 'lib', documentId: 'archive' },
+      query: { pages_view: 'expanded' },
+    })
+    expect(legacyScanLocation({ page: 'page-source', q: 'old' })).toEqual({
+      name: 'page-source',
+      params: { pageSourceId: 'page-source' },
+      query: {},
+    })
+  })
   it.each<LocationQuery>([
     {},
-    {
-      page: '00000000-0000-4000-8000-000000000002',
-      document: registered,
-      api_key: '00000000-0000-4000-8000-000000000004',
-      touched_by: '00000000-0000-4000-8000-000000000005',
-      touched_from: '2026-01-01T00:00:00Z',
-      link_state: 'manual',
-    },
-  ])('opens the target page without inheriting search filters: %j', async (query) => {
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/scans', name: 'document-search', component: DocumentSearchView },
-        {
-          path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
-          name: 'document-page',
-          component: defineComponent(() => () => null),
-        },
-      ],
+    { q: 'Ada' },
+    { library: 'lib' },
+    { document: ['a', 'b'] },
+    { archive_document: 'ambiguous' },
+  ])('returns Documents for global or ambiguous criteria %j', (query) => {
+    expect(legacyScanLocation(query)).toEqual({ name: 'document-list', query: {}, hash: '' })
+  })
+})
+describe('document entry resolution', () => {
+  const document = { source_id: 'source', library: 'lib', document_id: 'archive', name: 'Ledger' }
+  const page = { source_id: 'page-source', library: 'lib', document_id: 'archive', page_id: 'page' }
+  it('resolves a source UUID then queries only its library/document first page', async () => {
+    media.fetchDocuments.mockResolvedValue({ items: [document] })
+    media.fetchPages.mockResolvedValue({ items: [page] })
+    expect(await resolveDocumentEntry({ sourceId: 'source' })).toEqual({ document, page })
+    expect(media.fetchDocuments).toHaveBeenCalledTimes(1)
+    expect(media.fetchPages.mock.calls[0]![0]).toEqual({
+      'filter.library': ['lib'],
+      'filter.document_id': ['archive'],
+      sort: 'page_number',
+      sort_direction: 'asc',
+      limit: 1,
     })
-    await router.push({ path: '/scans', query })
-    const wrapper = mount(DocumentSearchView, {
-      global: {
-        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
-        stubs: { DocumentSearchBar: true, DocumentCard: true },
-      },
+  })
+  it('retains a registered empty document without inventing a page', async () => {
+    media.fetchDocuments.mockResolvedValue({ items: [document] })
+    expect(await resolveDocumentEntry({ library: 'lib', documentId: 'archive' })).toEqual({
+      document,
+      page: undefined,
     })
-    try {
-      await wrapper.get('section a').trigger('click')
-      await flushPromises()
-      expect(router.currentRoute.value.name).toBe('document-page')
-      expect(router.currentRoute.value.params.pageId).toBe('page')
-      expect(router.currentRoute.value.query).toEqual({})
-    } finally {
-      wrapper.unmount()
-    }
+  })
+  it('resolves old archive IDs and orphan pages without conflating libraries', async () => {
+    media.fetchPages.mockResolvedValue({ items: [page] })
+    expect(await resolveDocumentEntry({ sourceId: 'archive' }, 'lib')).toEqual({
+      document: undefined,
+      page,
+    })
+    expect(media.fetchDocuments.mock.calls[1]![0]).toMatchObject({
+      'filter.library': ['lib'],
+      'filter.document_id': ['archive'],
+    })
+    media.fetchDocuments.mockResolvedValue({ items: [{ ...document, library: 'other' }] })
+    expect(await resolveDocumentEntry({ sourceId: 'source' }, 'lib')).toEqual({})
+  })
+  it('rejects unrelated document/page records from an unexpected response', async () => {
+    media.fetchDocuments.mockResolvedValue({ items: [{ ...document, document_id: 'other' }] })
+    media.fetchPages.mockResolvedValue({ items: [{ ...page, library: 'other' }] })
+    expect(await resolveDocumentEntry({ library: 'lib', documentId: 'archive' })).toEqual({
+      document: undefined,
+      page: undefined,
+    })
   })
 })

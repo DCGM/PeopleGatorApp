@@ -1,0 +1,32 @@
+[
+  {
+    "viewport": "desktop",
+    "width": 1440,
+    "height": 900,
+    "checks": [
+      "face and mention page membership",
+      "sibling document membership",
+      "outside-document membership",
+      "portrait/tag/score order",
+      "selection independent of context",
+      "text/face/combined scores",
+      "dark mode",
+      "no overflow or browser errors"
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "width": 390,
+    "height": 844,
+    "checks": [
+      "face and mention page membership",
+      "sibling document membership",
+      "outside-document membership",
+      "portrait/tag/score order",
+      "selection independent of context",
+      "text/face/combined scores",
+      "dark mode",
+      "no overflow or browser errors"
+    ]
+  }
+]
