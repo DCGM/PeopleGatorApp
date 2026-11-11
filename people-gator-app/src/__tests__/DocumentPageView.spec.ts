@@ -47,6 +47,10 @@ vi.mock('@/composables/can-annotate', () => ({
   useCanDeleteDetection: () => ref(true),
 }))
 vi.mock('@/composables/link-state-filter', () => ({ useLinkStateFilter: () => ref([]) }))
+vi.mock('@/query/entities', async (original) => ({
+  ...(await original<typeof import('@/query/entities')>()),
+  useEntityQuery: () => ({ data: ref(null) }),
+}))
 vi.mock('@/query/media', () => ({
   useDocumentLookupQuery: mocks.documentLookup,
 }))
@@ -107,6 +111,8 @@ beforeEach(() => {
     totalCount: ref(null),
     isLoading: ref(false),
     error: ref(null),
+    highlightError: ref(false),
+    retryHighlights: vi.fn(),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
     loadMore: vi.fn(),
@@ -290,14 +296,54 @@ describe('document page gallery navigation', () => {
     const [library, document, page] = mocks.gallery.mock.calls[0]!
     expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
     // Only the route document and the gallery's own order; no evidence filters.
-    const [, , , , order] = mocks.gallery.mock.calls[0]!
-    expect(mocks.gallery.mock.calls[0]).toHaveLength(5)
+    const [, , , , order, person] = mocks.gallery.mock.calls[0]!
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(7)
+    expect(person.value).toBe('')
     expect(order.value).toEqual({ field: 'page_number', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
-    route.query = { person: 'a', line: 'l2', link_state: 'manual', page_link_state: 'verified' }
+    route.query = {
+      person: 'a',
+      line: 'l2',
+      link_state: 'manual',
+      page_link_state: 'verified',
+      selectedPerson: 'nora',
+      gallery_person_only: 'on',
+      gallery_sort: 'faces_total_count',
+      gallery_dir: 'desc',
+    }
+    await settleFocus()
+    expect(person.value).toBe('nora')
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
+      query: {
+        gallery_person_only: 'on',
+        selectedPerson: 'nora',
+        gallery_sort: 'faces_total_count',
+        gallery_dir: 'desc',
+      },
+    })
+    wrapper.unmount()
+  })
+
+  it('filters only by the sidebar selection while the compact toggle is enabled', async () => {
+    const wrapper = await mountView()
+    const strip = wrapper.findComponent({ name: 'DocumentPageGallery' })
+    const person = mocks.gallery.mock.calls[0]![5]
+    route.query = { selectedPerson: 'nora', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(person.value).toBe('nora')
+    route.query = { selectedPerson: 'ada', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(person.value).toBe('ada')
+    route.query = { selectedPerson: 'ada' }
+    await settleFocus()
+    expect(person.value).toBe('')
+    strip.vm.$emit('update:personOnly', true)
+    await flushPromises()
+    expect(mocks.push.mock.lastCall?.[0].query).toMatchObject({
+      selectedPerson: 'ada',
+      gallery_person_only: 'on',
     })
     wrapper.unmount()
   })

@@ -5,7 +5,7 @@ import type { PageResponse, PageSortField } from '@/client'
 import { listSortParams, type SortState } from '@/lib/sorting'
 import { GALLERY_DEFAULT } from '@/viewmodels/sort-options'
 import { useObjectUrlMap } from '@/composables/object-url'
-import { fetchPageImage, usePageListQuery } from '@/query/media'
+import { fetchPageImage, fetchPages, usePageListQuery } from '@/query/media'
 import { queryKeys } from '@/query/keys'
 
 /** Pages requested per API batch; further batches load on demand. */
@@ -20,6 +20,7 @@ export type PageGalleryItem = {
   pageId: string
   label: string
   current: boolean
+  matchesSelectedPerson?: boolean | null
   thumbnailUrl: string
   thumbnailLoading: boolean
   thumbnailFailed: boolean
@@ -32,8 +33,8 @@ export function pageGalleryLabel(pageId: string, number?: number | null) {
 
 /**
  * Registered pages of exactly one library/document in the selected API order:
- * stored page number (default), unknowns last. Evidence filters do not apply:
- * every registered page stays reachable.
+ * stored page number (default), unknowns last. Sidebar evidence filters do not
+ * apply; only the explicit strip person setting narrows the registered pages.
  */
 export function useDocumentPageGallery(
   library: MaybeRefOrGetter<string>,
@@ -41,11 +42,14 @@ export function useDocumentPageGallery(
   currentPageId: MaybeRefOrGetter<string>,
   batchSize = PAGE_GALLERY_BATCH_SIZE,
   sort: MaybeRefOrGetter<SortState<PageSortField>> = GALLERY_DEFAULT,
+  personId: MaybeRefOrGetter<string> = '',
+  selectedPersonId: MaybeRefOrGetter<string | null> = personId,
 ) {
   const query = usePageListQuery(
     computed(() => ({
       'filter.library': [toValue(library)],
       'filter.document_id': [toValue(documentId)],
+      ...(toValue(personId) ? { 'filter.entity_id': [toValue(personId)] } : {}),
       ...listSortParams(toValue(sort)),
       limit: batchSize,
       return_total_count: true,
@@ -67,8 +71,46 @@ export function useDocumentPageGallery(
     pages.value.some((page) => page.page_id === toValue(currentPageId)),
   )
 
-  // Load further batches until the current page is present so it can be marked
-  // and scrolled into view, including pages outside the first batch.
+  // Look up person membership for loaded pages in bounded batches. This also
+  // highlights matches while the strip shows every page, without loading faces
+  // or mentions separately for each thumbnail.
+  const matchChunks = computed(() => {
+    if (!toValue(selectedPersonId) || toValue(personId) === toValue(selectedPersonId)) return []
+    const ids = pages.value.map((page) => page.source_id)
+    return Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) =>
+      ids.slice(i * 100, (i + 1) * 100),
+    )
+  })
+  const matchQueries = useQueries({
+    queries: computed(() =>
+      matchChunks.value.map((ids) => {
+        const params = {
+          'filter.library': [toValue(library)],
+          'filter.document_id': [toValue(documentId)],
+          'filter.entity_id': [toValue(selectedPersonId)!],
+          'filter.source_id': ids,
+          limit: ids.length,
+        }
+        return {
+          queryKey: queryKeys.pages.list(params),
+          queryFn: ({ signal }: { signal: AbortSignal }) => fetchPages(params, signal),
+        }
+      }),
+    ),
+  })
+  const personMatches = computed(
+    () =>
+      new Map(
+        matchChunks.value.flatMap((ids, i) => {
+          const result = matchQueries.value[i]?.data
+          const found = new Set(result?.items.map((page) => page.source_id))
+          return ids.map((id) => [id, result ? found.has(id) : null] as const)
+        }),
+      ),
+  )
+
+  // In the unfiltered strip, locate the current page across batches. A person
+  // filter may exclude it, so filtered lists load further batches only on demand.
   watch(
     () => [
       currentLoaded.value,
@@ -79,6 +121,7 @@ export function useDocumentPageGallery(
     ],
     () => {
       if (
+        !toValue(personId) &&
         !currentLoaded.value &&
         query.data.value &&
         query.hasNextPage.value &&
@@ -120,6 +163,11 @@ export function useDocumentPageGallery(
       pageId: page.page_id,
       label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
+      matchesSelectedPerson: !toValue(selectedPersonId)
+        ? false
+        : toValue(personId) === toValue(selectedPersonId)
+          ? true
+          : (personMatches.value.get(page.source_id) ?? null),
       thumbnailUrl: thumbnailUrls.value.get(page.source_id) ?? '',
       thumbnailLoading: thumbnailQueries.value[index]?.isPending ?? false,
       thumbnailFailed: thumbnailQueries.value[index]?.isError ?? false,
@@ -131,6 +179,8 @@ export function useDocumentPageGallery(
     totalCount: computed(() => query.data.value?.pages[0]?.total_count ?? null),
     isLoading: computed(() => query.isPending.value),
     error: computed(() => query.error.value),
+    highlightError: computed(() => matchQueries.value.some((result) => result.isError)),
+    retryHighlights: () => Promise.all(matchQueries.value.map((result) => result.refetch())),
     hasNextPage: computed(() => query.hasNextPage.value),
     isFetchingNextPage: computed(() => query.isFetchingNextPage.value),
     loadMore: () => {

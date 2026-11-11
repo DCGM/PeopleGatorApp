@@ -1426,6 +1426,32 @@ transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
 
+### Bottom page-strip review (#131)
+
+Open `page-strip-review`, or **Page strip review practice** in
+`preview-page-strip`. Its 18 pages include Nora Page's assigned face (2), her
+mention alone (3), mixed assigned/unassigned faces (4), Otto Page's face (5), an
+empty page (6), and more Nora mentions (7–18). Pages 1 and 4 contain unassigned
+faces for review practice. Every page has deterministic local scan/layout media.
+
+Select **Nora Page** in the right panel, or open `page-strip-selected-person`.
+Her pages get a single orange outer border while all pages remain visible.
+Enable **Nora Page only**, or open `page-strip-person`, for 15 matching pages
+across two batches. Turn it off to restore all 18 pages. The current scan stays
+open when excluded by the filter. The compact strip shows no annotation counts.
+
+Open `page-strip-current-assigned` (page 2) to compare the current page's double
+orange border with the single outer border on Nora's other pages. Page 3 matches
+through a linked mention alone. The same document UUID in
+`preview-page-strip-mirror` demonstrates library isolation.
+
+On disposable data, assign page 1's face, unlink page 3's mention, or delete page
+2's face and inspect highlight/filter membership. Seed tests exercise repository
+queries bounded by loaded source IDs, local thumbnails and rerun preservation of
+assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
+Existing interrupted-checkpoint recovery coverage remains in place. These are
+additive examples and retain older page-gallery media and records.
+
 
 ### Page, document and database source tags (#138)
 

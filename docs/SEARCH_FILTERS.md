@@ -491,3 +491,30 @@ cards show the state counts used by the active filters/sort from batched entity
 statistics. Verification moves a link between state buckets without changing
 totals; review and verification mutations restart People continuation pages.
 Unassigned is intentionally absent: ownerless evidence cannot belong to a person.
+
+### Viewer bottom page strip (#131)
+
+The **Document pages** strip gives noncurrent pages containing the person
+selected in the right panel a single orange outer border, with no inner UI
+border. The current page keeps its double orange border, including when it also
+contains that person. The strip shows no per-page face or mention counters.
+
+Select a person in the viewer's right panel, then enable **[Person name] only**
+in the strip header to show pages with an assigned face **or** a linked text
+mention for that person. The sidebar owns the identity; the strip has no person
+selector or active-filter tags. While enabled, the toggle follows changes to the
+selected person. Turn it off to restore all pages. Without a selected person it
+is disabled.
+
+The header stays on one line: document name · NDK · current/total page position,
+then the person-only toggle and Sort. It scrolls horizontally in narrow panes
+instead of wrapping or adding mobile filter rows. The position uses the stored
+page number and complete registered-page count, even while filtering.
+
+The filter stays within the current library/document and runs before pagination
+and counting. `selectedPerson` identifies the sidebar selection and
+`gallery_person_only=on` enables the strip scope; both survive page-strip
+navigation, reload and history alongside `gallery_sort` / `gallery_dir`.
+Earlier `gallery_person=<id>` links restore that person in the sidebar with the
+scope enabled. A filtered-out current scan stays open; the strip does not fetch
+every batch trying to find it.

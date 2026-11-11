@@ -114,8 +114,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (45, 162, 110)
-    assert len(result.documents) == 57 and len(result.pages) == 117
+    assert await counts(database) == (47, 168, 123)
+    assert len(result.documents) == 59 and len(result.pages) == 136
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -175,7 +175,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
         (
             EntityListFilter(has_detections=True, has_mentions=False),
             {"actions", "emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana", "review-candidate",
-             "sidebar-rosa", "sidebar-karel"},
+             "sidebar-rosa", "sidebar-karel", "strip-other-person"},
 
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas", "sidebar-direct",
@@ -398,7 +398,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (45, 162, 110)
+    assert await counts(database) == (47, 168, 123)
 
 
 @pytest.mark.asyncio
@@ -418,7 +418,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (45, 162, 110)
+    assert await counts(database) == (47, 168, 123)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -441,7 +441,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (46, 162, 110)
+    assert await counts(database) == (48, 168, 123)
 
 
 
@@ -466,8 +466,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 45 and len(result.faces) == 162
-    assert await counts(database) == (45, 162, 110)
+    assert len(result.entities) == 47 and len(result.faces) == 168
+    assert await counts(database) == (47, 168, 123)
 
 
 
@@ -1314,7 +1314,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
     expected_libraries = [
-        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-page-strip', 'preview-page-strip-mirror', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
         'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
@@ -3617,7 +3617,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (45, 162, 110)
+    assert await counts(db) == (47, 168, 123)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -5030,6 +5030,81 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
     assert preserved.last_touched_at == edited.last_touched_at
     assert (await database.entities.get(person_id)).name == "Renamed Ada"
 
+
+@pytest.mark.asyncio
+async def test_page_strip_highlights_person_matching_pagination_and_preservation(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    spec = next(item for item in DOCUMENTS if item.key == "page-strip")
+    person = seed.entities["strip-person"]
+    actor = GenericActor(user_id=seed.users["reviewer"])
+
+    async def pages(person_id=None):
+        cursor = None
+        batches = []
+        while True:
+            result = await database.sources.list_pages(PageListRequest(
+                limit=12, cursor=cursor, return_total_count=True,
+                sort="page_number", sort_direction="asc",
+                filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id],
+                                      **({"entity_id": [person_id]} if person_id else {})),
+            ))
+            batches.append(result)
+            cursor = result.cursor
+            if not cursor:
+                return batches
+
+    all_pages = [page for batch in await pages() for page in batch.items]
+    assert len(all_pages) == 18
+    assert {page.source_id for page in all_pages if page.entity_link_stats.faces.unassigned} == {
+        seed.pages["page-strip-1"], seed.pages["page-strip-4"],
+    }
+    filtered = await pages(person)
+    assert [len(batch.items) for batch in filtered] == [12, 3]
+    assert {batch.total_count for batch in filtered} == {15}
+    expected = {seed.pages[f"page-strip-{i}"] for i in (2, 3, 4, *range(7, 19))}
+    assert {page.source_id for batch in filtered for page in batch.items} == expected
+    mixed = next(page for page in filtered[0].items if page.source_id == seed.pages["page-strip-4"])
+    assert mixed.entity_link_stats.faces.unassigned == 1
+    assert seed.pages["page-strip-mirror-1"] not in expected
+    for key in ("page-strip-1", "page-strip-3", "page-strip-4"):
+        page = await database.sources.get_page(seed.pages[key])
+        thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width == 256
+    assert parse_qs(urlsplit(seed.filter_examples["page-strip-person"]).query) == {"selectedPerson": [str(person)], "gallery_person_only": ["on"]}
+
+    # Unfiltered highlights use the same person predicate, restricted to loaded
+    # source IDs. A selected/assigned page has no unassigned-face counter.
+    highlighted = await database.sources.list_pages(PageListRequest(
+        limit=4, filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id],
+            source_id=[seed.pages[f"page-strip-{i}"] for i in (1, 2, 3, 4)], entity_id=[person]),
+    ))
+    assert {page.source_id for page in highlighted.items} == {seed.pages[f"page-strip-{i}"] for i in (2, 3, 4)}
+    assert next(page for page in highlighted.items if page.source_id == seed.pages["page-strip-2"]).entity_link_stats.faces.unassigned == 0
+    assigned_link = urlsplit(seed.filter_examples["page-strip-current-assigned"])
+    assert assigned_link.path.endswith(str(next(item.page_id for item in PAGES if item.key == "page-strip-2")))
+    assert parse_qs(assigned_link.query) == {"selectedPerson": [str(person)]}
+    selected_link = parse_qs(urlsplit(seed.filter_examples["page-strip-selected-person"]).query)
+    assert selected_link == {"selectedPerson": [str(person)]}
+
+    await database.faces.patch(seed.faces["strip-unassigned"], FacePatchRequest(
+        entity_id=person, entity_link_state="manual",
+    ), context=actor)
+    await database.text_mentions.patch(seed.mentions["strip-mentioned"], TextMentionPatchRequest(
+        entity_id=None, entity_link_state=None,
+    ), context=actor)
+    await database.faces.delete(seed.faces["strip-assigned"], context=actor)
+    before_rerun = await database.sources.get_page(seed.pages["page-strip-1"])
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.pages == seed.pages
+    filtered_ids = {page.source_id for batch in await pages(person) for page in batch.items}
+    assert filtered_ids == expected - {seed.pages["page-strip-2"], seed.pages["page-strip-3"]} | {seed.pages["page-strip-1"]}
+    after_rerun = await database.sources.get_page(seed.pages["page-strip-1"])
+    assert after_rerun.entity_link_stats.faces.unassigned == 0
+    assert after_rerun.last_touched_at == before_rerun.last_touched_at
+    assert await database.faces.get(seed.faces["strip-assigned"]) is None
+    assert (await database.text_mentions.get(seed.mentions["strip-mentioned"])).entity_id is None
 
 @pytest.mark.asyncio
 async def test_scan_people_document_default_global_search_and_direct_seed_preservation(seed_target):

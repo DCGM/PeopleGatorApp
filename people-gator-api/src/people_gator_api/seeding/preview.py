@@ -882,9 +882,28 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             ),
             **teleprompter_examples,
             **sidebar_examples,
+            # #131: indicators and face-or-mention filtering in the bottom strip.
+            "page-strip-review": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+            ),
+            "page-strip-current-assigned": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-2')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
+            "page-strip-selected-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"]})
+            ),
+            "page-strip-person": (
+                f"/libraries/preview-page-strip/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'page-strip')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-strip-1')}"
+                + "?" + urlencode({"selectedPerson": manifest.entities["strip-person"], "gallery_person_only": "on"})
+            ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
-            # page 9 has no media. List order follows internal source keys, so
-            # any page may need a further batch; the gallery loads until found.
+            # page 9 has no media. The gallery loads until the current page is found.
             "document-page-gallery": (
                 f"/libraries/{gallery_document.library}/documents/{gallery_document.document_id}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-gallery-13')}"
