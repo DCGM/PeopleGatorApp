@@ -15,7 +15,15 @@ import { useRoute } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
-import { BadgeCheck } from '@lucide/vue'
+import {
+  BadgeCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  PanelTopClose,
+  PanelTopOpen,
+} from '@lucide/vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
@@ -91,13 +99,50 @@ const route = useRoute()
 // it on narrow ones; each layout remembers its own user-resized split.
 const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
 const splitDirection = computed(() => (isWideWorkspace.value ? 'horizontal' : 'vertical'))
+const transcriptionVisible = ref(true)
+const sidebarVisible = ref(true)
+const sidebarShown = computed(() => !isWideWorkspace.value || sidebarVisible.value)
+const transcriptionBar = ref<HTMLElement | null>(null)
+const viewerToolbar = ref<HTMLElement | null>(null)
 const transcriptionPanel = ref<WorkspacePanel | null>(null)
-const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel)
+const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel, transcriptionVisible)
 // Wide screens size the sidebar beside the workspace; narrow ones stack it below.
 const sidebarPanel = ref<WorkspacePanel | null>(null)
-const sidebarWidth = useSidebarWidth(isWideWorkspace, sidebarPanel)
+const sidebarWidth = useSidebarWidth(isWideWorkspace, sidebarPanel, sidebarShown)
 const sidebar = useScanSidebarState()
 const sidebarState = sidebar.state
+
+function hidePanel(side: 'left' | 'right') {
+  // The stacked People section is part of the mobile page, not a hideable panel.
+  if (side === 'right' && !isWideWorkspace.value) return
+  const visible = side === 'left' ? transcriptionVisible : sidebarVisible
+  if (!visible.value) return
+  visible.value = false
+  const panel = side === 'left' ? transcriptionPanel : sidebarPanel
+  panel.value?.collapse?.()
+  // The previous focused control is now hidden; move to its matching reopen action.
+  void nextTick(() => {
+    if (side === 'left' && !isWideWorkspace.value)
+      transcriptionBar.value?.querySelector('button')?.focus()
+    else
+      viewerToolbar.value?.querySelector<HTMLButtonElement>(`[data-open-panel="${side}"]`)?.focus()
+  })
+}
+function showPanel(side: 'left' | 'right') {
+  if (side === 'left') transcriptionVisible.value = true
+  else sidebarVisible.value = true
+  void nextTick(() => {
+    if (side === 'left' && !isWideWorkspace.value) {
+      transcriptionBar.value?.querySelector('button')?.focus()
+      return
+    }
+    const selector =
+      side === 'left'
+        ? '[aria-label="Hide transcription panel"]'
+        : '[aria-label="Hide people panel"]'
+    document.querySelector<HTMLButtonElement>(selector)?.focus()
+  })
+}
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
@@ -415,19 +460,32 @@ function removeSearchFace(history: 'push' | 'replace' = 'push') {
 }
 const focusPeopleRequested = ref(false)
 function applyPeopleFocus() {
-  if (!focusPeopleRequested.value || sidebarState.value.tab !== 'people' || !peoplePanel.value)
+  if (
+    !focusPeopleRequested.value ||
+    !sidebarVisible.value ||
+    sidebarState.value.tab !== 'people' ||
+    !peoplePanel.value
+  )
     return
   focusPeopleRequested.value = false
   peoplePanel.value.focus()
 }
-watch([peoplePanel, () => sidebarState.value.tab], applyPeopleFocus, { flush: 'post' })
+watch([peoplePanel, sidebarVisible, () => sidebarState.value.tab], applyPeopleFocus, {
+  flush: 'post',
+})
 function focusPeopleSearch() {
+  sidebarVisible.value = true
   focusPeopleRequested.value = true
   if (sidebarState.value.tab === 'people') void nextTick(applyPeopleFocus)
   else sidebar.update({ tab: 'people' })
 }
 // Face Search opens People with the results; focus stays on the scan card.
 function searchByFace(face: Face) {
+  if (!sidebarVisible.value) {
+    sidebarVisible.value = true
+    focusPeopleRequested.value = true
+    void nextTick(applyPeopleFocus)
+  }
   sidebar.searchByFace(face.id)
 }
 const canAnnotate = useCanAnnotate()
@@ -845,18 +903,49 @@ onBeforeUnmount(() => {
     >
       <ResizablePanel :min-size="50" class="workspace-main">
         <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
-        <div class="workspace-split">
-          <ResizablePanelGroup :direction="splitDirection" @layout="workspaceSplit.layoutChanged">
+        <div class="workspace-split flex flex-col">
+          <header
+            v-if="!isWideWorkspace"
+            ref="transcriptionBar"
+            class="shrink-0 border-b bg-background px-3 py-1.5"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="w-full justify-between"
+              :aria-label="
+                transcriptionVisible ? 'Hide transcription panel' : 'Open transcription panel'
+              "
+              aria-controls="transcription-panel"
+              :aria-expanded="transcriptionVisible"
+              @click="transcriptionVisible ? hidePanel('left') : showPanel('left')"
+            >
+              Transcription
+              <PanelTopClose v-if="transcriptionVisible" aria-hidden="true" />
+              <PanelTopOpen v-else aria-hidden="true" />
+            </Button>
+          </header>
+          <ResizablePanelGroup
+            :direction="splitDirection"
+            class="min-h-0 flex-1"
+            @layout="workspaceSplit.layoutChanged"
+          >
             <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
             <ResizablePanel
+              id="transcription-panel"
               ref="transcriptionPanel"
+              v-show="transcriptionVisible"
+              collapsible
+              :collapsed-size="0"
+              @collapse="hidePanel('left')"
               :default-size="workspaceSplit.defaultSize"
               :min-size="15"
               :max-size="70"
             >
               <section
                 class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
-                aria-labelledby="page-transcription-title"
+                aria-label="Transcription"
               >
                 <DocumentTeleprompter
                   ref="teleprompter"
@@ -876,11 +965,26 @@ onBeforeUnmount(() => {
                   @select-line="selectLine"
                   @select-entity="selectEntity"
                   @expand="expandContext"
-                />
+                >
+                  <template v-if="isWideWorkspace" #panel-actions>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Hide transcription panel"
+                      title="Hide transcription panel"
+                      aria-controls="transcription-panel"
+                      :aria-expanded="true"
+                      @click="hidePanel('left')"
+                      ><PanelLeftClose aria-hidden="true"
+                    /></Button>
+                  </template>
+                </DocumentTeleprompter>
               </section>
             </ResizablePanel>
             <!-- Above scan overlays and toolbars, which would otherwise capture drags at the edge. -->
             <ResizableHandle
+              v-show="transcriptionVisible"
               with-handle
               aria-label="Resize transcription panel"
               class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
@@ -889,6 +993,69 @@ onBeforeUnmount(() => {
               :default-size="100 - workspaceSplit.defaultSize"
               class="flex min-h-0 min-w-0 flex-col"
             >
+              <header
+                ref="viewerToolbar"
+                class="viewer-tools flex min-w-0 shrink-0 items-center gap-2 border-b bg-background p-3"
+                aria-label="Page viewer controls"
+              >
+                <Button
+                  v-if="isWideWorkspace && !transcriptionVisible"
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  data-open-panel="left"
+                  aria-label="Open transcription panel"
+                  title="Open transcription panel"
+                  aria-controls="transcription-panel"
+                  :aria-expanded="false"
+                  @click="showPanel('left')"
+                >
+                  <PanelLeftOpen aria-hidden="true" />
+                </Button>
+                <div class="min-w-0 flex-1 overflow-x-auto">
+                  <DocumentControls
+                    v-show="!galleryExpanded"
+                    class="w-max min-w-full flex-nowrap justify-start"
+                    @pointerdown.stop
+                    @wheel.stop
+                    @keydown.stop
+                    v-model:link-states="linkStates"
+                    :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
+                    :line-count="visibleLineIndices.length"
+                    :selected-face-index="selectedFaceIndex"
+                    :face-count="faces.length"
+                    :zoom-percent="zoomPercent"
+                    :minimum-zoom-percent="minimumZoomPercent"
+                    :maximum-zoom-percent="maximumZoomPercent"
+                    :translation-options="translationOptions"
+                    :is-translation-open="isTranslationOpen"
+                    :selected-language="selectedLanguage"
+                    :show-badge-names="showBadgeNames"
+                    @previous-line="previousLine"
+                    @next-line="nextLine"
+                    @previous-face="previousFace"
+                    @next-face="nextFace"
+                    @set-zoom="setZoom"
+                    @reset-view="resetView"
+                    @select-translation="selectTranslation"
+                    @toggle-badge-names="showBadgeNames = !showBadgeNames"
+                  />
+                </div>
+                <Button
+                  v-if="isWideWorkspace && !sidebarVisible"
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  data-open-panel="right"
+                  aria-label="Open people panel"
+                  title="Open people panel"
+                  aria-controls="people-panel"
+                  :aria-expanded="false"
+                  @click="showPanel('right')"
+                >
+                  <PanelRightOpen aria-hidden="true" />
+                </Button>
+              </header>
               <section
                 ref="viewerElement"
                 v-show="!galleryExpanded"
@@ -896,32 +1063,6 @@ onBeforeUnmount(() => {
                 aria-label="Pan and zoom document page"
                 tabindex="-1"
               >
-                <DocumentControls
-                  class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
-                  @pointerdown.stop
-                  @wheel.stop
-                  @keydown.stop
-                  v-model:link-states="linkStates"
-                  :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
-                  :line-count="visibleLineIndices.length"
-                  :selected-face-index="selectedFaceIndex"
-                  :face-count="faces.length"
-                  :zoom-percent="zoomPercent"
-                  :minimum-zoom-percent="minimumZoomPercent"
-                  :maximum-zoom-percent="maximumZoomPercent"
-                  :translation-options="translationOptions"
-                  :is-translation-open="isTranslationOpen"
-                  :selected-language="selectedLanguage"
-                  :show-badge-names="showBadgeNames"
-                  @previous-line="previousLine"
-                  @next-line="nextLine"
-                  @previous-face="previousFace"
-                  @next-face="nextFace"
-                  @set-zoom="setZoom"
-                  @reset-view="resetView"
-                  @select-translation="selectTranslation"
-                  @toggle-badge-names="showBadgeNames = !showBadgeNames"
-                />
                 <div
                   ref="zoomElement"
                   class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
@@ -1033,12 +1174,18 @@ onBeforeUnmount(() => {
       </ResizablePanel>
       <ResizableHandle
         v-if="isWideWorkspace"
+        v-show="sidebarShown"
         with-handle
         aria-label="Resize sidebar"
         class="z-30 after:w-3"
       />
       <ResizablePanel
+        id="people-panel"
         ref="sidebarPanel"
+        v-show="sidebarShown"
+        collapsible
+        :collapsed-size="0"
+        @collapse="hidePanel('right')"
         size-unit="px"
         :default-size="sidebarWidth.defaultSize"
         :min-size="isWideWorkspace ? SIDEBAR_WIDTH.min : 0"
@@ -1051,7 +1198,19 @@ onBeforeUnmount(() => {
           :model-value="sidebarState.tab"
           @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
         >
-          <div class="shrink-0 border-b p-3">
+          <div class="flex shrink-0 items-center gap-2 border-b p-3">
+            <Button
+              v-if="isWideWorkspace"
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Hide people panel"
+              title="Hide people panel"
+              aria-controls="people-panel"
+              :aria-expanded="true"
+              @click="hidePanel('right')"
+              ><PanelRightClose aria-hidden="true"
+            /></Button>
             <TabsList aria-label="Page sidebar" class="w-full">
               <TabsTrigger value="people">People</TabsTrigger>
               <TabsTrigger value="faces">Faces</TabsTrigger>

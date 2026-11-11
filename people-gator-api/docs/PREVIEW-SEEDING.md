@@ -1426,6 +1426,26 @@ transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
 
+### Page panel layout (#139)
+
+Open **page-panel-layout** to review the existing synthetic scan-sidebar page,
+Hana's linked face and text, local media, selected-person transcription mode and
+document-scoped Mentions. On desktop, hide buttons sit on the edges facing the
+viewer: transcription on the right of its header, People on the left. Reopen
+from the corresponding viewer-header control. Panels retain settings and saved
+expanded sizes; Link/Reassign and face Search reveal People when needed.
+
+Below 1024px, People remains visible below the viewer. Transcription collapses
+upward into a single **Transcription** bar, which also reopens it. Try a desktop
+→ mobile → desktop round trip with People hidden: the mobile section remains
+available and returning to desktop retains its previous visibility and width.
+Open **page-panel-layout-expanded** to repeat the same checks beside the
+expanded page browser, then collapse the browser to restore the live viewer.
+
+Hidden/open state is local to the mounted workspace. Both links reuse stable
+existing evidence and local media; the seed test checks those relationships,
+media access, exploration URLs and preservation of a reviewed face edit on rerun.
+
 ### Bottom page-strip review (#131)
 
 Open `page-strip-review`, or **Page strip review practice** in

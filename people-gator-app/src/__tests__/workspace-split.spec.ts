@@ -121,3 +121,64 @@ describe('scan sidebar width (#121)', () => {
     blocked.stop()
   })
 })
+
+describe('collapsed workspace panels (#139)', () => {
+  it('retains expanded transcription sizes while hidden and restores the current orientation', async () => {
+    const direction = ref<'horizontal' | 'vertical'>('horizontal')
+    const visible = ref(true)
+    let size = 48
+    let split: ReturnType<typeof useWorkspaceSplit>
+    const panel = ref({
+      getSize: () => size,
+      resize: vi.fn((next: number) => {
+        size = next
+        split.layoutChanged([next, 100 - next])
+      }),
+    })
+    const scope = effectScope()
+    split = scope.run(() => useWorkspaceSplit(direction, panel, visible))!
+    split.layoutChanged([48, 52])
+    visible.value = false
+    size = 0
+    split.layoutChanged([0, 100])
+    // A responsive change while hidden must not reopen the panel or save zero.
+    direction.value = 'vertical'
+    await nextTick()
+    await nextTick()
+    expect(panel.value.resize).not.toHaveBeenCalled()
+    visible.value = true
+    await nextTick()
+    await nextTick()
+    expect(size).toBe(30)
+    direction.value = 'horizontal'
+    await nextTick()
+    await nextTick()
+    expect(size).toBe(48)
+    expect(JSON.parse(localStorage.getItem('document-workspace-layouts-v1')!)).toEqual({
+      horizontal: 48,
+      vertical: 30,
+    })
+    scope.stop()
+  })
+
+  it('retains the sidebar width through hiding, a narrow layout and reopening', async () => {
+    const wide = ref(true)
+    const visible = ref(true)
+    const panel = ref({ getSize: () => 0, resize: vi.fn() })
+    const scope = effectScope()
+    const sidebar = scope.run(() => useSidebarWidth(wide, panel, visible))!
+    sidebar.layoutChanged([700, 560])
+    visible.value = false
+    sidebar.layoutChanged([1260, 0])
+    wide.value = false
+    await settled()
+    visible.value = true
+    await settled()
+    expect(panel.value.resize).not.toHaveBeenCalled()
+    wide.value = true
+    await settled()
+    expect(panel.value.resize).toHaveBeenLastCalledWith(560)
+    expect(localStorage.getItem('document-sidebar-width-v1')).toBe('560')
+    scope.stop()
+  })
+})

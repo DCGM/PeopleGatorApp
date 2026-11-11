@@ -645,23 +645,28 @@ defineExpose({ scrollPage, navigateTo })
 <template>
   <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
     <div role="toolbar" aria-label="Teleprompter settings"
-      class="@container flex min-w-0 flex-row flex-wrap items-center gap-2 border-b py-1.5">
-      <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
-        :model-value="lineVisibility" @update:model-value="setLineVisibility">
-        <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="gap-1 px-2"
-          :aria-label="lineVisibilityLabels[mode]" :title="lineVisibilityLabels[mode]">
-          <component :is="lineVisibilityIcons[mode]" class="size-3.5" aria-hidden="true" />
-          <span class="hidden @3xl:inline">{{ lineVisibilityLabels[mode] }}</span>
-        </ToggleGroupItem>
-        <!-- Shown only while active, and always labeled: revealing lines creates it,
-          choosing a mode leaves it. -->
-        <ToggleGroupItem v-if="lineVisibility === 'custom'" value="custom" class="gap-1 px-2"
-          :aria-label="lineVisibilityLabels.custom" title="Lines you revealed. Choose a mode to reset.">
-          <component :is="lineVisibilityIcons.custom" class="size-3.5" aria-hidden="true" />
-          {{ lineVisibilityLabels.custom }}
-        </ToggleGroupItem>
-      </ToggleGroup>
-      <TeleprompterHighlightFilter v-model="annotationHighlight" />
+      class="@container flex min-w-0 items-start gap-2 border-b py-1.5">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
+          :model-value="lineVisibility" @update:model-value="setLineVisibility">
+          <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="gap-1 px-2"
+            :aria-label="lineVisibilityLabels[mode]" :title="lineVisibilityLabels[mode]">
+            <component :is="lineVisibilityIcons[mode]" class="size-3.5" aria-hidden="true" />
+            <span class="hidden @3xl:inline">{{ lineVisibilityLabels[mode] }}</span>
+          </ToggleGroupItem>
+          <!-- Shown only while active, and always labeled: revealing lines creates it,
+            choosing a mode leaves it. -->
+          <ToggleGroupItem v-if="lineVisibility === 'custom'" value="custom" class="gap-1 px-2"
+            :aria-label="lineVisibilityLabels.custom" title="Lines you revealed. Choose a mode to reset.">
+            <component :is="lineVisibilityIcons.custom" class="size-3.5" aria-hidden="true" />
+            {{ lineVisibilityLabels.custom }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <TeleprompterHighlightFilter v-model="annotationHighlight" />
+      </div>
+      <div v-if="$slots['panel-actions']" class="shrink-0">
+        <slot name="panel-actions" />
+      </div>
     </div>
 
     <div ref="bodyElement"

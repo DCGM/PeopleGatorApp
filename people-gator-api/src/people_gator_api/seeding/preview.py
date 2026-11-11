@@ -634,7 +634,18 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "panel": "mentions", "mention_scope": "document",
             }),
             "scan-sidebar-info": sidebar_path + "?" + urlencode({"panel": "info"}),
+            # #139: existing linked face/text/media provide state to preserve while
+            # independently hiding/reopening transcription and People panels.
+            "page-panel-layout": sidebar_path + "?" + urlencode({
+                "person": sidebar_face,
+                "selectedPerson": manifest.entities["sidebar-hana"],
+                "lines": "person", "panel": "mentions", "mention_scope": "document",
+            }),
         }
+        # Exercise the same preserved panel state beside the expanded page browser.
+        sidebar_examples["page-panel-layout-expanded"] = (
+            sidebar_examples["page-panel-layout"] + "&pages_view=expanded"
+        )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")

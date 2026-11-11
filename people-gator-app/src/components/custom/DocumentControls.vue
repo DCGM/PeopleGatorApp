@@ -51,9 +51,9 @@ defineEmits<{
   <div
     role="toolbar"
     aria-label="Scan tools"
-    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2"
+    class="flex select-none flex-row flex-nowrap items-center justify-start gap-2"
   >
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
@@ -81,7 +81,7 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
@@ -109,7 +109,7 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
@@ -147,7 +147,7 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
@@ -165,7 +165,7 @@ defineEmits<{
 
     <EntityLinkStateFilter v-model="linkStates" toolbar />
 
-    <ButtonGroup class="shrink-0 drop-shadow-md" aria-label="Translation">
+    <ButtonGroup class="shrink-0" aria-label="Translation">
       <Button
         v-for="option in translationOptions"
         :key="option"

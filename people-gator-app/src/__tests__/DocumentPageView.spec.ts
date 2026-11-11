@@ -2,7 +2,7 @@ import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 import { AxiosError, type AxiosResponse } from 'axios'
 import { mount, shallowMount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DocumentPageView from '@/views/DocumentPageView.vue'
 import type { Face, TranscriptionLine } from '@/viewmodels/document-workspace.types'
 
@@ -804,9 +804,7 @@ describe('resizable transcription panel (#36)', () => {
         expect(group.attributes('direction')).toBe(direction)
         const panels = group.element.children
         // Transcription first (left or top), then the handle, then the scan.
-        expect(
-          panels[0]!.querySelector('[aria-labelledby="page-transcription-title"]'),
-        ).not.toBeNull()
+        expect(panels[0]!.querySelector('[aria-label="Transcription"]')).not.toBeNull()
         expect(panels[2]!.querySelector('[aria-label="Pan and zoom document page"]')).not.toBeNull()
         wrapper.unmount()
       } finally {
@@ -1084,6 +1082,141 @@ describe('face search with an unusable reference (#134)', () => {
         sort_direction: 'asc',
       }),
     )
+    wrapper.unmount()
+  })
+})
+
+describe('independent panel visibility (#139)', () => {
+  let wide: boolean
+  let listeners: ((event: { matches: boolean; media: string }) => void)[]
+  let restoreMedia: () => void
+  beforeEach(() => {
+    wide = true
+    listeners = []
+    const original = window.matchMedia
+    window.matchMedia = vi.fn((query: string) => ({
+      get matches() {
+        return query.includes('1024') && wide
+      },
+      media: query,
+      addEventListener: (_: string, callback: (typeof listeners)[number]) => {
+        if (query.includes('1024')) listeners.push(callback)
+      },
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    restoreMedia = () => {
+      window.matchMedia = original
+    }
+  })
+  afterEach(() => restoreMedia())
+
+  it('keeps both panels and the live scan mounted while hidden, with reopen actions in the viewer header', async () => {
+    const wrapper = await mountView()
+    const viewer = wrapper.get('.workspace-viewer').element
+    const transcription = wrapper.findComponent({ name: 'DocumentTeleprompter' }).element
+    const sidebar = wrapper.get('.workspace-sidebar').element
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    state.hidePanel('left')
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    // The splitter may expand internally as responsive constraints change; only
+    // an explicit reopen action should reveal the user's hidden content.
+    wrapper
+      .findAllComponents({ name: 'ResizablePanel' })
+      .forEach((panel) => panel.vm.$emit('expand'))
+    await nextTick()
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    const bar = wrapper.get('header.viewer-tools')
+    expect(bar.find('[aria-label="Open transcription panel"]').exists()).toBe(true)
+    expect(bar.find('[aria-label="Open people panel"]').exists()).toBe(true)
+    await bar.get('[aria-label="Open transcription panel"]').trigger('click')
+    await bar.get('[aria-label="Open people panel"]').trigger('click')
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    expect(wrapper.findComponent({ name: 'DocumentTeleprompter' }).element).toBe(transcription)
+    expect(wrapper.get('.workspace-sidebar').element).toBe(sidebar)
+    expect(wrapper.get('#transcription-panel').attributes('style') ?? '').not.toContain(
+      'display: none',
+    )
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(
+      wrapper.get('.workspace-viewer').findComponent({ name: 'DocumentControls' }).exists(),
+    ).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('collapses mobile transcription into its labelled bar while keeping People visible', async () => {
+    wide = false
+    const wrapper = await mountView(true)
+    const viewer = wrapper.get('.workspace-viewer').element
+    const bar = wrapper.get('header:has([aria-label="Hide transcription panel"])')
+    expect(bar.text()).toContain('Transcription')
+    expect(wrapper.find('[aria-label="Hide people panel"]').exists()).toBe(false)
+    await bar.get('[aria-label="Hide transcription panel"]').trigger('click')
+    expect(bar.get('[aria-label="Open transcription panel"]').attributes('aria-expanded')).toBe(
+      'false',
+    )
+    expect(bar.text()).toContain('Transcription')
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(
+      wrapper.get('header.viewer-tools').find('[aria-label="Open transcription panel"]').exists(),
+    ).toBe(false)
+    await bar.get('[aria-label="Open transcription panel"]').trigger('click')
+    expect(wrapper.get('#transcription-panel').attributes('style') ?? '').not.toContain(
+      'display: none',
+    )
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    wrapper.unmount()
+  })
+
+  it('shows the stacked People section even when its desktop panel was hidden', async () => {
+    const wrapper = await mountView()
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    wide = false
+    listeners.forEach((listener) => listener({ matches: false, media: '(min-width: 1024px)' }))
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.find('[aria-label="Hide people panel"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Open people panel"]').exists()).toBe(false)
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    wide = true
+    listeners.forEach((listener) => listener({ matches: true, media: '(min-width: 1024px)' }))
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    await wrapper.get('[aria-label="Open people panel"]').trigger('click')
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    wrapper.unmount()
+  })
+
+  it('reveals a hidden People panel for Link and explicit face Search', async () => {
+    faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))
+    const wrapper = await mountView(true)
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    state.hidePanel('right')
+    await nextTick()
+    wrapper.findComponent({ name: 'SelectedFaceItem' }).vm.$emit('findProfile')
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(1)
+    state.hidePanel('right')
+    await nextTick()
+    await wrapper
+      .findComponent({ name: 'SelectedFaceItem' })
+      .get('[aria-label="Search people by this face"]')
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
 })

@@ -132,3 +132,12 @@ The scan workspace's top-bar breadcrumbs show the stored document name and page
 number when available, falling back independently to archive UUIDs. The document
 breadcrumb opens that document's pages. Explore the seed CLI's
 `breadcrumb-*` links for named, missing-metadata and long-title examples.
+
+The page workspace's desktop hide buttons sit beside the viewer: the right end
+of the transcription header and the left end of the People header. Reopen from
+the corresponding viewer-header control. On mobile, People remains visible;
+Transcription collapses upward into a labelled bar that also reopens it. Hiding
+preserves settings and expanded sizes; Link/Reassign and face Search reveal
+People when needed. Scan tools use a regular header above the image, scrolling
+horizontally on narrow screens. Explore `page-panel-layout` or
+`page-panel-layout-expanded` in the synthetic preview manifest.
