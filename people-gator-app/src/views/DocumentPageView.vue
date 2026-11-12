@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useCreationFilters } from '@/viewmodels/shared-filters'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
@@ -96,7 +95,6 @@ const sidebarState = sidebar.state
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
-const creation = useCreationFilters()
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -360,8 +358,7 @@ const people = reactive(
     order: peopleOrder,
     search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
     searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,
-    filters: creation.params,
-    enabled: () => sidebarState.value.tab === 'people' && !creation.error.value,
+    enabled: () => sidebarState.value.tab === 'people',
     pageFaces: faces,
     transcription,
     pageSourceId: () => page.value?.source_id ?? '',
@@ -1035,7 +1032,6 @@ onBeforeUnmount(() => {
               :has-next-page="people.hasNextPage"
               :is-fetching="people.isFetching"
               :error="people.error"
-              :enabled="!creation.error.value"
               :search-face-id="searchFaceId"
               :face-models="searchFaceModels"
               :face-model="searchModel"

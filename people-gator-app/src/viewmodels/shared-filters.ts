@@ -55,13 +55,7 @@ export function utcToLocalTime(value: unknown): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${seconds}`
 }
 
-export const CREATION_KEYS = ['created_by', 'created_key', 'created_from', 'created_to'] as const
-export const CREATION_FIELDS = [
-  'creatorIds',
-  'creationApiKeyIds',
-  'createdFrom',
-  'createdTo',
-] as const
+const CREATION_KEYS = ['created_by', 'created_key', 'created_from', 'created_to'] as const
 
 export const sharedKeys = [
   'library',
@@ -219,34 +213,6 @@ export function sharedUrlError(query: LocationQuery): string | undefined {
   if (invalidSharedValues(query).length)
     return 'This link contains an invalid filter. Remove or correct it.'
   return sharedFilterError(readSharedFilters(query))
-}
-
-export function creationUrlError(query: LocationQuery) {
-  return sharedUrlError(
-    Object.fromEntries(
-      Object.entries(query).filter(([key]) =>
-        CREATION_KEYS.includes(key as (typeof CREATION_KEYS)[number]),
-      ),
-    ),
-  )
-}
-
-export function useCreationFilters() {
-  const shared = useSharedFilters()
-  const route = useRoute()
-  return {
-    params: computed(() => creationFiltersQuery(shared.filters.value)),
-    error: computed(() => creationUrlError(route.query)),
-    clear: () => {
-      shared.filters.value = {
-        ...shared.filters.value,
-        creatorIds: [],
-        creationApiKeyIds: [],
-        createdFrom: '',
-        createdTo: '',
-      }
-    },
-  }
 }
 
 export function useSharedFilters() {

@@ -16,7 +16,6 @@ const links = Object.fromEntries(
   }),
 )
 const append = (url, params) => url + (url.includes('?') ? '&' : '?') + new URLSearchParams(params)
-const reviewer = new URL(links['documents-created-by'], origin).searchParams.get('created_by')
 const scenarios = [
   ['documents', links['documents-created-by'], 'documents', '/api/v1/documents'],
   ['people', links['people-created-by'], 'Search people panel', '/api/v1/search-entities'],
@@ -27,12 +26,6 @@ const scenarios = [
     links['mentions-created-by'],
     'Person evidence panel',
     '/api/v1/text-mentions',
-  ],
-  [
-    'sidebar-people',
-    append(links['scan-sidebar-people'], { created_by: reviewer }),
-    'sidebar-people',
-    '/api/v1/entities',
   ],
 ]
 await mkdir(output, { recursive: true })
@@ -67,11 +60,7 @@ try {
           await page.getByRole('button', { name: 'Show filters', exact: true }).click()
           panel = page.getByRole('dialog', { name: 'Filters', exact: true })
         } else panel = page.getByRole('complementary', { name: 'Document filters' })
-      } else if (label === 'sidebar-people')
-        panel = page
-          .locator('form[role="search"]')
-          .filter({ has: page.getByRole('textbox', { name: 'Search people', exact: true }) })
-      else panel = page.locator(`[aria-label="${label}"]`).first()
+      } else panel = page.locator(`[aria-label="${label}"]`).first()
       await panel.waitFor()
       if (viewport === 'mobile' && label !== 'documents') {
         await panel.scrollIntoViewIfNeeded()

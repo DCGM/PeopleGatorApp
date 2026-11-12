@@ -1448,8 +1448,8 @@ read their actual media before repeating the seed and checking preservation.
 
 Every shared panel offers **Created by**, **Created via key**, **Created from**
 and **Created to**, independently of its modification filters. This includes
-Documents, Scan search, People and person evidence (Faces/Mentions), plus the scan
-sidebar's People tab (not its Faces or Mentions tabs). Each list/search matches the returned
+Documents, Scan search, People and person evidence (Faces/Mentions); the scan
+editor sidebar has none. Each list/search matches the returned
 record's own creation, rather than its containing document or latest editor.
 The API accepts `filter.created_from`, `filter.created_to`,
 `filter.created_by_user_id` and `filter.created_by_api_key_id`.

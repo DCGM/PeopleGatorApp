@@ -11,7 +11,6 @@ Each pair shows the same shared creation controls and an applied criterion:
 - `people`: person search.
 - `scans`: registered-page search with an inclusive date interval.
 - `person-faces` and `person-mentions`: person evidence tabs.
-- `sidebar-people`: scan viewer People panel.
 - `creator-picker`: open creator multi-select.
 - `date-picker`: open creation calendar/time control.
 

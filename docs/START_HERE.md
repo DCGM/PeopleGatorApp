@@ -145,7 +145,7 @@ seed's `document-creation` link for user, API-key and legacy examples.
 
 
 Use **Created by**, **Created via key**, **Created from** and **Created to** in
-shared filter panels and the scan sidebar's People tab to select the creator and an inclusive
+shared filter panels to select the creator and an inclusive
 creation interval. The criteria match the listed person, face, mention or source's
 own creation; modification filters remain independent. Start with the seed's
 `documents-created-by`, `scans-created-range`, `people-created-by`,

@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed, nextTick, ref, watch } from 'vue'
-import { useMediaQuery, watchDebounced } from '@vueuse/core'
-import { ChevronDown, Plus, ScanFace, Search, SlidersHorizontal } from '@lucide/vue'
+import { watchDebounced } from '@vueuse/core'
+import { ChevronDown, Plus, ScanFace, Search } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
 import SearchFaceAttachment from './SearchFaceAttachment.vue'
 import SimilarPersonItem from './SimilarPersonItem.vue'
 import SimilarPersonItemSkeleton from './SimilarPersonItemSkeleton.vue'
 import SortSelect from './SortSelect.vue'
-import SharedFilterControls from './SharedFilterControls.vue'
-import SharedFilterTags from './SharedFilterTags.vue'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SIDEBAR_TITLE } from './sidebar-title'
 import {
   DropdownMenu,
@@ -36,29 +33,24 @@ import {
   type PeopleScope,
 } from '@/viewmodels/scan-sidebar'
 
-const props = withDefaults(
-  defineProps<{
-    people: SimilarPersonCandidate[]
-    scored: boolean
-    loading: boolean
-    totalCount?: number
-    hasNextPage: boolean
-    isFetching: boolean
-    error?: unknown
-    searchFaceId: string | null
-    /** Embedding models available for the attached face. */
-    faceModels?: string[]
-    faceModel?: string | null
-    selectedFace: Face | null
-    viewedPersonId: string | null
-    assignmentPending?: boolean
-    loadMore: () => Promise<unknown>
-    retry: () => unknown
-    /** False while the URL carries an invalid filter; results stay hidden. */
-    enabled?: boolean
-  }>(),
-  { enabled: true },
-)
+const props = defineProps<{
+  people: SimilarPersonCandidate[]
+  scored: boolean
+  loading: boolean
+  totalCount?: number
+  hasNextPage: boolean
+  isFetching: boolean
+  error?: unknown
+  searchFaceId: string | null
+  /** Embedding models available for the attached face. */
+  faceModels?: string[]
+  faceModel?: string | null
+  selectedFace: Face | null
+  viewedPersonId: string | null
+  assignmentPending?: boolean
+  loadMore: () => Promise<unknown>
+  retry: () => unknown
+}>()
 /** The applied name text; typing applies it after a pause, or at once on Search. */
 const text = defineModel<string>('text', { required: true })
 const scope = defineModel<PeopleScope>('scope', { required: true })
@@ -72,14 +64,6 @@ const emit = defineEmits<{
   assign: [person: SimilarPersonCandidate]
 }>()
 
-const desktopFilters = useMediaQuery('(min-width: 640px)')
-const mobileFiltersOpen = ref(false)
-const filtersOpen = computed({
-  get: () => desktopFilters.value || mobileFiltersOpen.value,
-  set: (value) => {
-    mobileFiltersOpen.value = value
-  },
-})
 const draft = ref(text.value)
 // Back/Forward, links and face Search replace the draft with the applied text.
 watch([text, () => props.searchFaceId], () => (draft.value = text.value))
@@ -114,7 +98,7 @@ const canAttachSelected = computed(
     Boolean(props.selectedFace?.embeddingModel) && props.selectedFace?.id !== props.searchFaceId,
 )
 const countLabel = computed(() =>
-  !props.enabled || props.loading || props.totalCount === undefined
+  props.loading || props.totalCount === undefined
     ? ''
     : `${props.totalCount} ${props.totalCount === 1 ? 'result' : 'results'}`,
 )
@@ -148,124 +132,98 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
 
 <template>
   <section class="flex min-h-0 flex-1 flex-col" aria-label="People">
-    <Collapsible v-model:open="filtersOpen" as-child>
-      <form
-        ref="group"
-        class="flex w-full min-w-0 shrink-0 flex-row flex-wrap items-center gap-2 px-3 pt-3"
-        role="search"
-        aria-labelledby="people-search-title"
-        @submit.prevent="search"
+    <form
+      ref="group"
+      class="flex shrink-0 flex-col gap-2 px-3 pt-3"
+      role="search"
+      aria-labelledby="people-search-title"
+      @submit.prevent="search"
+    >
+      <h3 id="people-search-title" :class="SIDEBAR_TITLE">Search</h3>
+      <InputGroup>
+        <InputGroupInput v-model="draft" aria-label="Search people" placeholder="Name or alias" />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton type="submit" size="icon-xs" :disabled="!changed">
+            <Search aria-hidden="true" />
+            <span class="sr-only">Search</span>
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+      <!-- Always present at a fixed height, so attaching context never shifts results. -->
+      <div
+        class="flex h-8 min-w-0 flex-row flex-nowrap items-center gap-2 overflow-x-auto"
+        role="group"
+        aria-label="Search context"
       >
-        <h3 id="people-search-title" :class="SIDEBAR_TITLE" class="basis-full">Search</h3>
-        <div class="flex min-w-0 basis-full items-center gap-2 sm:basis-[calc(66.6666667%-0.5rem)]">
-          <InputGroup class="min-w-0 flex-1">
-            <InputGroupInput
-              v-model="draft"
-              aria-label="Search people"
-              placeholder="Name or alias"
-            />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton type="submit" size="icon-xs" :disabled="!changed">
-                <Search aria-hidden="true" />
-                <span class="sr-only">Search</span>
-              </InputGroupButton>
-              <small class="shrink-0 whitespace-nowrap" role="status">{{ countLabel }}</small>
-            </InputGroupAddon>
-          </InputGroup>
-          <CollapsibleTrigger v-if="!desktopFilters" as-child
-            ><Button
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
               type="button"
               variant="outline"
-              size="icon"
-              :aria-label="mobileFiltersOpen ? 'Hide filters' : 'Show filters'"
-              ><SlidersHorizontal aria-hidden="true" /></Button
-          ></CollapsibleTrigger>
-        </div>
-        <!-- Always present at a fixed height, so attaching context never shifts results. -->
-        <div
-          class="flex h-8 min-w-0 basis-full flex-row flex-nowrap items-center gap-2 overflow-x-auto"
-          role="group"
-          aria-label="Search context"
-        >
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <Button
-                type="button"
-                variant="outline"
-                class="rounded-full"
-                size="icon-xs"
-                aria-label="Add search context"
+              class="rounded-full"
+              size="icon-xs"
+              aria-label="Add search context"
+            >
+              <Plus aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
+              <ScanFace aria-hidden="true" />Selected face
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <SearchFaceAttachment
+          v-if="searchFaceId"
+          :face-id="searchFaceId"
+          @remove="emit('removeFace')"
+        />
+      </div>
+      <div class="flex min-w-0 flex-row flex-nowrap items-center gap-1" aria-label="Search options">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button type="button" variant="ghost" size="sm" :aria-label="`Scope: ${scopeLabel}`">
+              {{ scopeLabel }}<ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuRadioGroup v-model="scopeValue">
+              <DropdownMenuRadioItem
+                v-for="option in PEOPLE_SCOPES"
+                :key="option.value"
+                :value="option.value"
+                >{{ option.label }}</DropdownMenuRadioItem
               >
-                <Plus aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
-              <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
-                <ScanFace aria-hidden="true" />Selected face
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SearchFaceAttachment
-            v-if="searchFaceId"
-            :face-id="searchFaceId"
-            @remove="emit('removeFace')"
-          />
-        </div>
-        <CollapsibleContent class="contents">
-          <div
-            class="flex min-w-0 basis-full flex-row flex-wrap items-center gap-1"
-            aria-label="Search options"
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  :aria-label="`Scope: ${scopeLabel}`"
-                >
-                  {{ scopeLabel }}<ChevronDown aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
-                <DropdownMenuRadioGroup v-model="scopeValue">
-                  <DropdownMenuRadioItem
-                    v-for="option in PEOPLE_SCOPES"
-                    :key="option.value"
-                    :value="option.value"
-                    >{{ option.label }}</DropdownMenuRadioItem
-                  >
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu v-if="searchFaceId && faceModels?.length">
-              <DropdownMenuTrigger as-child>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="min-w-0 shrink"
-                  :aria-label="`Face model: ${faceModel ?? ''}`"
-                  :title="faceModel ?? undefined"
-                >
-                  <span class="min-w-0 truncate">{{ faceModel }}</span
-                  ><ChevronDown aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
-                <DropdownMenuRadioGroup v-model="faceModelValue">
-                  <DropdownMenuRadioItem v-for="model in faceModels" :key="model" :value="model">{{
-                    model
-                  }}</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <SharedFilterControls :controls="['creators', 'creationDates']" />
-        </CollapsibleContent>
-      </form>
-    </Collapsible>
-    <div class="px-3"><SharedFilterTags creation-only /></div>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu v-if="searchFaceId && faceModels?.length">
+          <DropdownMenuTrigger as-child>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-w-0 shrink"
+              :aria-label="`Face model: ${faceModel ?? ''}`"
+              :title="faceModel ?? undefined"
+            >
+              <span class="min-w-0 truncate">{{ faceModel }}</span
+              ><ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuRadioGroup v-model="faceModelValue">
+              <DropdownMenuRadioItem v-for="model in faceModels" :key="model" :value="model">{{
+                model
+              }}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <small class="ml-auto shrink-0 whitespace-nowrap text-muted-foreground" role="status">{{
+          countLabel
+        }}</small>
+      </div>
+    </form>
     <div class="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2 px-3 pt-3">
       <h3 id="people-results-title" :class="SIDEBAR_TITLE">Results</h3>
       <SortSelect v-model="orderValue" :strategies="orderOptions" label="Sort people" size="sm" />
@@ -276,7 +234,7 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
       aria-labelledby="people-results-title"
       :aria-busy="loading || isFetching"
     >
-      <div v-if="enabled" ref="results" class="px-3 pb-3 pt-2">
+      <div ref="results" class="px-3 pb-3 pt-2">
         <ul class="flex flex-col gap-2">
           <li v-for="person in people" :key="person.id">
             <SimilarPersonItem
