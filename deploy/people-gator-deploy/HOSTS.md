@@ -23,7 +23,7 @@ commands and operations in the [utility guide](README.md).
 ## Shared PostgreSQL and Traefik
 
 [`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
-PostgreSQL 16 with pgvector as `postgres` on the internal `db` network (no
+PostgreSQL 18 with pgvector as `postgres` on the internal `db` network (no
 published port) and Traefik on `web`. One command, run as the deployment account
 from anywhere, clones the repository shallowly (`ref` selects the branch),
 copies `compose.yaml` and the examples into `~/peoplegator-infra`, creates the

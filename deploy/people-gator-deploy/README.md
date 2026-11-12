@@ -21,7 +21,7 @@ Engine and Docker Compose v2.32+, plus the proxy, DNS, runners and database in
 [GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts). Each deploy job builds the package
 into a job-local virtual environment, which downloads `setuptools` and the pinned
 S3 client dependencies from the configured package index. Database clients run
-in throwaway `pgvector/pgvector:pg16` containers on the database network and
+in throwaway `pgvector/pgvector:pg18` containers on the database network and
 database validation runs in operation-scoped backend containers. Candidate
 application code never selects backups or receives backup credentials.
 

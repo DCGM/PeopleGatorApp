@@ -76,7 +76,7 @@ class ConfigurationTests(unittest.TestCase):
         settings = self.load("staging", STAGING)
         self.assertEqual((settings["web_network"], settings["database_network"], settings["otel_network"]),
                          ("web", "db", "logging"))
-        self.assertEqual((settings["project"], settings["postgres_image"]), ("people-gator-staging", "pgvector/pgvector:pg16"))
+        self.assertEqual((settings["project"], settings["postgres_image"]), ("people-gator-staging", "pgvector/pgvector:pg18"))
         for unrelated in ("DOCKER_CONTEXT", "PROJECT", "WEB_NETWORK", "CERTIFICATE_RESOLVER", "ACCESS_REVIEWED", "RUNTIME_ENV", "TELEMETRY_ENV"):
             self.assertNotIn(unrelated, config.VARIABLES)
         self.assertEqual(config.names("pr")[:2], ["HOST", "DATABASE_URL"])

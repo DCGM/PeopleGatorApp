@@ -26,6 +26,10 @@ class InfrastructureStackTests(unittest.TestCase):
         postgres = document["services"]["postgres"]
         self.assertEqual(postgres["container_name"], "postgres")
         self.assertEqual(postgres["networks"], ["db"])
+        # The deploy utility's client tools (POSTGRES_IMAGE) must match the server's major version.
+        from people_gator_deploy.config import POSTGRES_IMAGE
+        self.assertEqual(postgres["image"], POSTGRES_IMAGE)
+        self.assertIn("postgres18-data:/var/lib/postgresql", postgres["volumes"])  # PostgreSQL 18 data layout
         self.assertEqual((document["networks"]["db"]["name"], document["networks"]["web"]["name"]), ("db", "web"))
         traefik = document["services"]["traefik"]
         # Older Traefik cannot talk to Docker Engine 29 ("client version 1.24 is too old").

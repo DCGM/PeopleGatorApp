@@ -110,7 +110,7 @@ class DockerAdapterTests(unittest.TestCase):
             docker = Docker()
             self.assertEqual(docker.context, "rootless")
             docker.run(["docker", "compose", "--project-name", "p", "ps"])
-            docker.run(["docker", "run", "--rm", "-i", "-e", "PGPASSWORD", "pgvector/pgvector:pg16", "psql"],
+            docker.run(["docker", "run", "--rm", "-i", "-e", "PGPASSWORD", "pgvector/pgvector:pg18", "psql"],
                        extra_env={"PGPASSWORD": "explicit"})
         calls = [call for call in self.calls() if call["args"][:1] != ["context"]]
         self.assertEqual(calls[0]["args"][:2], ["--context", "rootless"])

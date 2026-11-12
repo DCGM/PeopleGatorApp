@@ -26,7 +26,7 @@ GITHUB_PREFIX = {"pr": "PREVIEW", "staging": "STAGING", "release": "PRODUCTION"}
 WEB_NETWORK = "web"
 DATABASE_NETWORK = "db"
 OTEL_NETWORK = "logging"
-POSTGRES_IMAGE = "pgvector/pgvector:pg16"
+POSTGRES_IMAGE = "pgvector/pgvector:pg18"
 EXAMPLE_USERS = Path(__file__).with_name("assets") / "users.example.json"
 
 # name -> (environments, secret). Required: HOST and DATABASE_URL everywhere; the

@@ -126,7 +126,7 @@ class EnvironmentTests(unittest.TestCase):
             self.assertIn(["docker", "network", "inspect", network], docker.calls)
         psql = docker.commands("psql")[0]
         self.assertEqual(psql[:8], ["docker", "run", "--rm", "-i", "--network", "db", "-e", "PGPASSWORD"])
-        self.assertEqual(psql[8], "pgvector/pgvector:pg16")
+        self.assertEqual(psql[8], "pgvector/pgvector:pg18")
         self.assertEqual(psql[psql.index("-h") + 1], "postgres")
         self.assertEqual(psql[psql.index("-U") + 1], "preview_admin")
         self.assertNotIn("admin-pw", " ".join(psql))  # the password only travels through the environment

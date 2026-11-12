@@ -232,7 +232,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
                 volumes = self.command(["docker", "volume", "ls", "-q", "--filter", project]).split()
                 if volumes:
                     self.command(["docker", "volume", "rm", "-f", *volumes])
-        # PostgreSQL 16 FORCE disconnects the stopped preview's remaining sessions.
+        # PostgreSQL 13+ FORCE disconnects the stopped preview's remaining sessions.
         self.sql(f"DROP DATABASE IF EXISTS preview_pr_{number} WITH (FORCE);\n"
                  f"DROP ROLE IF EXISTS preview_pr_{number};\n")
         # Retain state until both Compose and DB cleanup succeed, allowing retries.

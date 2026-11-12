@@ -194,7 +194,7 @@ class Host:
         """
         connection = self.config[role]
         return ["docker", "run", "--rm", "-i", "--network", self.config.get("database_network", "db"),
-                "-e", "PGPASSWORD", self.config.get("postgres_image", "pgvector/pgvector:pg16"), tool,
+                "-e", "PGPASSWORD", self.config.get("postgres_image", "pgvector/pgvector:pg18"), tool,
                 "-h", connection["host"], "-p", str(connection["port"]), "-U", connection["user"], *args]
 
     def postgres_env(self, role: str = "postgres") -> dict[str, str]:

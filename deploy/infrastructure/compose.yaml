@@ -16,7 +16,7 @@ name: peoplegator-infra
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg18
     container_name: postgres
     restart: unless-stopped
     environment:
@@ -25,7 +25,9 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker. A new
+      # volume name: a PostgreSQL 16 volume cannot be opened by 18 and stays untouched.
+      - postgres18-data:/var/lib/postgresql
     networks: [db]
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d postgres']
@@ -95,7 +97,7 @@ configs:
                          "MaintenanceDB": "postgres", "Username": "${POSTGRES_USER:-postgres}", "SSLMode": "disable"}}}
 
 volumes:
-  postgres-data:
+  postgres18-data:
   traefik-acme:
   pgadmin-data:
 
