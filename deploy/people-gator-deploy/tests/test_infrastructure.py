@@ -57,6 +57,17 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertNotIn("httpChallenge", acme)
         self.assertNotIn("dnsChallenge", acme)
 
+    def test_application_routers_inherit_tls_and_the_resolver_from_the_entry_point(self):
+        # A router-level TLS setting (even `tls=true`) replaces the entry point's
+        # TLS defaults, so such a router would get Traefik's default certificate
+        # instead of one from the `letsencrypt` resolver in traefik.yaml.
+        assets = Path(__file__).resolve().parents[1] / "src/people_gator_deploy/assets"
+        for stack in sorted(assets.glob("compose*.yaml")):
+            with self.subTest(stack=stack.name):
+                text = stack.read_text()
+                self.assertNotRegex(text, r"traefik\.http\.routers\.[^=\s]+\.tls")
+                self.assertIn("entrypoints=websecure", text)
+
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_stack_keeps_the_database_private_and_routes_only_through_traefik(self):
         with tempfile.TemporaryDirectory() as private:

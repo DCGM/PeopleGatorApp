@@ -84,7 +84,6 @@ services:
       - 'traefik.http.routers.pg-release-api.rule=Host(`${RELEASE_HOST:?required}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
       - traefik.http.routers.pg-release-api.priority=100
       - traefik.http.routers.pg-release-api.service=pg-release-api
-      - traefik.http.routers.pg-release-api.tls=true
       - traefik.http.services.pg-release-api.loadbalancer.server.port=8000
 
   frontend:
@@ -112,7 +111,6 @@ services:
       - 'traefik.http.routers.pg-release-app.rule=Host(`${RELEASE_HOST}`)'
       - traefik.http.routers.pg-release-app.priority=10
       - traefik.http.routers.pg-release-app.service=pg-release-app
-      - traefik.http.routers.pg-release-app.tls=true
       - traefik.http.services.pg-release-app.loadbalancer.server.port=8080
 
 networks:

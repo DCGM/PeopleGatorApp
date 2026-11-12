@@ -86,7 +86,6 @@ services:
       - 'traefik.http.routers.pg-staging-api.rule=Host(`${STAGING_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
       - traefik.http.routers.pg-staging-api.priority=100
       - traefik.http.routers.pg-staging-api.service=pg-staging-api
-      - traefik.http.routers.pg-staging-api.tls=true
       - traefik.http.services.pg-staging-api.loadbalancer.server.port=8000
 
   frontend:
@@ -115,7 +114,6 @@ services:
       - 'traefik.http.routers.pg-staging-app.rule=Host(`${STAGING_HOST}`)'
       - traefik.http.routers.pg-staging-app.priority=10
       - traefik.http.routers.pg-staging-app.service=pg-staging-app
-      - traefik.http.routers.pg-staging-app.tls=true
       - traefik.http.services.pg-staging-app.loadbalancer.server.port=8080
 
 networks:

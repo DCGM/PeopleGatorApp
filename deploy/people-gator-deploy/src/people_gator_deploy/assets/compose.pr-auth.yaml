@@ -125,7 +125,6 @@ services:
       - 'traefik.http.routers.pg-pr-${PR_NUMBER}-auth.rule=Host(`${PREVIEW_HOST}`) && (PathPrefix(`/token/`) || PathPrefix(`/.well-known/`) || Path(`/auth/health`))'
       - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.priority=110
       - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.service=pg-pr-${PR_NUMBER}-auth
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.tls=true
       - traefik.http.services.pg-pr-${PR_NUMBER}-auth.loadbalancer.server.port=8002
 
   backend:
@@ -159,7 +158,6 @@ services:
       - 'traefik.http.routers.pg-pr-${PR_NUMBER}-api.rule=Host(`${PREVIEW_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`))'
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.priority=100
       - traefik.http.routers.pg-pr-${PR_NUMBER}-api.service=pg-pr-${PR_NUMBER}-api
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls=true
       - traefik.http.services.pg-pr-${PR_NUMBER}-api.loadbalancer.server.port=8000
 
   frontend:
@@ -188,7 +186,6 @@ services:
       - 'traefik.http.routers.pg-pr-${PR_NUMBER}-app.rule=Host(`${PREVIEW_HOST}`)'
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.priority=10
       - traefik.http.routers.pg-pr-${PR_NUMBER}-app.service=pg-pr-${PR_NUMBER}-app
-      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls=true
       - traefik.http.services.pg-pr-${PR_NUMBER}-app.loadbalancer.server.port=8080
 
 volumes:
