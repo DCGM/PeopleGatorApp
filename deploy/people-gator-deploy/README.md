@@ -101,18 +101,6 @@ venv with `pip install deploy/people-gator-deploy`. GitHub-reading operations
 `~/.local/opt/people-gator-deploy/state/<pr|staging|release>` (`DEPLOY_STATE_DIR`
 overrides it for unusual hosts).
 
-**Moving a host from the descriptor-based setup.** Start fresh: stop and
-remove the old `people-gator-preview-infra` stack, the preview and staging
-containers and their volumes, then start the new shared stack
-([GITHUB-SETUP.md](../GITHUB-SETUP.md#hosts)), set the variables and secrets,
-install the new runner guard with `PEOPLE_GATOR_RUNNER_ENVIRONMENT` in each
-runner's `.env` and run `docker context use rootless` once as the deployment
-account. Delete the old descriptors (`~/.local/opt/people-gator-deploy/environments`),
-versioned installations (`~/.local/lib/people-gator-deploy`),
-`~/.local/bin/people-gator-deploy` and state directories. Then run the workflow
-manually on `main` with `operation=snapshot-init` for staging and rerun open
-PRs' CI to recreate their previews.
-
 ## Operations
 
 | Operation | pr | staging | release | Meaning |
@@ -175,8 +163,9 @@ failed migration or seed leaves the preview stopped until a successful retry.
 never imply closure). `pr stop` stops all previews but keeps their data.
 
 **Staging.** `staging update --sha <commit>` deploys the current `main` build
-and retains the database; it never reads a snapshot, restores or seeds.
-Initialize once with `staging snapshot-init`; replace the database only with
+and retains the database; it never reads a snapshot, restores or seeds. The
+first `update` creates an empty database when no `STAGING_BACKUP_S3_*` source is
+set; with one, initialize once with `staging snapshot-init`. Replace the database only with
 `staging refresh --backup-record <private file>` (the manual workflow run's
 `operation` and `backup_record` inputs). The one-time initialization check runs
 under the environment lock, so queued initializations cannot replace an already

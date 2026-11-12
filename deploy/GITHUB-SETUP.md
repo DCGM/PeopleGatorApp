@@ -107,8 +107,7 @@ gh secret set PRODUCTION_OTEL_HEADERS --env production --body 'Authorization=Bas
   Use `release` on the production host. Settings → Actions → General: require
   approval for all outside collaborators.
 
-Then open a pull request or run **CI** manually on `main` (`operation=update`,
-or `snapshot-init` for a fresh staging database). A deploy job's `preflight`
+Then open a pull request or push to `main`. A deploy job's `preflight`
 step fails with the variable's name when something is missing or invalid; each
 success appears under the repository's Deployments.
 
@@ -145,28 +144,21 @@ account's `postgres` container; staging creates its own database and role there.
    ref=main; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && RUNNER_TOKEN=<token> $t/deploy/runner/install.sh staging; rm -rf $t
    ```
 
-5. **Secrets** in the `staging` environment. From a machine with `gh`, this copies
-   the database URL from the host without printing it; the S3 commands prompt
-   for their values:
+5. **Secrets** in the `staging` environment (Settings → Environments → staging).
+   This copies the database URL from the host without printing it; the S3
+   commands prompt for their values:
 
    ```sh
    R=DCGM/PeopleGatorApp
    ssh peoplegator-staging@<host> '. ~/peoplegator-infra/infra.env; printf "postgresql://%s:%s@postgres:5432/postgres" "$POSTGRES_USER" "$POSTGRES_PASSWORD"' | gh secret set STAGING_DATABASE_URL --env staging -R $R
    gh secret set STAGING_S3_ACCESS_KEY_ID --env staging -R $R
    gh secret set STAGING_S3_SECRET_ACCESS_KEY --env staging -R $R
-   for n in DATABASE_URL S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do gh secret delete STAGING_$n -R $R; done
    ```
 
-   The last line removes old repository copies, which pull requests could read.
-   Without SSH to that account, run the `printf` part on the host and paste the
-   URL under Settings → Environments → staging.
-6. **Production backups.** Staging starts from the latest production dump.
-   Set the `STAGING_BACKUP_S3_*` variables and secrets (table above) to the
-   read-only bucket where [`deploy/backup`](backup/README.md) publishes
-   `peoplegator-prod-YYYY-MM-DD.dump`. Without a published dump staging cannot start.
-7. **First deploy.** Run `gh workflow run ci.yml -R $R --ref main -f operation=snapshot-init`.
-   Until it has succeeded once, the staging step of a push to `main` fails and
-   asks for it; afterwards every push to `main` updates staging.
+6. **Logins.** Upload the staging users to `peoplegator_api/users.json` in the
+   `STAGING_S3_BUCKET`, in the format of `people-gator-api/example.users.json`.
+7. **Deploy.** Every push to `main` deploys staging (or run **CI** manually on
+   `main`). The first deploy creates an empty database; later ones migrate it.
 
 ## Conventions
 

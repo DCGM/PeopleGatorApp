@@ -143,24 +143,17 @@ and deployment jobs cannot reach your files or containers:
    Never add `gator-deploy` to the `docker` group; that grants root.
 2. In a login session for the account (`sudo machinectl shell gator-deploy@`),
    run `dockerd-rootless-setuptool.sh install` and `docker context use rootless`.
-3. Move the public Traefik (and its tunnel sidecar) and the OTLP collector to
-   this daemon. Keep development proxies on your own daemon and ports.
-4. Register the runners as `gator-deploy` with the labels of the environments
-   they serve, install them with `sudo ./svc.sh install gator-deploy`, and add
-   the job-started guard.
-5. Start the shared stack, create the three secrets, then run the CI workflow
-   manually on `main` with `operation=snapshot-init` and rerun the latest CI of
-   open PRs to redeploy their previews.
-6. Remove the old runners (`./config.sh remove`) and the old environments'
-   containers, volumes and state from your account.
+3. Start the shared stack and install the runner as this account
+   ([setup](../GITHUB-SETUP.md#hosts)).
 
 ## Staging and releases
 
-Staging shares the preview PostgreSQL through the same admin URL and keeps its
-own database generations; its media, users and keys live in the S3 bucket named
-in the `STAGING_S3_*` bucket. Sign in at `https://<host>/staging-login.html` with accounts
-provisioned in that bucket. Only database backup objects are downloaded by
-`snapshot-init`/`refresh` ([backup gathering](README.md#backup-gathering)).
+Staging uses the PostgreSQL of its own host account through the admin URL and
+creates its own database there; the first deploy starts it empty. Its media,
+users and keys live in the `STAGING_S3_BUCKET`. Sign in at
+`https://<host>/staging-login.html` with the accounts in that bucket's
+`peoplegator_api/users.json`. Optionally, `snapshot-init`/`refresh` replace the
+database with the latest production backup ([backup gathering](README.md#backup-gathering)).
 
 Releases need an external PostgreSQL on `db` (already migrated or
 new) with the application role from `PRODUCTION_DATABASE_URL` and, optionally,

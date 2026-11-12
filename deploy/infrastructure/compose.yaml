@@ -25,8 +25,7 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
     volumes:
-      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker. A new
-      # volume name: a PostgreSQL 16 volume cannot be opened by 18 and stays untouched.
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql.
       - postgres18-data:/var/lib/postgresql
     networks: [db]
     healthcheck:
