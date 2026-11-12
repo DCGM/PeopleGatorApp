@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import uuid
 from unittest.mock import AsyncMock, Mock
 
@@ -196,6 +197,21 @@ async def test_many_face_queries_are_reduced_to_weighted_representatives() -> No
     assert sum(item.weight for item in representatives) == len(vectors)
     assert all(item.weight > 0 for item in representatives)
     assert all(item.embedding == vectors[item.query_id] for item in representatives)
+
+
+@pytest.mark.asyncio
+async def test_representatives_do_not_depend_on_reference_row_order() -> None:
+    """Issue #163: PostgreSQL may return reference faces in any order."""
+    rng = random.Random(163)
+    vectors = {
+        uuid.UUID(int=index + 1): [rng.uniform(-1.0, 1.0) for _ in range(8)]
+        for index in range(FACE_SEARCH_REPRESENTATIVE_LIMIT * 5 + 2)
+    }
+    expected = await representative_face_vectors(vectors)
+    for seed in range(5):
+        items = list(vectors.items())
+        random.Random(seed).shuffle(items)
+        assert await representative_face_vectors(dict(items)) == expected
 
 
 @pytest.mark.asyncio
