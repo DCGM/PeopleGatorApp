@@ -50,7 +50,7 @@ that are not meaningful.
 | … with `-n 6` | 1238 s, 2 timeouts | — |
 | … with `-n 8` | — | 218 s |
 | … shard 1 of 3 (`--shard=1/3`) | 348 s | — |
-| Final: seed cases spread, tmpfs, durability off, `--shard=I/4` | 282–347 s per shard | 372 s (no shard, durability on) |
+| Final: seed cases spread, tmpfs, durability off, `--shard=I/4` | 274–360 s per shard (3 runs) | 372 s (no shard, durability on) |
 
 tmpfs and disabled durability help a lot locally but are within runner noise
 on CI, where the work is CPU-bound. Splitting the suite across runners is what
@@ -68,10 +68,13 @@ private worker databases and tmpfs `--basetemp`.
 | CI run | Slowest shard (pytest) | `backend` job wall time |
 | --- | --- | --- |
 | Before: [43271445350](https://github.com/DCGM/PeopleGatorApp/actions/runs/43271445350) | 1332 s (one job) | 24 min 0 s |
-| After: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s | 6 min 16 s |
+| After, run 1: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s (others 282–342 s) | 6 min 16 s |
+| After, run 2: [43283091214](https://github.com/DCGM/PeopleGatorApp/actions/runs/43283091214) | 320 s (others 295–319 s) | 5 min 50 s |
+| After, run 3: [43284470634](https://github.com/DCGM/PeopleGatorApp/actions/runs/43284470634) | 360 s (others 274–329 s) | 6 min 31 s |
 
-The shards ran 221 + 221 + 219 (+1 skipped) + 220 = 881 passed and 1 skipped,
-the full collection with this branch's 11 scheduling tests. Per-case times are
+The job is about **3.8× faster** (24 min to 6–6.5 min). In every run the
+shards ran 221 + 221 + 219 (+1 skipped) + 220 = 881 passed and 1 skipped, the
+full collection with this branch's 11 scheduling tests. Per-case times are
 unchanged (seed cases 48–81 s on CI); each runner just has a quarter of them.
 The tools part finishes in under two minutes.
 
