@@ -270,14 +270,13 @@ useAutomaticPagination({
                 :data-person-match="item.matchesSelectedPerson || undefined"
                 :aria-busy="item.matchesSelectedPerson === null && !highlightError"
                 class="relative aspect-[8/11] w-full rounded-md"
-                :class="[
-                  !expanded && 'max-w-14 sm:max-w-16',
+                :class="
                   item.current
                     ? 'border-2 border-secondary ring-2 ring-secondary ring-offset-2'
                     : item.matchesSelectedPerson
                       ? 'border-0 p-0.5 ring-2 ring-secondary'
-                      : 'border-2 border-border group-hover:border-accent',
-                ]"
+                      : 'border-2 border-border group-hover:border-accent'
+                "
               >
                 <LoadableImage
                   :src="item.thumbnailUrl"
@@ -295,6 +294,12 @@ useAutomaticPagination({
                     </span>
                   </template>
                 </LoadableImage>
+                <VerificationBadge
+                  v-if="item.verified"
+                  state="verified"
+                  class="absolute top-0.5 left-1/2 max-w-full -translate-x-1/2"
+                  aria-hidden="true"
+                />
               </div>
               <span
                 class="w-full truncate text-center font-mono text-[0.6875rem] leading-tight"
@@ -302,7 +307,6 @@ useAutomaticPagination({
               >
                 {{ item.label }}
               </span>
-              <VerificationBadge v-if="item.verified" state="verified" aria-hidden="true" />
             </RouterLink>
           </li>
           <li

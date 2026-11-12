@@ -233,7 +233,7 @@ strip's **Not verified only** toggle sets `gallery_not_verified=on`. The viewer
 toolbar keeps verification and previous/next page available with the page list
 expanded. Previous and next follow page-number order and preserve gallery
 settings. The page list shows a verification progress ring before the document
-title and a **Verified** badge on each verified page.
+title and overlays a **Verified** badge at the top of each verified thumbnail.
 
 `has_unassigned_faces=false` includes documents without faces; text-mention
 assignment never satisfies this face-specific condition. Link statistics describe

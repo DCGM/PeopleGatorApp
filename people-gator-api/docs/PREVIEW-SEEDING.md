@@ -1577,7 +1577,7 @@ the document state derived from it. The reviewer verifies three pages once:
 - Open `page-verification` for page 2 of the in-progress document, or
   `page-verification-expanded` for the same page with the page list expanded.
   Both show the progress ring before the document name and a **Verified** badge
-  for page 1. Use **Verify** in the viewer toolbar, go to the next page, and
+  at the top of page 1’s thumbnail. Use **Verify** in the viewer toolbar, go to the next page, and
   verify page 3 to fill the ring. The **Verified** menu shows the reviewer and
   offers **Remove verification**. Turn on **Not verified only** to see the pages
   still awaiting review.
