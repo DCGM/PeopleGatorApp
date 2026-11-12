@@ -1435,7 +1435,9 @@ uses the preview reviewer. The historical pair uses the repository's internal
 actor to historical creation. This operation only inserts missing records; it
 never clears creation on existing sources and is not an HTTP registration route.
 
-Migration `d34a021b0015` leaves existing source creation fields NULL. Registration
+Migration `d34a021b0015` leaves existing source creation fields NULL;
+`d34a021b0016` indexes creation time, user and API key on sources, entities,
+image occurrences and mentions, like the modification fields. Registration
 never backfills them or changes known creation on a retry. Seed reruns retain
 source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
 The creation integration checks query both document and page responses and
