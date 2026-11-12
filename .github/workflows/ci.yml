@@ -70,8 +70,14 @@ jobs:
   backend:
     if: github.event.action != 'closed' && github.event_name != 'schedule'
     runs-on: ubuntu-24.04
-    # Hosted public-repository runners have 4 vCPUs; the suite takes ~18 minutes.
-    timeout-minutes: 40
+    # Hosted runners have 4 vCPUs and the preview-seed cases are CPU-bound, so
+    # the suite runs as four parallel shards of ~4 minutes; `tools` runs the CLI
+    # seed smoke test and the deployment utility suites alongside (#156).
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ['1/4', '2/4', '3/4', '4/4', tools]
     services:
       postgres:
         image: pgvector/pgvector:pg18
@@ -117,8 +123,15 @@ jobs:
       - name: Create disposable schema and seed databases on the same CI server
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed'
+        # Durability is pointless on this throwaway server; reloading avoids a
+        # restart, which could change the service's published port.
+        run: |
+          docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed' \
+            -c 'ALTER SYSTEM SET fsync = off' -c 'ALTER SYSTEM SET synchronous_commit = off' \
+            -c 'ALTER SYSTEM SET full_page_writes = off' -c 'SELECT pg_reload_conf()'
       - name: Smoke-test preview migrations and repeatable seeding
+        if: matrix.part == 'tools'
         working-directory: people-gator-api
         env:
           PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci_seed
@@ -130,9 +143,16 @@ jobs:
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.database check
-      - run: uv run --locked pytest tests -n 4 --dist=worksteal --durations=50 --durations-min=1
+      # Every LocalFilesystem write is fsynced and a seed writes ~2,000 files:
+      # keep pytest's temporary storage in memory.
+      - name: Backend tests (shard ${{ matrix.part }})
+        if: matrix.part != 'tools'
+        run: >-
+          uv run --locked pytest tests -n 4 --dist=worksteal --shard=${{ matrix.part }}
+          --basetemp=/dev/shm/people-gator-pytest --durations=20 --durations-min=1
         working-directory: people-gator-api
       - name: Exercise database-only snapshot preservation on synthetic data
+        if: matrix.part == 'tools'
         working-directory: people-gator-api
         env:
           STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
@@ -144,6 +164,7 @@ jobs:
       # their own checkout. The backend environment supplies PyYAML for the
       # workflow tests and boto3 for the snapshot suites.
       - name: Test deployment utility, workflow and runner guard
+        if: matrix.part == 'tools'
         working-directory: people-gator-api
         env:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
@@ -153,8 +174,10 @@ jobs:
           GITHUB_OUTPUT: ''
         run: uv run --locked python -B -m unittest discover -s ../deploy/people-gator-deploy/tests -v
       - name: Install the deployment utility as the deploy jobs do
+        if: matrix.part == 'tools'
         uses: ./.github/actions/deploy-tools
-      - run: people-gator-deploy --version && people-gator-deploy --help >/dev/null
+      - if: matrix.part == 'tools'
+        run: people-gator-deploy --version && people-gator-deploy --help >/dev/null
 
   images:
     needs: [frontend, backend]

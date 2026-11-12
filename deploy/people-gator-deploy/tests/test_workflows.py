@@ -96,6 +96,12 @@ class WorkflowStructureTests(unittest.TestCase):
         backend = "\n".join(scripts(jobs["backend"]))
         self.assertIn("unittest discover -s ../deploy/people-gator-deploy/tests", backend)
         self.assertIn("people_gator_api.cli.seed", backend)
+        # The pytest shards together run the whole suite exactly once.
+        parts = jobs["backend"]["strategy"]["matrix"]["part"]
+        shards = [part for part in parts if part != "tools"]
+        self.assertEqual(shards, [f"{index}/{len(shards)}" for index in range(1, len(shards) + 1)])
+        self.assertIn("tools", parts)
+        self.assertIn("pytest tests -n 4 --dist=worksteal --shard=${{ matrix.part }}", backend)
         for opt_in in ("BACKUP_TEST_IMAGE", "STAGING_TEST_IMAGE", "test_roundtrip.py", "test_staging_runtime.py"):
             self.assertNotIn(opt_in, WORKFLOW.read_text())
 
