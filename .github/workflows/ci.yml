@@ -71,7 +71,7 @@ jobs:
     if: github.event.action != 'closed' && github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     # Hosted runners have 4 vCPUs and the preview-seed cases are CPU-bound, so
-    # the suite runs as four parallel shards of ~4 minutes; `tools` runs the CLI
+    # the suite runs as four parallel shards of ~5 minutes; `tools` runs the CLI
     # seed smoke test and the deployment utility suites alongside (#156).
     timeout-minutes: 25
     strategy:
