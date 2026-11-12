@@ -1,4 +1,85 @@
-# Backend pytest performance investigation (#81)
+# Backend pytest performance
+
+## CI runner speed-up (#156)
+
+Measured on 2026-11-12 from the issue #156 branch (based on `main` at
+`26db464`). CI: GitHub-hosted `ubuntu-24.04`, 4 vCPUs, 15 GB RAM, 7.9 GB
+`/dev/shm`, CPython 3.14.10, PostgreSQL 18/pgvector service container.
+Local: the #81 host below (24 threads, other services running), CPython
+3.14.3 and the same PostgreSQL 18 image in a dedicated container on localhost.
+Times are the pytest step only, from pytest's summary line.
+
+### Where the time goes
+
+All slowest 50 CI cases were preview-seed calls: **49–81 s each** on the
+runner (the slowest was the alignment upgrade case), against 24–36 s locally
+for the same four-worker run. Setup and teardown were under one second. The
+101 preview-seed cases are 12% of the 871 cases and nearly all of the time,
+so progress reached 75% in 1.4 minutes and then took 21 minutes for the rest.
+
+Profiling one fresh seed case locally (`cProfile`, one seed run):
+
+- PostgreSQL executed 14,346 statements in **0.4 s** of server time
+  (`pg_stat_statements`), and a localhost round trip took 0.045 ms. Neither
+  the database server nor the network is the bottleneck.
+- `LocalFilesystem.write_bytes` fsyncs every file, and one seed writes about
+  1,900 (mostly manifest checkpoints). On disk, the event loop spent 8.5 s
+  waiting for those threads; with pytest's temporary directory on tmpfs it
+  spent 2.1 s, and the case took **8.0 s instead of 13.8 s**.
+- The remainder is Python CPU in repository code: SQLAlchemy statement
+  construction and compilation, link-statistics queries, pydantic models and
+  page-image rendering. A rerun costs about as much as a fresh seed (three
+  seeds took 17 s profiled), and migrating a private schema per case takes
+  0.2 s, so sharing migrations would not help.
+
+On the runner that CPU work, PostgreSQL and the four workers share 4 vCPUs.
+Six workers were no faster and two upload-concurrency tests timed out.
+
+### Options compared
+
+One CI run per configuration, all on the same commit and started together.
+Hosted runners vary by about 15% between runs, so differences smaller than
+that are not meaningful.
+
+| Configuration (`-n 4 --dist=worksteal` unless noted) | CI pytest step | Local |
+| --- | --- | --- |
+| Baseline: collection order | 1332 s | 651 s |
+| Seed cases first | 1283 s | — |
+| Seed cases first + tmpfs `--basetemp` | 1486 s | 363 s |
+| … + PostgreSQL `fsync`/`synchronous_commit`/`full_page_writes` off | 1178 s | 327 s |
+| … with `-n 6` | 1238 s, 2 timeouts | — |
+| … with `-n 8` | — | 218 s |
+| … shard 1 of 3 (`--shard=1/3`) | 348 s | — |
+| Final: seed cases spread, tmpfs, durability off, `--shard=I/4` | 282–347 s per shard | 372 s (no shard, durability on) |
+
+tmpfs and disabled durability help a lot locally but are within runner noise
+on CI, where the work is CPU-bound. Splitting the suite across runners is what
+shortens the CI critical path. Reusing seeded state between cases (a template
+database plus storage snapshot) would cut the seed work further, but it
+replaces a case's first real seed run, which the issue excludes.
+
+### Result
+
+The `backend` job is a matrix: four pytest shards and a `tools` part (CLI
+migration/seed smoke test, snapshot and deployment utility suites, utility
+installation), all in parallel. Each shard has its own PostgreSQL service,
+private worker databases and tmpfs `--basetemp`.
+
+| CI run | Slowest shard (pytest) | `backend` job wall time |
+| --- | --- | --- |
+| Before: [43271445350](https://github.com/DCGM/PeopleGatorApp/actions/runs/43271445350) | 1332 s (one job) | 24 min 0 s |
+| After: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s | 6 min 16 s |
+
+The shards ran 221 + 221 + 219 (+1 skipped) + 220 = 881 passed and 1 skipped,
+the full collection with this branch's 11 scheduling tests. Per-case times are
+unchanged (seed cases 48–81 s on CI); each runner just has a quarter of them.
+The tools part finishes in under two minutes.
+
+Preview-seed cases are now spaced evenly through each shard, so the progress
+counter tracks elapsed time: shard 1 reached 32% after 2.0 minutes, 65% after
+3.5 and 97% after 4.7 of 5.0 minutes.
+
+## Parallel workers (#81)
 
 Measured on 2026-10-27 from `main` at `d9e7e8d` and the issue #81 branch.
 Linux x86-64 (Ubuntu kernel 7.0.0-38), Intel i7-13700KF, CPython 3.14.3,
@@ -9,7 +90,7 @@ settings. No project database, external inference service or live Weaviate was u
 Dependency installation is excluded. These are local observations, not CI budgets;
 the host also runs other services.
 
-## Baseline and diagnosis
+### Baseline and diagnosis
 
 Commands ran from `people-gator-api`, with the locked environment. Full runs used
 `--durations=30 --durations-min=0.1`; a representative test also ran under
@@ -36,7 +117,7 @@ seeded records. A second, small fixture change restores dynamically attached ORM
 index definitions after every test, extending the existing discovery-only guard
 to prevent ordering-dependent bootstrap behavior.
 
-## Worker-count comparison
+### Worker-count comparison
 
 Full comparison commands use the same container/URLs:
 
@@ -61,7 +142,7 @@ DDL, metadata isolation, partial allocation failure and cleanup after worker/dro
 failure. Final verification also covers nested settings overrides, schema-only
 worker settings and rejection of parallel live Weaviate opt-ins.
 
-## Isolation and limits
+### Isolation and limits
 
 Each worker gets separate empty repository/schema databases before collection,
 including fresh application persistence settings. Destructive extension and
