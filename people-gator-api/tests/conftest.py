@@ -78,6 +78,35 @@ def pytest_configure_node(node) -> None:
     )
 
 
+# Each preview-seed case takes seconds; the rest of the suite takes milliseconds.
+# Starting them first lets workers fill the tail with fast cases instead of
+# finishing on a cluster of seed cases (the progress counter counts cases).
+SLOW_MODULES = ("test_preview_seed.py",)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--shard", metavar="I/N",
+        help="run every Nth collected case starting with the Ith (1-based); CI runs N jobs",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    items.sort(key=lambda item: item.path.name not in SLOW_MODULES)
+    if shard := config.getoption("shard"):
+        try:
+            index, count = map(int, shard.split("/"))
+        except ValueError:
+            index = count = 0
+        if not 1 <= index <= count:
+            raise pytest.UsageError(f"--shard must be I/N with 1 <= I <= N, not {shard!r}")
+        # Round robin spreads the slow cases evenly; collection order is stable.
+        selected = items[index - 1::count]
+        kept = set(selected)
+        config.hook.pytest_deselected(items=[item for item in items if item not in kept])
+        items[:] = selected
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     if WORKER_STORES in config.stash:
         config.stash[WORKER_STORES].close()
