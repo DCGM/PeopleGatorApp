@@ -8,7 +8,7 @@
 # creates infra.env with a generated password and traefik.yaml only once; edit
 # those two there and rerun to apply changes):
 #
-#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 #
 # The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
 # postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres
@@ -62,9 +62,42 @@ services:
       - traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard-auth
       - traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile=/etc/traefik/dashboard.users
 
+  pgadmin:
+    # Optional web UI for this PostgreSQL: set COMPOSE_PROFILES=pgadmin in the env
+    # file. It sits behind the dashboard's basic auth and then pgAdmin's own login
+    # (PGADMIN_EMAIL / PGADMIN_PASSWORD); the server `postgres` is preconfigured.
+    image: dpage/pgadmin4:9
+    profiles: [pgadmin]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@peoplegator.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-}
+      PGADMIN_DISABLE_POSTFIX: 'True'
+    configs:
+      - source: pgadmin-servers
+        target: /pgadmin4/servers.json
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks: [db, web]
+    labels:
+      # Like every router here: no `tls` label, so it gets the entry point's certificate.
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)
+      - traefik.http.routers.pgadmin.entrypoints=websecure
+      - traefik.http.routers.pgadmin.middlewares=traefik-dashboard-auth@docker
+      - traefik.http.services.pgadmin.loadbalancer.server.port=80
+
+configs:
+  pgadmin-servers:
+    content: |
+      {"Servers": {"1": {"Name": "postgres", "Group": "Servers", "Host": "postgres", "Port": 5432,
+                         "MaintenanceDB": "postgres", "Username": "${POSTGRES_USER:-postgres}", "SSLMode": "disable"}}}
+
 volumes:
   postgres-data:
   traefik-acme:
+  pgadmin-data:
 
 networks:
   db:

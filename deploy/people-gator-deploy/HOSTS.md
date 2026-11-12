@@ -30,7 +30,7 @@ copies `compose.yaml` and the examples into `~/peoplegator-infra`, creates the
 private files there the first time and starts the stack:
 
 ```sh
-ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 ```
 
 - `infra.env`, from [`example.env`](../infrastructure/example.env): generated
@@ -39,6 +39,12 @@ ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --bran
 - `traefik.yaml`, from [`traefik.example.yaml`](../infrastructure/traefik.example.yaml):
   the HTTPS-only `websecure` entry point, the dashboard, the Docker provider and
   the `letsencrypt` resolver (set the ACME e-mail);
+- optional pgAdmin: `COMPOSE_PROFILES=pgadmin` in `infra.env` starts it at
+  `https://<PGADMIN_HOST>` behind the dashboard login, then pgAdmin's own
+  `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` login, with the server `postgres`
+  preconfigured. Export `HTTPS_PORT`, `TRAEFIK_DASHBOARD_HOST`, `PGADMIN_HOST` or
+  `COMPOSE_PROFILES` before the first run to write them into the new `infra.env`
+  (see [the staging host steps](../GITHUB-SETUP.md#staging-host));
 - `dashboard.users`: the dashboard's basic-auth login, `admin` with a generated
   password printed once. The dashboard answers only on `TRAEFIK_DASHBOARD_HOST`
   (default `traefik-preview.peoplegator.dev`), behind that login. Add users with

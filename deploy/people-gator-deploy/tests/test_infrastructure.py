@@ -22,7 +22,7 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(interpolated, example)
         document = yaml.safe_load(compose)
         self.assertEqual(document["name"], "peoplegator-infra")
-        self.assertEqual(set(document["services"]), {"postgres", "traefik"})
+        self.assertEqual(set(document["services"]), {"postgres", "traefik", "pgadmin"})
         postgres = document["services"]["postgres"]
         self.assertEqual(postgres["container_name"], "postgres")
         self.assertEqual(postgres["networks"], ["db"])
@@ -40,6 +40,16 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(labels["traefik.http.routers.traefik-dashboard.rule"], "Host(`${TRAEFIK_DASHBOARD_HOST:-traefik-preview.peoplegator.dev}`)")
         self.assertEqual(labels["traefik.http.routers.traefik-dashboard.middlewares"], "traefik-dashboard-auth")
         self.assertEqual(labels["traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile"], "/etc/traefik/dashboard.users")
+        # Optional pgAdmin: off unless COMPOSE_PROFILES=pgadmin, reaches only the db and web
+        # networks, and sits behind the dashboard's basic auth before its own login.
+        pgadmin = document["services"]["pgadmin"]
+        self.assertEqual(pgadmin["profiles"], ["pgadmin"])
+        self.assertEqual(pgadmin["networks"], ["db", "web"])
+        self.assertFalse(pgadmin.get("ports"))
+        labels = dict(label.split("=", 1) for label in pgadmin["labels"])
+        self.assertEqual(labels["traefik.http.routers.pgadmin.rule"], "Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)")
+        self.assertEqual(labels["traefik.http.routers.pgadmin.middlewares"], "traefik-dashboard-auth@docker")
+        self.assertEqual(document["configs"]["pgadmin-servers"]["content"].count('"Host": "postgres"'), 1)
 
     def test_example_traefik_config_serves_only_https_with_an_acme_resolver(self):
         config = yaml.safe_load((INFRASTRUCTURE / "traefik.example.yaml").read_text())
@@ -62,7 +72,7 @@ class InfrastructureStackTests(unittest.TestCase):
         # TLS defaults, so such a router would get Traefik's default certificate
         # instead of one from the `letsencrypt` resolver in traefik.yaml.
         assets = Path(__file__).resolve().parents[1] / "src/people_gator_deploy/assets"
-        for stack in sorted(assets.glob("compose*.yaml")):
+        for stack in [*sorted(assets.glob("compose*.yaml")), INFRASTRUCTURE / "compose.yaml"]:
             with self.subTest(stack=stack.name):
                 text = stack.read_text()
                 self.assertNotRegex(text, r"traefik\.http\.routers\.[^=\s]+\.tls")
@@ -78,6 +88,7 @@ class InfrastructureStackTests(unittest.TestCase):
             result = subprocess.run(["docker", "compose", "-f", str(INFRASTRUCTURE / "compose.yaml"), "config", "--format", "json"],
                                     env=environment, text=True, capture_output=True, check=True)
         config = json.loads(result.stdout)
+        self.assertNotIn("pgadmin", config["services"])  # only with COMPOSE_PROFILES=pgadmin
         postgres = config["services"]["postgres"]
         self.assertFalse(postgres.get("ports"))
         self.assertEqual(set(postgres["networks"]), {"db"})

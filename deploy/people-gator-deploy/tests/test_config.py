@@ -10,6 +10,7 @@ from unittest.mock import patch
 from people_gator_deploy import config
 from people_gator_deploy.core import DeployError
 
+GITHUB_ENVIRONMENT = {"staging": "staging", "release": "production"}
 SETUP_PAGE = Path(__file__).resolve().parents[3] / "deploy/GITHUB-SETUP.md"
 REPOSITORY = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"}
 PREVIEW = {"HOST": "preview.peoplegator.dev", "DATABASE_URL": "postgresql://postgres:SECRET@postgres:5432/postgres",
@@ -50,7 +51,9 @@ class ConfigurationTests(unittest.TestCase):
             prefix = config.GITHUB_PREFIX[environment]
             for name, value in values.items():
                 kind = "secret" if config.VARIABLES[name][1] else "variable"
-                self.assertRegex(page, rf"gh {kind} set {prefix}_{name} --body '?{re.escape(value)}'?\n", f"{prefix}_{name}")
+                # Staging/production secrets live in their GitHub environment, out of PR workflows' reach.
+                scope = f"--env {GITHUB_ENVIRONMENT[environment]} " if kind == "secret" and environment != "pr" else ""
+                self.assertRegex(page, rf"gh {kind} set {prefix}_{name} {scope}--body '?{re.escape(value)}'?\n", f"{prefix}_{name}")
             with self.subTest(environment=environment):
                 settings = self.load(environment, values)
                 self.assertEqual(settings["environment"], environment)

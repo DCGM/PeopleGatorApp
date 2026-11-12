@@ -1,9 +1,16 @@
 # Deployment setup
 
 Each environment is configured by a short list of repository **variables**
-(Settings → Secrets and variables → Actions → Variables) and **secrets**
-(same page, Secrets), prefixed `PREVIEW_`, `STAGING_` or `PRODUCTION_`. Everything
-not listed here is a fixed convention (table at the end).
+(Settings → Secrets and variables → Actions → Variables) and **secrets**,
+prefixed `PREVIEW_`, `STAGING_` or `PRODUCTION_`. Everything not listed here is a
+fixed convention (table at the end).
+
+Store `STAGING_*` secrets in the `staging` environment and `PRODUCTION_*` secrets
+in `production` (Settings → Environments, or `gh secret set … --env`). Those
+environments only admit `main` and `v*` tags, so pull-request workflows cannot
+read them; a repository secret is readable by any same-repository pull request.
+The workflow uses the same names either way. `PREVIEW_*` secrets stay repository
+secrets.
 
 | Name (after the prefix) | Kind | Preview | Staging | Production | Meaning |
 | --- | --- | --- | --- | --- | --- |
@@ -31,28 +38,28 @@ gh variable set PREVIEW_OTEL_ENDPOINT --body http://lgtm:4318
 gh secret set PREVIEW_RUM_CLIENT_TOKEN --body RUM_TOKEN
 
 gh variable set STAGING_HOST --body staging.peoplegator.dev
-gh secret set STAGING_DATABASE_URL --body 'postgresql://postgres:SECRET@postgres:5432/postgres'
+gh secret set STAGING_DATABASE_URL --env staging --body 'postgresql://postgres:SECRET@postgres:5432/postgres'
 gh variable set STAGING_S3_BUCKET --body peoplegator-staging
 gh variable set STAGING_S3_REGION --body us-east-1
 gh variable set STAGING_S3_ENDPOINT_URL --body https://s3.example.org
-gh secret set STAGING_S3_ACCESS_KEY_ID --body KEY
-gh secret set STAGING_S3_SECRET_ACCESS_KEY --body SECRET
+gh secret set STAGING_S3_ACCESS_KEY_ID --env staging --body KEY
+gh secret set STAGING_S3_SECRET_ACCESS_KEY --env staging --body SECRET
 gh variable set STAGING_BACKUP_S3_BUCKET --body peoplegator-db-backup
 gh variable set STAGING_BACKUP_S3_PREFIX --body production/db-backups/
 gh variable set STAGING_BACKUP_S3_REGION --body us-east-1
 gh variable set STAGING_BACKUP_S3_ENDPOINT_URL --body https://s3.example.org
-gh secret set STAGING_BACKUP_S3_ACCESS_KEY_ID --body READ_ONLY_KEY
-gh secret set STAGING_BACKUP_S3_SECRET_ACCESS_KEY --body READ_ONLY_SECRET
+gh secret set STAGING_BACKUP_S3_ACCESS_KEY_ID --env staging --body READ_ONLY_KEY
+gh secret set STAGING_BACKUP_S3_SECRET_ACCESS_KEY --env staging --body READ_ONLY_SECRET
 gh variable set STAGING_OTEL_ENDPOINT --body http://lgtm:4318
 
 gh variable set PRODUCTION_HOST --body people.example.org
-gh secret set PRODUCTION_DATABASE_URL --body 'postgresql://people_gator:SECRET@postgres:5432/people_gator'
+gh secret set PRODUCTION_DATABASE_URL --env production --body 'postgresql://people_gator:SECRET@postgres:5432/people_gator'
 gh variable set PRODUCTION_S3_BUCKET --body peoplegator
 gh variable set PRODUCTION_S3_REGION --body us-east-1
-gh secret set PRODUCTION_S3_ACCESS_KEY_ID --body KEY
-gh secret set PRODUCTION_S3_SECRET_ACCESS_KEY --body SECRET
+gh secret set PRODUCTION_S3_ACCESS_KEY_ID --env production --body KEY
+gh secret set PRODUCTION_S3_SECRET_ACCESS_KEY --env production --body SECRET
 gh variable set PRODUCTION_OTEL_ENDPOINT --body http://lgtm:4318
-gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
+gh secret set PRODUCTION_OTEL_HEADERS --env production --body 'Authorization=Basic BASE64'
 ```
 
 ## Hosts
@@ -62,7 +69,7 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   deployment account, from anywhere:
 
   ```sh
-  ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+  ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
   ```
 
   It shallow-clones the repository (`ref` selects the branch), copies
@@ -104,6 +111,62 @@ Then open a pull request or run **CI** manually on `main` (`operation=update`,
 or `snapshot-init` for a fresh staging database). A deploy job's `preflight`
 step fails with the variable's name when something is missing or invalid; each
 success appears under the repository's Deployments.
+
+## Staging host
+
+Staging runs under its own Linux account with its own rootless Docker, next to
+the preview account: the infrastructure stack uses fixed names (`postgres`, `db`,
+`web`), so each Docker daemon runs one. The staging database lives in that
+account's `postgres` container; staging creates its own database and role there.
+
+1. **Account.** As root: `useradd -m peoplegator-staging && loginctl enable-linger peoplegator-staging`.
+   Open a login session (`sudo machinectl shell peoplegator-staging@`; plain `su`
+   has no systemd user session), install rootless Docker
+   (`dockerd-rootless-setuptool.sh install`) and run `docker context use rootless`.
+2. **PostgreSQL, Traefik and pgAdmin** on a port of its own. The exported values
+   go into the new `infra.env`:
+
+   ```sh
+   export HTTPS_PORT=2443 TRAEFIK_DASHBOARD_HOST=traefik-staging.peoplegator.dev PGADMIN_HOST=pgadmin-staging.peoplegator.dev COMPOSE_PROFILES=pgadmin
+   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+   ```
+
+   pgAdmin is at `https://pgadmin-staging.peoplegator.dev` behind the printed
+   dashboard login, then its own login (`grep ^PGADMIN_ ~/peoplegator-infra/infra.env`).
+   Its server `postgres` takes `POSTGRES_PASSWORD` from `infra.env`.
+3. **Edge and DNS.** Point `staging.peoplegator.dev`, `traefik-staging.peoplegator.dev`
+   and `pgadmin-staging.peoplegator.dev` at the public entry. On the edge proxy, add
+   them to the staging TCP router (`tls.passthrough`) towards `<host IP>:2443`, not
+   `localhost`. The edge entry point needs `allowACMEByPass: true` so certificate
+   challenges reach this Traefik.
+4. **Runner**, as the staging account, with a new registration token:
+
+   ```sh
+   ref=main; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && RUNNER_TOKEN=<token> $t/deploy/runner/install.sh staging; rm -rf $t
+   ```
+
+5. **Secrets** in the `staging` environment. From a machine with `gh`, this copies
+   the database URL from the host without printing it; the S3 commands prompt
+   for their values:
+
+   ```sh
+   R=DCGM/PeopleGatorApp
+   ssh peoplegator-staging@<host> '. ~/peoplegator-infra/infra.env; printf "postgresql://%s:%s@postgres:5432/postgres" "$POSTGRES_USER" "$POSTGRES_PASSWORD"' | gh secret set STAGING_DATABASE_URL --env staging -R $R
+   gh secret set STAGING_S3_ACCESS_KEY_ID --env staging -R $R
+   gh secret set STAGING_S3_SECRET_ACCESS_KEY --env staging -R $R
+   for n in DATABASE_URL S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do gh secret delete STAGING_$n -R $R; done
+   ```
+
+   The last line removes old repository copies, which pull requests could read.
+   Without SSH to that account, run the `printf` part on the host and paste the
+   URL under Settings → Environments → staging.
+6. **Production backups.** Staging starts from the latest production dump.
+   Set the `STAGING_BACKUP_S3_*` variables and secrets (table above) to the
+   read-only bucket where [`deploy/backup`](backup/README.md) publishes
+   `peoplegator-prod-YYYY-MM-DD.dump`. Without a published dump staging cannot start.
+7. **First deploy.** Run `gh workflow run ci.yml -R $R --ref main -f operation=snapshot-init`.
+   Until it has succeeded once, the staging step of a push to `main` fails and
+   asks for it; afterwards every push to `main` updates staging.
 
 ## Conventions
 
