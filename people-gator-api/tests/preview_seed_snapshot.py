@@ -7,6 +7,10 @@ TEMPLATE`` and a storage copy, and its first ``seed_preview`` call returns the
 template's result instead of repeating the identical work. Every later call in
 the case (reruns after edits, upgrades, recovery) runs the real seed.
 
+One worker builds the template for the whole run under a file lock in the
+run's shared temporary directory; the others reuse it. The pytest controller
+drops it with the worker databases (it is named after the builder's database).
+
 A case is eligible only when its body starts with
 ``<names> = seed_target`` followed directly by ``await
 preview.seed_preview(<database>, <filesystem>)``, so nothing it does can
@@ -15,7 +19,10 @@ fresh run first (``@fresh_seed``) keep a real first seed.
 """
 
 import ast
+import fcntl
 import inspect
+import json
+import os
 import shutil
 import textwrap
 import uuid
@@ -159,3 +166,38 @@ async def build_template(server_url: str, storage: Path, seed) -> SeedTemplate:
         indexes.clear()
         indexes.update(original)
     return SeedTemplate(server_url, database, storage, result, models)
+
+
+async def shared_template(url: str, basetemp: Path, seed, result_type) -> SeedTemplate:
+    """The run's template: built by the first worker that needs it, then reused.
+
+    ``basetemp`` is pytest's per-worker temporary root; xdist workers share its
+    parent, which pytest creates afresh for every run.
+    """
+    root = basetemp.parent if os.getenv("PYTEST_XDIST_WORKER") else basetemp
+    info = root / "preview-seed-template.json"
+    with open(root / "preview-seed-template.lock", "a") as lock:
+        # Other workers are separate processes; blocking this event loop is fine.
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            if not info.exists():
+                storage = root / "preview-seed-template"
+                storage.mkdir()
+                template = await build_template(url, storage, seed)
+                info.write_text(json.dumps({
+                    "database": template.database, "storage": str(storage),
+                    "result": template.result.model_dump(mode="json"), "models": template.models,
+                }))
+            data = json.loads(info.read_text())
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+    # Copies are created through this worker's own database on the same server.
+    return SeedTemplate(
+        url, data["database"], Path(data["storage"]),
+        result_type.model_validate(data["result"]), [tuple(model) for model in data["models"]],
+    )
+
+
+def owns_template() -> bool:
+    """Without xdist the session drops its template; otherwise the controller does."""
+    return not os.getenv("PYTEST_XDIST_WORKER")

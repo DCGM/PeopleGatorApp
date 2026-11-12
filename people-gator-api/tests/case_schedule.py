@@ -4,22 +4,31 @@ from collections.abc import Callable, Sequence
 
 
 def schedule[T](
-    items: Sequence[T], is_slow: Callable[[T], bool], shard: tuple[int, int] | None,
+    items: Sequence[T], tier: Callable[[T], int], shard: tuple[int, int] | None,
 ) -> list[T]:
-    """Select shard ``(index, count)`` and spread its slow cases evenly.
+    """Select shard ``(index, count)`` and spread each cost tier evenly.
 
-    Round robin over slow cases, then fast cases, gives every shard an equal
-    share of each. Within the selection both groups keep collection order and
-    slow cases are evenly spaced, so each xdist worker's initial share holds
-    some and the progress counter (which counts cases) tracks elapsed time.
+    ``tier`` groups cases of similar cost (0 for fast cases). Round robin over
+    each tier in turn, heaviest first, gives every shard an equal share of
+    each. Within the selection every tier keeps collection order and is evenly
+    spaced, so each xdist worker's initial share holds some slow cases and the
+    progress counter (which counts cases) tracks elapsed time.
     """
-    slow = [item for item in items if is_slow(item)]
-    fast = [item for item in items if not is_slow(item)]
+    tiers: dict[int, list[T]] = {}
+    for item in items:
+        tiers.setdefault(tier(item), []).append(item)
+    groups = [tiers[key] for key in sorted(tiers, reverse=True)]
     if shard is not None:
         index, count = shard
-        # Continue fast cases' round robin where the slow cases' one stopped.
-        slow, fast = slow[index - 1::count], fast[(index - 1 - len(slow)) % count::count]
-    # Place the jth of n cases of each group at fraction (j + 0.5) / n of the run.
-    keyed = [((j + 0.5) / len(slow), 0, item) for j, item in enumerate(slow)]
-    keyed += [((j + 0.5) / len(fast), 1, item) for j, item in enumerate(fast)]
+        selected, offset = [], 0
+        for group in groups:
+            # Continue the round robin where the previous tier stopped.
+            selected.append(group[(index - 1 - offset) % count::count])
+            offset += len(group)
+        groups = selected
+    # Place the jth of n cases of each tier at fraction (j + 0.5) / n of the run.
+    keyed = [
+        ((j + 0.5) / len(group), rank, item)
+        for rank, group in enumerate(groups) for j, item in enumerate(group)
+    ]
     return [item for *_, item in sorted(keyed, key=lambda entry: entry[:2])]

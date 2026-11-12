@@ -81,7 +81,7 @@ from people_gator_api.seeding.fixtures import (
 from people_gator_api.services import filesystem_service
 from people_gator_api.settings import settings
 from conftest import migrated_schema
-from preview_seed_snapshot import SeedTemplate, build_template, fresh_seed, starts_with_seed
+from preview_seed_snapshot import SeedTemplate, fresh_seed, owns_template, shared_template, starts_with_seed
 
 
 type SeedTarget = tuple[Database, LocalFilesystem, AsyncEngine]
@@ -92,8 +92,9 @@ def seed_templates() -> Iterator[dict[str, SeedTemplate]]:
     """This worker's fresh preview seed, built by the first eligible case."""
     templates: dict[str, SeedTemplate] = {}
     yield templates
-    for template in templates.values():
-        asyncio.run(template.drop(template.database))
+    if owns_template():
+        for template in templates.values():
+            asyncio.run(template.drop(template.database))
 
 
 @pytest_asyncio.fixture
@@ -133,12 +134,19 @@ async def worker_template(
     url: str, tmp_path_factory: pytest.TempPathFactory, templates: dict[str, SeedTemplate],
 ) -> SeedTemplate:
     if url not in templates:
-        storage = tmp_path_factory.mktemp("preview-seed-template")
         with pytest.MonkeyPatch.context() as patch:
-            filesystem = LocalFilesystem(storage)
-            patch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
-            templates[url] = await build_template(url, storage, preview.seed_preview)
+            templates[url] = await shared_template(
+                url, tmp_path_factory.getbasetemp(), building_seed(patch), preview.SeedResult)
     return templates[url]
+
+
+def building_seed(patch: pytest.MonkeyPatch):
+    async def seed(database, filesystem):
+        # Media the seed reads back resolves in the storage it is seeding.
+        patch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
+        return await preview.seed_preview(database, filesystem)
+
+    return seed
 
 
 @asynccontextmanager
