@@ -5,6 +5,7 @@ from contextlib import redirect_stderr
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ from unittest.mock import Mock, patch
 import urllib.error
 
 
+from actions_isolation import isolate
 from people_gator_deploy import host, preview
 from people_gator_deploy.core import DeployError
 SHA = "a" * 40
@@ -20,12 +22,11 @@ IMAGES = {
     component: f"ghcr.io/dcgm/peoplegatorapp-{component}@sha256:{'b' * 64}"
     for component in ("frontend", "backend")
 }
-RUN = {
-    "id": 100, "run_attempt": 1, "workflow_id": 5, "conclusion": "success",
-    "event": "pull_request", "head_sha": SHA,
-    "head_repository": {"full_name": "DCGM/PeopleGatorApp"},
-    "pull_requests": [{"number": 123}],
-}
+RUN = {"id": 100, "run_attempt": 1, "head_sha": SHA}  # this workflow run's build identity
+
+
+CONFIG = {"repository": "DCGM/PeopleGatorApp", "domain": "preview.peoplegator.dev", "docker_context": "rootless",
+          "postgres": {"host": "postgres", "port": 5432, "user": "preview_admin", "password": "admin-pw", "database": "postgres"}}
 
 
 def pull_request(*, state="open", sha=SHA, repository="DCGM/PeopleGatorApp"):
@@ -40,6 +41,7 @@ def response(data):
 
 class GitHubAccessTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -48,7 +50,7 @@ class GitHubAccessTests(unittest.TestCase):
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
-        self.config = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root)}
+        self.config = {**CONFIG, "state_dir": str(self.root)}
         self.controller = preview.Preview(self.config)
         self.controller.command = Mock()
         self.controller.sql = Mock()
@@ -62,7 +64,7 @@ class GitHubAccessTests(unittest.TestCase):
 
     def test_mismatch_is_rejected_before_creating_state_or_making_requests(self):
         with patch.object(host.urllib.request, "urlopen") as urlopen:
-            with self.assertRaisesRegex(ValueError, "does not match GITHUB_REPOSITORY.*operator"):
+            with self.assertRaisesRegex(ValueError, "does not match GITHUB_REPOSITORY.*DEPLOY_REPOSITORY"):
                 preview.Preview({**self.config, "repository": "DCGM/people_gator",
                                     "state_dir": str(self.root / "untouched")})
             self.assertFalse((self.root / "untouched").exists())
@@ -121,7 +123,7 @@ class GitHubAccessTests(unittest.TestCase):
                     for p in self.root.rglob("*") if p.is_file()}
         before = snapshot()
         for status in (401, 403, 404):
-            for action in (lambda: self.controller.deploy(100),
+            for action in (lambda: self.controller.deploy(SHA, 123),
                            lambda: self.controller.cleanup(123), self.controller.reconcile):
                 # Exercise both repository preflight failure and PR/run access
                 # failures after repository access has already succeeded.
@@ -138,7 +140,7 @@ class GitHubAccessTests(unittest.TestCase):
                         self.assertIn("GET https://api.github.com/repos/DCGM/PeopleGatorApp", message)
                         self.assertIn("ABCD:1234:5678", message)
                         if not preflight:
-                            self.assertRegex(message, r"/(pulls/123|actions/runs/100)")
+                            self.assertRegex(message, r"/pulls/123")
                         self.assertNotIn("synthetic_secret_token", message)
                         self.assertNotIn("retained-password", message)
                         self.assertEqual(urlopen.call_count, 1 if preflight else 2)
@@ -184,23 +186,19 @@ class GitHubAccessTests(unittest.TestCase):
 
 class LifecycleTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.users = self.root / "users.json"
         self.users.write_text("{}")
-        self.controller = preview.Preview({
-            "repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
-            "users_file": str(self.users),
-        })
+        self.controller = preview.Preview({**CONFIG, "state_dir": str(self.root), "users_file": str(self.users),
+                                           "runtime_file": str(self.root / "runtime.env")})
         self.controller.command = Mock(return_value="")
         self.controller.sql = Mock(return_value="")
         self.controller.readiness = Mock()
         self.controller.api = Mock(side_effect=lambda endpoint: (
-            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else
-            RUN if endpoint == "actions/runs/100" else
-            {"path": ".github/workflows/pr-ci.yml"} if endpoint == "actions/workflows/5"
-            else pull_request()
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else pull_request()
         ))
 
     def seed_preview(self):
@@ -222,16 +220,13 @@ class LifecycleTests(unittest.TestCase):
             self.controller.api.side_effect = None
             self.assertIsNone(self.controller.current_pr(123, SHA))
 
-    def test_deployment_verifies_workflow_identity(self):
-        self.controller.api.side_effect = [RUN, {"path": ".github/workflows/other.yml"}]
-        with self.assertRaises(ValueError):
-            self.controller.eligible_run(100)
-        self.controller.command.assert_not_called()
-
-    def test_stale_run_does_not_pull_images(self):
+    def test_stale_commit_does_not_pull_images(self):
         self.controller.current_pr = Mock(return_value=None)
-        self.controller.deploy(100)
+        self.assertEqual(self.controller.deploy(SHA, 123), [])
         self.controller.command.assert_not_called()
+        for sha in ("", "HEAD", SHA.upper(), SHA + "\n"):
+            with self.subTest(sha=sha), self.assertRaisesRegex(DeployError, "--sha"):
+                self.controller.build(sha)
 
     def test_image_must_match_tested_commit_and_registry(self):
         inspected = {"Config": {"Labels": {"org.opencontainers.image.revision": "d" * 40}},
@@ -247,7 +242,6 @@ class LifecycleTests(unittest.TestCase):
             self.controller.image("frontend", RUN)
 
     def test_deploy_repeats_and_populated_reconciliation_preserve_open_preview(self):
-        (self.root / "infrastructure.env").write_text("existing infrastructure credentials")
         directory = self.seed_preview()
         inspected = [{"Config": {"Labels": {"org.opencontainers.image.revision": SHA}},
                       "RepoDigests": [digest]} for digest in IMAGES.values()]
@@ -255,8 +249,9 @@ class LifecycleTests(unittest.TestCase):
             json.dumps([inspected[0 if "frontend" in args[-1] else 1]])
             if args[:3] == ["docker", "image", "inspect"] else ""
         )
-        self.controller.deploy(100)
-        expected_tags = {f"ghcr.io/dcgm/peoplegatorapp-{component}:run-100-1"
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "100", "GITHUB_RUN_ATTEMPT": "1"}):
+            self.assertEqual(self.controller.deploy(SHA, 123), [123])
+        expected_tags = {f"ghcr.io/dcgm/peoplegatorapp-{component}:sha-{SHA}"
                          for component in ("frontend", "backend")}
         self.assertEqual({call.args[0][-1] for call in self.controller.command.call_args_list
                           if call.args[0][:2] == ["docker", "pull"]}, expected_tags)
@@ -264,7 +259,8 @@ class LifecycleTests(unittest.TestCase):
         environment = (directory / "compose.env").read_bytes()
         self.controller.command.reset_mock()
         self.controller.sql.reset_mock()
-        self.controller.deploy(100)
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "100", "GITHUB_RUN_ATTEMPT": "1"}):
+            self.assertEqual(self.controller.deploy(SHA, 123), [])
         self.controller.reconcile()
         self.assertEqual((directory / "state.json").read_bytes(), state)
         self.assertEqual((directory / "compose.env").read_bytes(), environment)
@@ -295,6 +291,23 @@ class LifecycleTests(unittest.TestCase):
         self.controller.command.reset_mock()
         self.controller.deploy_pr(123, {**RUN, "id": 99}, IMAGES)
         self.controller.command.assert_not_called()
+
+    def test_operator_runs_without_run_identity_compare_commits_only(self):
+        directory = self.seed_preview()
+        manual = {"id": 0, "run_attempt": 0, "head_sha": SHA}
+        self.assertTrue(self.controller.deploy_pr(123, manual, IMAGES))
+        self.controller.command.reset_mock()
+        self.assertFalse(self.controller.deploy_pr(123, manual, IMAGES))
+        self.controller.command.assert_not_called()
+        self.controller.current_pr = Mock(return_value=pull_request(sha="d" * 40))
+        self.assertTrue(self.controller.deploy_pr(123, {**manual, "head_sha": "d" * 40}, IMAGES))
+        self.assertEqual(json.loads((directory / "state.json").read_text())["sha"], "d" * 40)
+        # Workflow runs record their identity so that older runs never replace newer ones.
+        self.assertTrue(self.controller.deploy_pr(123, {**RUN, "head_sha": "d" * 40}, IMAGES))
+        self.controller.command.reset_mock()
+        self.assertFalse(self.controller.deploy_pr(123, {**RUN, "id": 99, "head_sha": "e" * 40}, IMAGES))
+        self.controller.command.assert_not_called()
+        self.assertTrue(self.controller.deploy_pr(123, {**manual, "head_sha": "e" * 40}, IMAGES))
 
     def test_redeployment_removes_only_selected_pr_containers_before_database_preparation(self):
         directory = self.seed_preview()
@@ -365,6 +378,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")
         self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
 
+    def test_synthetic_deployments_never_reach_a_real_job_summary(self):
+        summary = self.root / "summary.md"
+        with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.assertIn("pr-123.preview.peoplegator.dev", summary.read_text())  # the feature itself works
+        summary.unlink()
+        self.controller.deploy_pr(124, RUN, IMAGES)  # under the test isolation nothing is written
+        self.assertFalse(summary.exists())
+
+    def test_provisioning_closes_the_shared_admin_database_to_preview_roles(self):
+        self.controller.provision_database(123, "c" * 64)
+        statements = [call.args[0] for call in self.controller.sql.call_args_list]
+        self.assertEqual(statements[0], 'REVOKE ALL ON DATABASE "postgres", template1 FROM PUBLIC;\n')
+        self.assertIn("CREATE ROLE preview_pr_123", statements[1])
+
     def test_seeding_runs_after_migrations_and_before_application_startup(self):
         self.controller.deploy_pr(123, RUN, IMAGES)
         commands = [call.args[0] for call in self.controller.command.call_args_list]
@@ -428,6 +456,7 @@ class LifecycleTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_standalone_auth_recipe_has_private_alias_and_separate_credentials(self):
         env_file = self.root / "auth.env"
+        (self.root / "runtime.env").write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         preview.write_private(env_file, self.controller.env(123, {"password": "c" * 64}, IMAGES, standalone_auth=True))
         result = subprocess.run(self.controller.compose(123, env_file, "--profile", "tools", "config", "--format", "json"),
                                 text=True, capture_output=True, check=True)
@@ -455,39 +484,6 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")
         self.assertNotIn("version", json.loads((directory / "state.json").read_text()))
         self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
-
-    def test_infrastructure_upgrade_and_reruns_preserve_credentials(self):
-        env_file = self.root / "infrastructure.env"
-        env_file.write_text("POSTGRES_ADMIN_PASSWORD=" + "c" * 64 + "\nDATABASE_NETWORK=people-gator-preview-db\n")
-        self.controller.init()
-        first = env_file.read_text()
-        self.assertIn("POSTGRES_ADMIN_PASSWORD='" + "c" * 64 + "'", first)
-        self.assertIn("PGADMIN_DEFAULT_PASSWORD='", first)
-        self.assertIn("OTEL_EXPORTER_OTLP_ENDPOINT='http://lgtm:4318'", first)
-        self.assertEqual(env_file.stat().st_mode & 0o777, 0o600)
-        self.controller.init()
-        self.assertEqual(env_file.read_text(), first)
-
-    def test_config_controls_otel_pgadmin_and_preview_log_port(self):
-        self.controller.config.update(
-            otel_network="observability", otel_http_endpoint="https://otel.example.test",
-            preview_log_port=24225, pgadmin_email="operator@example.test",
-            pgadmin_host="pgadmin.example.test", certificate_resolver="",
-        )
-        self.controller.init()
-        infrastructure = (self.root / "infrastructure.env").read_text()
-        for value in ("OTEL_NETWORK='observability'", "PGADMIN_DEFAULT_EMAIL='operator@example.test'",
-                      "PGADMIN_HOST='pgadmin.example.test'", "CERTIFICATE_RESOLVER=''",
-                      "OTEL_EXPORTER_OTLP_ENDPOINT='https://otel.example.test'"):
-            self.assertIn(value, infrastructure)
-        self.assertIn("PREVIEW_LOG_ADDRESS='127.0.0.1:24225'",
-                      self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA))
-
-    def test_infrastructure_rejects_dotenv_injection_before_starting(self):
-        self.controller.config["pgadmin_email"] = "admin@example.test\nINJECTED=value"
-        with self.assertRaises(ValueError):
-            self.controller.init()
-        self.controller.command.assert_not_called()
 
     def test_migration_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
@@ -531,6 +527,28 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(directory.exists())
         self.assertIn("--volumes", self.controller.command.call_args.args[0])
 
+    def test_removal_falls_back_to_project_labels_when_compose_cannot_tear_down_an_old_stack(self):
+        directory = self.seed_preview()
+        (directory / "compose.env").write_text("DATABASE_NETWORK='people-gator-preview-db'\n")  # saved under old conventions
+        self.controller.api.side_effect = lambda endpoint: (
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else pull_request(state="closed"))
+        def command(args, **kwargs):
+            if "down" in args:
+                raise DeployError("network people-gator-preview-db declared as external, but could not be found")
+            if args[:2] == ["docker", "ps"]:
+                return "c1\nc2\n"
+            if args[:3] == ["docker", "volume", "ls"]:
+                return "people-gator-pr-123_api-data\n"
+            return ""
+        self.controller.command.side_effect = command
+        self.assertTrue(self.controller.cleanup(123))
+        calls = [call.args[0] for call in self.controller.command.call_args_list]
+        self.assertIn(["docker", "rm", "-f", "c1", "c2"], calls)
+        self.assertIn(["docker", "volume", "rm", "-f", "people-gator-pr-123_api-data"], calls)
+        self.assertTrue(all("label=com.docker.compose.project=people-gator-pr-123" in call for call in calls if "--filter" in call))
+        self.assertIn("DROP DATABASE IF EXISTS preview_pr_123", self.controller.sql.call_args.args[0])
+        self.assertFalse(directory.exists())
+
     def test_reconciliation_does_not_infer_closure_from_api_errors(self):
         directory = self.seed_preview()
         self.controller.api.side_effect = OSError("API unavailable")
@@ -542,6 +560,7 @@ class LifecycleTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_compose_resolves_unique_router_names_and_uses_shared_database(self):
         env_file = self.root / "compose.env"
+        (self.root / "runtime.env").write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
         preview.write_private(env_file, self.controller.env(123, {"password": "c" * 64}, IMAGES))
         # Use the real CLI, not the mocked command executor.
         result = subprocess.run(self.controller.compose(123, env_file,
@@ -562,52 +581,49 @@ class LifecycleTests(unittest.TestCase):
         self.assertTrue(all(mount.startswith("/") for mount in config["services"]["backend"]["tmpfs"]))
         for name in ("frontend", "backend", "migrate", "seed", "storage-init"):
             service = config["services"][name]
-            self.assertEqual(service["logging"]["driver"], "fluentd")
-            self.assertEqual(service["logging"]["options"]["fluentd-async"], "true")
+            self.assertEqual(service["logging"]["driver"], "json-file")  # container output stays local
             self.assertEqual(service["labels"]["people-gator.preview.pr"], "123")
-            self.assertIn("com.docker.compose.service", service["logging"]["options"]["labels"])
+        backend = config["services"]["backend"]["environment"]
+        self.assertEqual(backend["PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER"], "123")
+        self.assertEqual(backend["PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST"], "postgres")
+        self.assertEqual(backend["PEOPLE_GATOR_API__STORAGE"], '{"local": {"root": "/data"}, "s3": null}')
+        self.assertNotIn("PEOPLE_GATOR_API__OTEL__ENABLED", backend)  # telemetry comes only from the rendered file
 
-    @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
-    def test_infrastructure_routes_pgadmin_and_keeps_database_private(self):
-        self.controller.init()
-        result = subprocess.run(self.controller.infra("config", "--format", "json"),
-                                text=True, capture_output=True, check=True)
-        config = json.loads(result.stdout)
-        self.assertFalse(config["services"]["postgres"].get("ports"))
-        self.assertNotIn("web", config["services"]["postgres"]["networks"])
-        pgadmin = config["services"]["pgadmin"]
-        self.assertFalse(pgadmin.get("ports"))
-        self.assertEqual(set(pgadmin["networks"]), {"database", "web"})
-        self.assertEqual(pgadmin["labels"]["traefik.http.routers.pg-preview-pgadmin.rule"],
-                         "Host(`pgadmin-preview.peoplegator.dev`)")
-        self.assertEqual(pgadmin["environment"]["PGADMIN_CONFIG_SESSION_COOKIE_SECURE"], "True")
-        collector = config["services"]["otel-collector"]
-        self.assertEqual(collector["ports"][0]["host_ip"], "127.0.0.1")
-        self.assertTrue(config["networks"]["logging"]["external"])
-        self.assertFalse(any("docker.sock" in mount.get("source", "") for mount in collector["volumes"]))
+    def test_compose_environment_points_at_the_configured_database_and_rendered_files(self):
+        self.controller.config.update(telemetry_file=str(self.root / "telemetry.env"), otel_network="logging")
+        environment = self.controller.env(123, {"password": "c" * 64}, IMAGES, sha=SHA)
+        for line in ("DB_HOST='postgres'", "DB_PORT='5432'", "DATABASE_NETWORK='db'", "APPLICATION_OTEL_NETWORK='web'",
+                     f"RUNTIME_FILE='{self.root / 'runtime.env'}'", f"TELEMETRY_FILE='{self.root / 'telemetry.env'}'",
+                     "PREVIEW_HOST='pr-123.preview.peoplegator.dev'"):
+            self.assertIn(line, environment)
+        self.assertNotIn("admin-pw", environment)  # the admin password never enters a preview stack
 
 
 @unittest.skipUnless(os.environ.get("PREVIEW_TEST_POSTGRES_CONTAINER"), "requires disposable PostgreSQL container")
 class DatabaseIsolationTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+
     def test_two_pr_databases_are_isolated_and_cleanup_is_repeatable(self):
         container = os.environ["PREVIEW_TEST_POSTGRES_CONTAINER"]
         admin = os.environ.get("PREVIEW_TEST_POSTGRES_USER", "ci")
         with tempfile.TemporaryDirectory() as root:
-            # The fixture lives in the caller's active context; the adapter never guesses one.
             context = os.environ.get("PREVIEW_TEST_DOCKER_CONTEXT") or subprocess.check_output(
                 ["docker", "context", "show"], text=True).strip()
-            controller = preview.Preview({"repository": "DCGM/PeopleGatorApp", "state_dir": root,
-                                          "docker_context": context})
-
-            def sql(statements, database="postgres"):
-                return controller.command([
-                    "docker", "exec", "-i", container, "psql", "-X", "-qAt",
-                    "-v", "ON_ERROR_STOP=1", "-U", admin, "-d", database,
-                ], sql=statements)
-
-            controller.sql = sql
+            network = "people-gator-test-" + secrets.token_hex(4)
+            alias = "pg-" + secrets.token_hex(4)
+            subprocess.run(["docker", "network", "create", "--internal", network], check=True, capture_output=True)
+            # The utility reaches the database through its URL from a throwaway client container on the database network.
+            controller = preview.Preview({**CONFIG, "state_dir": root, "docker_context": context, "database_network": network,
+                                          "postgres": {"host": alias, "port": 5432, "user": admin,
+                                                       "password": os.environ.get("PREVIEW_TEST_POSTGRES_PASSWORD", "ci"), "database": "ci"}})
+            sql = controller.sql
             numbers = (900001, 900002)
             try:
+                with self.assertRaisesRegex(DeployError, f"Cannot connect to {alias}:5432/ci as {admin}"):
+                    controller.check_database()
+                subprocess.run(["docker", "network", "connect", "--alias", alias, network, container], check=True, capture_output=True)
+                self.assertEqual(controller.check_database(), {"database": f"{alias}:5432/ci as {admin}", "network": network})
                 for number in numbers:
                     controller.provision_database(number, "c" * 64)
                     controller.provision_database(number, "c" * 64)
@@ -624,6 +640,13 @@ class DatabaseIsolationTests(unittest.TestCase):
                 ], capture_output=True, text=True)
                 self.assertNotEqual(denied.returncode, 0)
                 self.assertIn("permission denied for database", denied.stderr)
+                # Nor may it connect to the shared server's admin database.
+                admin_denied = subprocess.run([
+                    "docker", "exec", "-e", "PGPASSWORD=" + "c" * 64, container,
+                    "psql", "-h", "127.0.0.1", "-U", "preview_pr_900001", "-d", "ci", "-c", "SELECT 1",
+                ], capture_output=True, text=True)
+                self.assertNotEqual(admin_denied.returncode, 0)
+                self.assertIn("permission denied for database", admin_denied.stderr)
                 allowed = subprocess.run([
                     "docker", "exec", "-e", "PGPASSWORD=" + "c" * 64, container,
                     "psql", "-h", "127.0.0.1", "-U", "preview_pr_900001", "-d", "preview_pr_900001", "-v", "ON_ERROR_STOP=1",
@@ -634,6 +657,8 @@ class DatabaseIsolationTests(unittest.TestCase):
                 for _ in range(2):
                     for number in numbers:
                         sql(f"DROP DATABASE IF EXISTS preview_pr_{number} WITH (FORCE); DROP ROLE IF EXISTS preview_pr_{number};")
+                subprocess.run(["docker", "network", "disconnect", network, container], capture_output=True)
+                subprocess.run(["docker", "network", "rm", network], capture_output=True)
 
 
 if __name__ == "__main__":

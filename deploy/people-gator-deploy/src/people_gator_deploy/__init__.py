@@ -1,4 +1,3 @@
-"""PeopleGator deployment API. No application dependencies are installed on hosts."""
-__version__ = "1.0.1"
-CONFIG_SCHEMA = 1
+"""PeopleGator deployment API, run from the checkout of the commit being deployed."""
+__version__ = "2.0.0"
 STATE_SCHEMA = 1

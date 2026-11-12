@@ -79,6 +79,21 @@ function scrollCurrentIntoView() {
   })
 }
 
+/** A plain up/down wheel over the collapsed strip scrolls it sideways. */
+function scrollStripWithWheel(event: WheelEvent) {
+  if (expanded.value || event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
+  const viewport = list.value?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  if (!viewport) return
+  const unit = [1, 16, viewport.clientWidth][event.deltaMode] ?? 1
+  const delta = event.deltaY * unit
+  const max = viewport.scrollWidth - viewport.clientWidth
+  // At either end the wheel passes on, so the page can still scroll.
+  if ((delta < 0 && viewport.scrollLeft <= 0) || (delta > 0 && viewport.scrollLeft >= max - 1))
+    return
+  event.preventDefault()
+  viewport.scrollLeft += delta
+}
+
 watch(() => props.items.find((item) => item.current)?.pageId, scrollCurrentIntoView, {
   immediate: true,
 })
@@ -223,6 +238,7 @@ useAutomaticPagination({
           tabindex: 0,
           'aria-label': expanded ? 'Document pages grid' : 'Document pages strip',
         }"
+        @wheel="scrollStripWithWheel"
       >
         <ol
           id="document-pages-list"

@@ -1,7 +1,0 @@
-{
-  "repository": "DCGM/PeopleGatorApp",
-  "docker_context": "rootless",
-  "host": "staging.peoplegator.dev",
-  "runtime_file": "/private/staging-runtime.env",
-  "snapshot_source_file": "/private/staging-backup-source.json"
-}

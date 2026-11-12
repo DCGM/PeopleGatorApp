@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from s3_fixture import S3Fixture
 
+from actions_isolation import isolate
 from people_gator_deploy import staging
 from people_gator_deploy.core import DeployError
 import test_snapshot as snapshot_tests
@@ -20,6 +21,9 @@ import test_snapshot as snapshot_tests
 @unittest.skipUnless(os.environ.get("STAGING_TEST_IMAGE") and os.environ.get("STAGING_TEST_POSTGRES_CONTAINER"),
                      "Set isolated STAGING_TEST_IMAGE/container/port/network")
 class RuntimeTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+
     @classmethod
     def setUpClass(cls):
         snapshot_tests.SnapshotIntegrationTests.setUpClass()
@@ -65,11 +69,13 @@ class RuntimeTests(unittest.TestCase):
         runtime.chmod(0o600)
         context = os.environ.get("STAGING_TEST_DOCKER_CONTEXT") or subprocess.check_output(
             ["docker", "context", "show"], text=True).strip()
-        controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
-            "docker_context": context, "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
+        controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(state),
+            "host": "staging-fixture.example.invalid", "docker_context": context,
+            "postgres": {"host": "postgres", "port": 5432, "user": os.environ.get("STAGING_TEST_DATABASE_USER", "ci"),
+                         "password": os.environ.get("STAGING_TEST_DATABASE_PASSWORD", "ci"), "database": "ci"},
+            "database_network": os.environ["STAGING_TEST_NETWORK"], "web_network": network,
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
-                "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40},
-            "staging": {"state_dir": str(state), "host": "staging-fixture.example.invalid"}})
+                "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40}})
         snapshot_revision = "d34a021b0005"
         if backup_source:
             # Roundtrip already-existing thumbnail constraints. An old snapshot
@@ -100,8 +106,6 @@ class RuntimeTests(unittest.TestCase):
             del controller.config["snapshot"]
             controller.config["snapshot_source_file"] = str(source_file)
         controller.sql = fixture.sql
-        controller.infra = lambda *args: ["docker", "exec", "-i", fixture.container,
-            *[fixture.username if arg == "preview_admin" else arg for arg in args[3:]]]
         override = state / "compose.test.json"
         override.write_text(json.dumps({"services": {name: {"logging": {"driver": "json-file", "options": {}},
             "environment": {"PEOPLE_GATOR_API__OTEL__ENABLED": "false"}, "restart": "no"}

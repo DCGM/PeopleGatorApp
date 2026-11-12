@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import release
 from people_gator_deploy.core import DeployError
 
@@ -26,18 +27,18 @@ class FakeRelease(release.Release):
             path = private / name
             path.write_text("".join(f"PEOPLE_GATOR_API__{key}\n" for key in keys))
             path.chmod(0o600)
+        postgres = {"host": "db.internal", "port": 5432, "user": "runtime", "password": "pw", "database": "people"}
         super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "state"),
                           "docker_context": "rootless", "host": "people.example.invalid", "web_network": "web",
-                          "database_network": "production-db", "runtime_file": str(private / "runtime.env"),
-                          "migration_file": str(private / "migration.env")})
-        self.install()
+                          "database_network": "production-db", "postgres": postgres, "migration": {**postgres, "user": "migrator"},
+                          "runtime_file": str(private / "runtime.env"), "migration_file": str(private / "migration.env")})
+        self.root.mkdir(parents=True)
         self.tags = {"v1.0.0": {"type": "commit", "sha": FIRST},
                      "v1.1.0": {"type": "tag", "sha": "a" * 40},
                      "v0.9.0": {"type": "commit", "sha": OLD}}
         self.annotated = {"a" * 40: {"type": "commit", "sha": SECOND}}
         self.on_main = {FIRST, SECOND, OLD}
         self.history = {(FIRST, SECOND), (OLD, FIRST), (OLD, SECOND)}  # (ancestor, descendant)
-        self.runs = {FIRST: 200, SECOND: 300, OLD: 100}
         self.schema = {"current": True}
         self.events = []
         self.fail = None
@@ -55,16 +56,6 @@ class FakeRelease(release.Release):
             if head == "main":
                 return {"status": "ahead" if base in self.on_main else "diverged"}
             return {"status": "identical" if base == head else "ahead" if (base, head) in self.history else "behind"}
-        if endpoint.startswith("actions/workflows/pr-ci.yml/runs?head_sha="):
-            sha = endpoint.split("head_sha=")[1].split("&")[0]
-            return {"workflow_runs": [{"id": self.runs[sha]}] if sha in self.runs else []}
-        if endpoint.startswith("actions/runs/"):
-            run_id = int(endpoint.rsplit("/", 1)[1])
-            sha = next(sha for sha, value in self.runs.items() if value == run_id)
-            return {"id": run_id, "run_attempt": 1, "workflow_id": 9, "conclusion": "success", "event": "push",
-                    "head_branch": "main", "head_sha": sha, "head_repository": {"full_name": self.repository}}
-        if endpoint.startswith("actions/workflows/"):
-            return {"path": ".github/workflows/pr-ci.yml"}
         raise AssertionError(endpoint)
 
     def image(self, component, run):
@@ -90,6 +81,7 @@ class FakeRelease(release.Release):
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -108,21 +100,18 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaisesRegex(DeployError, "pattern"):
                 self.release.tag_commit(tag)
         with self.assertRaisesRegex(DeployError, "moved"):
-            self.release.eligible("v1.0.0", commit=SECOND)
+            self.release.eligible("v1.0.0", sha=SECOND)
         self.release.on_main.discard(FIRST)
         with self.assertRaisesRegex(DeployError, "not on main"):
             self.release.eligible("v1.0.0")
         self.release.on_main.add(FIRST)
-        del self.release.runs[FIRST]
-        with self.assertRaisesRegex(DeployError, "No successful main-push"):
-            self.release.eligible("v1.0.0")
-        self.release.runs[FIRST] = 200
-        with self.assertRaisesRegex(DeployError, "not tagged commit"):
-            self.release.eligible("v1.0.0", run_id=300)
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "200", "GITHUB_RUN_ATTEMPT": "2"}):
+            resolved, build = self.release.eligible("v1.0.0", sha=FIRST)
+        self.assertEqual((resolved, build), (FIRST, {"head_sha": FIRST, "id": 200, "run_attempt": 2}))
         self.assertEqual(self.release.events, [])
 
     def test_first_release_gates_order_and_repeated_delivery_is_idempotent(self):
-        result = self.release.deploy("v1.0.0", commit=FIRST)
+        result = self.release.deploy("v1.0.0", sha=FIRST)
         self.assertTrue(result["changed"])
         gates = ["config --quiet", "run --rm --no-deps check",
                  "up -d --wait --wait-timeout 300 backend", "up -d --wait --wait-timeout 180 frontend", "routed-readiness"]
@@ -275,25 +264,6 @@ class ReleaseTests(unittest.TestCase):
                     self.assertFalse((controller.root / "activation.json").exists())
                     if not committed:
                         self.assertEqual(controller.recover()["tag"], "v0.9.0")
-
-    def test_private_inputs_keep_roles_separate_and_cannot_override_production_settings(self):
-        runtime = Path(self.release.config["runtime_file"])
-        original = runtime.read_text()
-        for content, mode, message in (
-                (original, 0o644, "mode-600"),
-                (original + "PEOPLE_GATOR_API__DEBUG=true\n", 0o600, "DEBUG"),
-                (original + "PEOPLE_GATOR_API__RELOAD=true\n", 0o600, "RELOAD"),
-                ("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=runtime\n", 0o600, "STORAGE"),
-                ("export AWS_SECRET_ACCESS_KEY=ambient\n", 0o600, "only PEOPLE_GATOR_API")):
-            runtime.write_text(content)
-            runtime.chmod(mode)
-            with self.subTest(message=message), self.assertRaisesRegex(DeployError, message):
-                self.release.validate_inputs()
-        runtime.write_text(original)
-        runtime.chmod(0o600)
-        self.release.config["migration_file"] = str(runtime)
-        with self.assertRaisesRegex(DeployError, "separate"):
-            self.release.validate_inputs()
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
     def test_production_stack_has_no_development_mounts_and_separates_roles(self):

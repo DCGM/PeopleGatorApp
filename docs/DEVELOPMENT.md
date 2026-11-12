@@ -179,7 +179,8 @@ twice in a third isolated database and runs the deployment utility tests:
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
 ```
 
-Run it from the repository root. The [utility guide](../deploy/people-gator-deploy/README.md#development)
+Run it from the repository root with PyYAML available (or through `uv run` from
+`people-gator-api`, as CI does). The [utility guide](../deploy/people-gator-deploy/README.md#development)
 explains the opt-in database-isolation, snapshot, runtime-image and log-delivery checks.
 
 For the disposable media-upload concurrency investigation, see

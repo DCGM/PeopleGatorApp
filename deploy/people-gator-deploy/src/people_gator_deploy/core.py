@@ -39,16 +39,12 @@ def write_json(path, value):
 
 
 @contextmanager
-def lock(path: Path, *, shared=False):
-    """Never replace/unlink locks: every caller must lock the same inode.
-
-    Shared holders run concurrently with each other but never with an exclusive
-    holder, such as an infrastructure upgrade.
-    """
+def lock(path: Path):
+    """Never replace/unlink locks: every caller must lock the same inode."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "a") as stream:
-        fcntl.flock(stream, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        fcntl.flock(stream, fcntl.LOCK_EX)
         yield
 
 

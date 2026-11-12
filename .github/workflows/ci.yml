@@ -1,0 +1,452 @@
+# CI/CD: tests → images to GHCR → deployments on the self-hosted runners.
+#   same-repository PR   → https://pr-<n>.<preview domain>; removed when the PR closes
+#   push to main         → staging (manual runs on main choose update / snapshot-init / refresh)
+#   v* tag on main       → production
+# Fork PRs are only tested; nothing from them runs on our hosts. Deploy jobs run
+# deploy/people-gator-deploy from this run's own checkout with the GitHub
+# Environment's variables and secrets (see deploy/README.md), so a PR deploys with
+# its own deploy code and only that PR's preview can break.
+# Every deploy is a GitHub Deployment; only the current one per environment (per
+# PR for previews) stays active. Closed PRs' previews are removed on close and by
+# the daily/post-staging prune. If GitHub drops an event, rerun the workflow.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Staging operation for a manual run on main; snapshot-init/refresh restore the latest production backup
+        type: choice
+        options: [update, snapshot-init, refresh]
+        default: update
+      backup_record:
+        description: Absolute path of a private host file recording a completed backup (staging refresh, release migration)
+        type: string
+  schedule:
+    - cron: '17 3 * * *'   # daily preview pruning, run from main
+
+permissions:
+  contents: read
+
+# One pipeline per event and PR. A closed PR's github.ref is its base branch, so
+# the event name keeps `closed` runs from cancelling main's staging deployment.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # PR images and deployments use the PR head commit, not the merge commit.
+  COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  # PR code runs only on ephemeral GitHub-hosted runners; the self-hosted
+  # runners only run the deploy jobs below, for same-repository events.
+  frontend:
+    if: github.event.action != 'closed' && github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: people-gator-app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: people-gator-app/package-lock.json
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npm run type-check
+      - run: npm run test:unit -- --run
+
+  backend:
+    if: github.event.action != 'closed' && github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    # Hosted public-repository runners have 4 vCPUs; the suite takes ~18 minutes.
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: localhost
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ci
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ci
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      # The runner image's Compose predates develop.watch options the repository's
+      # Compose files use; match the version used for local development.
+      - uses: docker/setup-compose-action@v2
+        with:
+          version: v5.5.1
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: people-gator-api/uv.lock
+      - name: Configure isolated PostgreSQL test port
+        env:
+          CI_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          {
+            echo "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT=$CI_POSTGRES_PORT"
+            echo "PEOPLE_GATOR_POSTGRES_TEST_URL=postgresql+asyncpg://ci:ci@localhost:$CI_POSTGRES_PORT/ci"
+            echo "PEOPLE_GATOR_SCHEMA_TEST_URL=postgresql+asyncpg://ci:ci@localhost:$CI_POSTGRES_PORT/ci_schema"
+          } >> "$GITHUB_ENV"
+      - run: uv sync --locked --python 3.14
+        working-directory: people-gator-api
+      - name: Create disposable schema and seed databases on the same CI server
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed'
+      - name: Smoke-test preview migrations and repeatable seeding
+        working-directory: people-gator-api
+        env:
+          PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci_seed
+        run: |
+          seed_storage="$(mktemp -d "$RUNNER_TEMP/people-gator-preview-seed.XXXXXX")"
+          trap 'rm -rf -- "$seed_storage"' EXIT
+          export PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT="$seed_storage"
+          uv run --locked python -m people_gator_api.cli.database migrate
+          uv run --locked python -m people_gator_api.cli.seed
+          uv run --locked python -m people_gator_api.cli.seed
+          uv run --locked python -m people_gator_api.cli.database check
+      - run: uv run --locked pytest tests -n 4 --dist=worksteal
+        working-directory: people-gator-api
+      - name: Exercise database-only snapshot preservation on synthetic data
+        working-directory: people-gator-api
+        env:
+          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+          STAGING_TEST_DATABASE_USER: ci
+          STAGING_TEST_DATABASE_PASSWORD: ci
+          STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
+      # The deploy utility is part of the tested commit: deploy jobs run it from
+      # their own checkout. The backend environment supplies PyYAML for the
+      # workflow tests and boto3 for the snapshot suites.
+      - name: Test deployment utility, workflow and runner guard
+        working-directory: people-gator-api
+        env:
+          PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          PYTHONPATH: ../deploy/people-gator-deploy/src
+          # Synthetic deployments in the tests must not land in this job's summary.
+          GITHUB_STEP_SUMMARY: ''
+          GITHUB_OUTPUT: ''
+        run: uv run --locked python -B -m unittest discover -s ../deploy/people-gator-deploy/tests -v
+      - name: Install the deployment utility as the deploy jobs do
+        uses: ./.github/actions/deploy-tools
+      - run: people-gator-deploy --version && people-gator-deploy --help >/dev/null
+
+  images:
+    needs: [frontend, backend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            context: people-gator-app
+          - component: backend
+            context: people-gator-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      # Forks get a build, but cannot publish images or reach the preview host.
+      - name: Log into image registry
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMPONENT: ${{ matrix.component }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          platforms: linux/amd64
+          # Deploy jobs in this run pull the tested commit's tag and pin its digest.
+          tags: ${{ steps.image.outputs.name }}:sha-${{ env.COMMIT_SHA }}
+          labels: org.opencontainers.image.revision=${{ env.COMMIT_SHA }}
+          # Same-origin requests allow the built frontend to work on any PR hostname.
+          build-args: VITE_API_BASE_URL=/
+          # PR scopes read main's layers but write only their own branch cache.
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+  # Preview jobs read the preview host's settings from repository variables
+  # (PREVIEW_*): remove-preview and prune-previews have no `environment:` (that
+  # would record a new Deployment), so environment-scoped variables would be
+  # empty there. Secrets stay in the `preview` environment.
+  deploy-preview:
+    needs: images
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, people-gator-preview]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: read
+      deployments: write
+    environment:
+      name: preview
+      url: https://pr-${{ github.event.number }}.${{ steps.preflight.outputs.host }}
+    # Never cancel a running deployment of this PR; the closing run waits for it.
+    concurrency:
+      group: deploy-preview-${{ github.event.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_ACTOR: ${{ github.actor }}
+      PR_NUMBER: ${{ github.event.number }}
+      HEAD_REF: ${{ github.head_ref }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-tools
+      - name: Check preview configuration and prerequisites
+        id: preflight
+        run: people-gator-deploy pr preflight
+      - name: Deploy preview
+        run: people-gator-deploy pr update --pr "$PR_NUMBER" --sha "$COMMIT_SHA"
+      - name: Set older preview deployments inactive
+        continue-on-error: true
+        run: people-gator-deploy deployments supersede preview --ref "$HEAD_REF"
+
+  remove-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, people-gator-preview]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: write
+    concurrency:
+      group: deploy-preview-${{ github.event.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_NUMBER: ${{ github.event.number }}
+      HEAD_REF: ${{ github.head_ref }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-tools
+      - name: Remove preview
+        run: people-gator-deploy pr cleanup --pr "$PR_NUMBER"
+      - name: Set preview deployments inactive
+        continue-on-error: true
+        run: people-gator-deploy deployments retire --ref "$HEAD_REF"
+
+  deploy-staging:
+    needs: images
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, x64, people-gator-staging]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+    environment:
+      name: staging
+      url: https://${{ steps.preflight.outputs.host }}
+    # Never cancel a running migration or snapshot restore.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_ACTOR: ${{ github.actor }}
+      OPERATION: ${{ inputs.operation || 'update' }}
+      BACKUP_RECORD: ${{ inputs.backup_record }}
+      DEPLOY_HOST: ${{ vars.STAGING_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.STAGING_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.STAGING_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.STAGING_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.STAGING_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.STAGING_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_BACKUP_S3_ENDPOINT_URL: ${{ vars.STAGING_BACKUP_S3_ENDPOINT_URL }}
+      DEPLOY_BACKUP_S3_REGION: ${{ vars.STAGING_BACKUP_S3_REGION }}
+      DEPLOY_BACKUP_S3_BUCKET: ${{ vars.STAGING_BACKUP_S3_BUCKET }}
+      DEPLOY_BACKUP_S3_PREFIX: ${{ vars.STAGING_BACKUP_S3_PREFIX }}
+      DEPLOY_BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.STAGING_BACKUP_S3_ACCESS_KEY_ID }}
+      DEPLOY_BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.STAGING_BACKUP_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.STAGING_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.STAGING_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.STAGING_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.STAGING_RUM_SITE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-tools
+      - name: Check staging configuration and prerequisites
+        id: preflight
+        run: people-gator-deploy staging preflight
+      - name: Deploy staging
+        run: |
+          args=(staging "$OPERATION" --sha "$COMMIT_SHA")
+          if [ "$OPERATION" = refresh ] && [ -n "$BACKUP_RECORD" ]; then args+=(--backup-record "$BACKUP_RECORD"); fi
+          people-gator-deploy "${args[@]}"
+      - name: Set older staging deployments inactive
+        continue-on-error: true
+        run: people-gator-deploy deployments supersede staging
+
+  prune-previews:
+    needs: deploy-staging
+    # After a staging deployment (a merged PR), daily and on manual runs from main:
+    # remove previews of PRs that are no longer open and retire their deployments.
+    if: >-
+      always() && !cancelled() &&
+      (needs.deploy-staging.result == 'success' || github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: [self-hosted, linux, x64, people-gator-preview]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: write
+    concurrency:
+      group: prune-previews
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEPLOY_HOST: ${{ vars.PREVIEW_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DEPLOY_STORAGE_DIR: ${{ vars.PREVIEW_STORAGE_DIR }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PREVIEW_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PREVIEW_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PREVIEW_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PREVIEW_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PREVIEW_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PREVIEW_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PREVIEW_RUM_SITE }}
+      DEPLOY_USERS_JSON: ${{ secrets.PREVIEW_USERS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-tools
+      - name: Remove previews of closed pull requests
+        run: people-gator-deploy pr reconcile
+      - name: Set closed PRs' and older deployments inactive
+        continue-on-error: true
+        run: people-gator-deploy deployments prune
+
+  deploy-release:
+    needs: images
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, x64, people-gator-release]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+    environment:
+      name: production
+      url: https://${{ steps.preflight.outputs.host }}
+    # Never cancel a running migration or activation.
+    concurrency:
+      group: deploy-release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_ACTOR: ${{ github.actor }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      BACKUP_RECORD: ${{ inputs.backup_record }}
+      DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+      DEPLOY_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DEPLOY_MIGRATION_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATION_DATABASE_URL }}
+      DEPLOY_S3_ENDPOINT_URL: ${{ vars.PRODUCTION_S3_ENDPOINT_URL }}
+      DEPLOY_S3_REGION: ${{ vars.PRODUCTION_S3_REGION }}
+      DEPLOY_S3_BUCKET: ${{ vars.PRODUCTION_S3_BUCKET }}
+      DEPLOY_S3_ACCESS_KEY_ID: ${{ secrets.PRODUCTION_S3_ACCESS_KEY_ID }}
+      DEPLOY_S3_SECRET_ACCESS_KEY: ${{ secrets.PRODUCTION_S3_SECRET_ACCESS_KEY }}
+      DEPLOY_OTEL_ENDPOINT: ${{ vars.PRODUCTION_OTEL_ENDPOINT }}
+      DEPLOY_OTEL_HEADERS: ${{ secrets.PRODUCTION_OTEL_HEADERS }}
+      DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PRODUCTION_RUM_CLIENT_TOKEN }}
+      DEPLOY_RUM_SITE: ${{ vars.PRODUCTION_RUM_SITE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the tagged commit on main
+        run: git merge-base --is-ancestor "$COMMIT_SHA" origin/main || { echo "::error::Tag $RELEASE_TAG ($COMMIT_SHA) is not on main"; exit 1; }
+      - uses: ./.github/actions/deploy-tools
+      - name: Check release configuration and prerequisites
+        id: preflight
+        run: people-gator-deploy release preflight
+      - name: Deliver release
+        run: |
+          args=(release update --tag "$RELEASE_TAG" --sha "$COMMIT_SHA")
+          if [ -n "$BACKUP_RECORD" ]; then args+=(--backup-record "$BACKUP_RECORD"); fi
+          people-gator-deploy "${args[@]}"
+      - name: Set older production deployments inactive
+        continue-on-error: true
+        run: people-gator-deploy deployments supersede production

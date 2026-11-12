@@ -1,72 +1,135 @@
 # Host prerequisites
 
-External services the utility checks but never creates. Prepare them before
-`people-gator-deploy <env> install`. Commands are covered in the
-[utility guide](README.md); descriptor shapes are in [`examples/`](examples/).
+Everything the deploy jobs expect on a host and never create. The GitHub side and
+the three configuration secrets are in [GITHUB-SETUP.md](../GITHUB-SETUP.md);
+commands and operations in the [utility guide](README.md).
 
 ## Docker, proxy and networks
 
 - Linux x86-64 (images are built for `linux/amd64`), Docker Engine with Compose
-  v2.32+, Python 3.11+ with `venv`. For rootless Docker, run the runner service,
-  the utility and Traefik as the same account and socket, and set the
-  descriptor's `docker_context` (for example `rootless`). The utility names that
-  context on every call; it never changes the host's active context.
-- An existing Traefik instance on the `web_network` with entrypoint `websecure` and
-  resolver `tlschallenge` (`certificate_resolver: ""` reuses an existing wildcard
-  certificate). Wildcard issuance requires DNS-01.
-- An OTLP HTTP backend on `otel_network` (default `logging`, endpoint
-  `http://lgtm:4318`). The shared collector receives Docker fluentd logs on
-  `127.0.0.1:<preview_log_port>` (default 24224).
-- DNS: `*.<domain>` (previews), `pgadmin_host`, the staging `host` and the release
-  `host` all point to the Traefik host. The preview wildcard does not cover staging.
+  v2.32+, Python 3.11+ with `venv`, Git, and outbound access to GitHub (API and
+  GHCR) and the Python package index.
+- The deployment account's **current Docker context** is used (`docker context
+  use rootless` once for rootless Docker). Run the runner service, Traefik and
+  the shared stack under that account and daemon; containers on one daemon cannot
+  join another daemon's networks.
+- Networks: `web` with Traefik (HTTPS-only entry point `websecure` whose ACME
+  resolver issues a certificate per host name), `db` for PostgreSQL (both
+  created by the shared stack), and `logging` with the OTLP collector when
+  `OTEL_ENDPOINT` is set.
+- DNS: `*.<preview host>`, the staging host and the production host point at
+  the Traefik host. The preview wildcard does not cover staging.
 
-## GitHub runners and tokens
+## Shared PostgreSQL and Traefik
 
-`pr-ci.yml` runs on GitHub-hosted `ubuntu-24.04` runners, so no PR code runs on
-your hosts. Self-hosted runners serve only the lifecycle workflows:
-
-| Runner labels | Workflow | Account needs |
-| --- | --- | --- |
-| `self-hosted,linux,x64,people-gator-preview` | `pr-preview.yml` | Utility user install, `pr` descriptor |
-| `self-hosted,linux,x64,people-gator-staging` | `staging.yml` | Utility user install, `staging` descriptor |
-| `self-hosted,linux,x64,people-gator-release` | `release.yml` | Utility user install, `release` descriptor |
-
-Labels only select a runner: in a public repository any workflow in a PR, branch
-or tag can request them. Install the job-started guard on every self-hosted
-runner. It refuses every job except these workflows from reviewed `main` and
-release tags whose commit is on `main`:
+[`deploy/infrastructure/compose.yaml`](../infrastructure/compose.yaml) runs
+PostgreSQL 18 with pgvector as `postgres` on the internal `db` network (no
+published port) and Traefik on `web`. One command, run as the deployment account
+from anywhere, clones the repository shallowly (`ref` selects the branch),
+copies `compose.yaml` and the examples into `~/peoplegator-infra`, creates the
+private files there the first time and starts the stack:
 
 ```sh
-install -D -m 755 deploy/runner/job-started.sh ~/.local/libexec/people-gator/job-started.sh
-# In each runner directory; the script itself must live outside it:
-echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$HOME/.local/libexec/people-gator/job-started.sh" >> .env
+ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 ```
 
-Restart each runner service while idle so it reads `.env`, for example
-`sudo ./svc.sh stop && sudo ./svc.sh start`, or
-`systemctl --user restart github-runner@<runner>` for a user unit.
+- `infra.env`, from [`example.env`](../infrastructure/example.env): generated
+  PostgreSQL password, user, `HTTPS_PORT`, the Traefik config path and the
+  current Docker context's socket;
+- `traefik.yaml`, from [`traefik.example.yaml`](../infrastructure/traefik.example.yaml):
+  the HTTPS-only `websecure` entry point, the dashboard, the Docker provider and
+  the `letsencrypt` resolver (set the ACME e-mail);
+- optional pgAdmin: `COMPOSE_PROFILES=pgadmin` in `infra.env` starts it at
+  `https://<PGADMIN_HOST>` behind the dashboard login, then pgAdmin's own
+  `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` login, with the server `postgres`
+  preconfigured. Export `HTTPS_PORT`, `TRAEFIK_DASHBOARD_HOST`, `PGADMIN_HOST` or
+  `COMPOSE_PROFILES` before the first run to write them into the new `infra.env`
+  (see [the staging host steps](../GITHUB-SETUP.md#staging-host));
+- `dashboard.users`: the dashboard's basic-auth login, `admin` with a generated
+  password printed once. The dashboard answers only on `TRAEFIK_DASHBOARD_HOST`
+  (default `traefik-preview.peoplegator.dev`), behind that login. Add users with
+  `printf 'name:%s\n' "$(openssl passwd -apr1 '<password>')" >> ~/peoplegator-infra/dashboard.users`.
 
-Copy the script from reviewed `main`, and refresh the copy when it changes.
-Refused jobs fail in their `Set up runner` step. Also set **Settings → Actions →
-General → Fork pull request workflows** to require approval for all outside
-contributors, and protect release tags (`v*`) with a ruleset.
+Rerun the same command after editing either file or pulling a newer `main`; passwords,
+certificates (`traefik-acme` volume) and data are kept. Certificates come from
+Let's Encrypt's TLS-ALPN-01 challenge, one per host name on its first request
+(each new preview's first page load waits for issuance; Let's Encrypt allows 50
+new certificates per week per registered domain, renewals exempt). The challenge
+reaches the host name on public port 443: expose Traefik there directly, or
+forward the TLS stream unchanged from an edge proxy, for example an edge Traefik
+TCP router with `HostSNI(…)` / `HostSNIRegexp(…)` rules and `tls.passthrough: true`
+pointing at `HTTPS_PORT`. An edge that terminates TLS itself breaks the challenge
+and the inner routers. Test with Let's Encrypt's staging CA (`caServer` in
+`traefik.yaml`) first and delete the `traefik-acme` volume when switching.
+Rootless Docker needs `net.ipv4.ip_unprivileged_port_start` at or below
+`HTTPS_PORT` when it is under 1024.
 
-Preview containers still execute contributor images. Run lifecycle runners and
-deployments under a dedicated account, not a personal one; see
-[Single-host isolation](#single-host-isolation). Fork PRs are tested but never
-publish images or deploy.
+Back up the env files with the `peoplegator-infra_postgres-data`
+volume. `PREVIEW_DATABASE_URL` / `STAGING_DATABASE_URL` is then
+`postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres`.
+For a database shell use `docker exec -it postgres psql -U <POSTGRES_USER>`; a
+PR-only connection uses role/database `preview_pr_<N>` and the password in
+`<state dir>/pr-<N>/state.json`. Never print these files in Actions.
 
-Deployment jobs use only `GITHUB_TOKEN` (contents, actions, pull-requests and
-packages read; CI image publication needs packages write). For private GHCR
-packages, grant this repository Actions access to `peoplegatorapp-frontend` and
-`peoplegatorapp-backend`. No SSH key or database secret is stored in GitHub.
-Protect release tags (`v*`) with a ruleset so only maintainers can create them.
+## GitHub runners
+
+The `frontend`, `backend` and `images` jobs run on GitHub-hosted `ubuntu-24.04`
+runners; self-hosted runners serve only the deploy jobs of same-repository
+events:
+
+| Runner label | Jobs | `PEOPLE_GATOR_RUNNER_ENVIRONMENT` |
+| --- | --- | --- |
+| `people-gator-preview` | `deploy-preview`, `remove-preview`, `prune-previews` | `preview` |
+| `people-gator-staging` | `deploy-staging` | `staging` |
+| `people-gator-release` | `deploy-release` | `release` |
+
+Labels only select a runner: in a public repository any workflow in a PR, branch
+or tag can request them, and a pull request's workflow file is the pull request's
+own. Every runner therefore runs the job-started guard, which admits only this
+repository's events for the environments listed for that runner
+(same-repository pull requests and `main` for `preview`, `main` for `staging`,
+`v*` tags whose commit is on `main` for `release`) and refuses fork pull requests
+from the event payload, whatever the workflow says.
+
+[`deploy/runner/install.sh`](../runner/install.sh) sets a runner up as the
+deployment account, as a `systemctl --user` service that keeps running without a
+login. Enable lingering once as root (`sudo loginctl enable-linger <account>`),
+select the Docker context (`docker context use rootless`), take a registration
+token from **Settings → Actions → Runners → New self-hosted runner** (valid for an
+hour; a `gh` login with admin rights works instead), then run from anywhere:
+
+```sh
+ref=main; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && RUNNER_TOKEN=<token> $t/deploy/runner/install.sh preview,staging; rm -rf $t
+```
+
+Use `release` instead of `preview,staging` on the production host. The script
+checks the prerequisites (Docker with Compose on the current context, Python with
+venv, git, lingering, a user session), downloads the latest official runner and
+verifies its SHA-256, registers it as `<host>-<environments>` with the matching
+labels, installs the guard as `~/.local/libexec/people-gator/job-started.sh`,
+writes `ACTIONS_RUNNER_HOOK_JOB_STARTED` and `PEOPLE_GATOR_RUNNER_ENVIRONMENT` to
+the runner's `.env` and enables `github-runner@<name>` from
+[`github-runner@.service`](../runner/github-runner@.service). Rerunning it (without
+a token) refreshes the guard, the environment and the service of an existing
+runner. Status and logs: `systemctl --user status github-runner@<name>` and
+`journalctl --user -u github-runner@<name>`. To remove a runner, stop it with
+`systemctl --user disable --now github-runner@<name>`, unregister it with
+`~/actions-runner/<name>/config.sh remove --token <token>` (from the same
+Settings page) and delete `~/actions-runner/<name>`.
+
+Also set
+**Settings → Actions → General → Fork pull request workflows** to require
+approval for all outside contributors, and protect `v*` tags with a ruleset.
+Deploy jobs use only `GITHUB_TOKEN` (contents, pull-requests and packages read,
+deployments write; `images` needs packages write); grant the repository's Actions
+access to the `peoplegatorapp-frontend` and `peoplegatorapp-backend` packages if
+they are private.
 
 ## Single-host isolation
 
 When CI, previews and staging share one machine, give deployments their own
-account and Docker daemon. Your personal account then holds no deployment
-secrets, and deployment jobs cannot reach your files or containers.
+account and Docker daemon, so your personal account holds no deployment secrets
+and deployment jobs cannot reach your files or containers:
 
 1. As an administrator, once:
 
@@ -79,81 +142,24 @@ secrets, and deployment jobs cannot reach your files or containers.
 
    Never add `gator-deploy` to the `docker` group; that grants root.
 2. In a login session for the account (`sudo machinectl shell gator-deploy@`),
-   run `dockerd-rootless-setuptool.sh install` and use context `rootless`.
-3. Move the public Traefik (and its tunnel sidecar) and the OTLP backend to this
-   daemon. Containers on one daemon cannot join another daemon's networks. Keep
-   development proxies on your own daemon and ports.
-4. Register the lifecycle runners as `gator-deploy` with labels
-   `people-gator-preview,people-gator-staging,people-gator-release`, install them
-   with `sudo ./svc.sh install gator-deploy`, and add the job-started guard.
-   Several runners can run different environments at the same time; each
-   environment still deploys one job at a time.
-5. As `gator-deploy`, install the utility from reviewed `main`, configure the
-   descriptors with `docker_context: rootless`, then run `pr install`,
-   `staging install` and `staging snapshot-init`. Rerun the latest CI of open PRs
-   to redeploy their previews.
-6. Remove the old runners (`./config.sh remove`) and uninstall the old
-   environments and their containers, volumes and state from your account.
+   run `dockerd-rootless-setuptool.sh install` and `docker context use rootless`.
+3. Start the shared stack and install the runner as this account
+   ([setup](../GITHUB-SETUP.md#hosts)).
 
-## PR previews
+## Staging and releases
 
-- `users_file`: a users JSON with Argon2 hashes, owned by the deployment account
-  or root and not group/world writable (the backend container reads it).
-  `people-gator-api/example.users.json` supplies the demo `test` / `test` account
-  that the preview frontend logs into.
-- `pr install` generates the shared PostgreSQL and pgAdmin passwords into
-  `<infrastructure.state_dir>/infrastructure.env` (mode 600) and starts
-  PostgreSQL, the collector and pgAdmin. Back up that directory with the
-  `<project>_postgres-data` and `<project>_pgadmin-data` volumes before
-  `pr infra-upgrade`.
-- pgAdmin: `https://<pgadmin_host>`, login `pgadmin_email` with
-  `PGADMIN_DEFAULT_PASSWORD`. Its preconfigured server connects to
-  `preview-postgres:5432` as `preview_admin` (`POSTGRES_ADMIN_PASSWORD`). A PR-only
-  connection uses role/database `preview_pr_<N>` and the password in
-  `<state_dir>/pr-<N>/state.json`. Never print these files in Actions.
-- Logs reach LGTM with resource attribute `people-gator.preview.pr = "<N>"` and
-  service names `people-gator-preview.<service>`; the tested SHA is
-  `vcs.ref.head.revision`. Buffers are bounded; this is not an audit archive.
+Staging uses the PostgreSQL of its own host account through the admin URL and
+creates its own database there; the first deploy starts it empty. Its media,
+users and keys live in the `STAGING_S3_BUCKET`. Sign in at
+`https://<host>/staging-login.html` with the accounts in that bucket's
+`peoplegator_api/users.json`. Optionally, `snapshot-init`/`refresh` replace the
+database with the latest production backup ([backup gathering](README.md#backup-gathering)).
 
-## Staging
-
-Staging shares the preview PostgreSQL (`infrastructure.mode: external`) and has
-its own hostname and database state. The utility manages **databases only**;
-Application S3 storage, media and authentication objects are operated externally.
-
-The private descriptor ([example](examples/staging.json)) names:
-
-- `runtime_file`: an owned private `PEOPLE_GATOR_API__*` env file for the backend's
-  externally managed application settings. Supply storage, media prefixes and
-  authentication configuration appropriate for your external environment. Do
-  not put persistence settings in this file; staging generates its database
-  connection. Routine updates require neither a snapshot nor S3 source inputs.
-- `snapshot_source_file`: private read-only production backup S3 source, needed
-  only by `snapshot-init`/`refresh`. Provision prefix-scoped list/read/version-read
-  access once. Each operation selects the latest valid dated archive, downloads
-  privately and checks identity, publisher checksum/revision and archive format
-  before restore. See [Backup gathering](README.md#backup-gathering), including
-  migration from legacy fixed-local `snapshot` descriptors.
-
-Bucket/account provisioning, application signing keys and media copying remain
-external. Only database backup objects are downloaded and verified by refresh. Missing scans/layouts do not fail a database
-snapshot. Operators maintain external storage/auth compatibility separately;
-staging never rewrites media prefixes or imports production auth objects.
-Sign in at `https://<host>/staging-login.html` using externally provisioned
-accounts. The page contains no credentials; the demo auto-login only works if
-those credentials have explicitly been supplied externally.
-
-## Releases
-
-- An external PostgreSQL reachable on `database_network`, already migrated or new,
-  with separate **migration** and **runtime** roles. `migration_file` and
-  `runtime_file` (mode 600) contain only `PEOPLE_GATOR_API__*` lines: the migration
-  file the migration role's persistence settings; the runtime file the runtime
-  role, `PEOPLE_GATOR_API__STORAGE…`, JWK issuer/audience and paths. Deployment
-  fixes host/port, debug/reload off, `schema_mode=validate` and CORS.
-- Private object storage holding users, API keys and JWKs, preserved across
-  releases; back up the database before any release that migrates
-  ([backup](../backup/README.md)) and record it in a mode-600 file for
-  `--backup-record`.
-- The frontend embeds demo auto-login credentials. Put the release behind a
-  reviewed access boundary before setting `access_reviewed: true`.
+Releases need an external PostgreSQL on `db` (already migrated or
+new) with the application role from `PRODUCTION_DATABASE_URL` and, optionally,
+a separate migration role from `PRODUCTION_MIGRATION_DATABASE_URL`; private
+object storage holding users,
+API keys and JWKs, preserved across releases; and a backup before any release
+that migrates ([backup](../backup/README.md)), recorded in a mode-600 host file
+for the workflow's `backup_record` input. The frontend embeds demo auto-login
+credentials: put the release behind a reviewed access boundary.

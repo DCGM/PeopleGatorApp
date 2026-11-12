@@ -1,4 +1,4 @@
-"""Explicit rootless context, temporary registry credentials and owned-worker cleanup."""
+"""The runner account's Docker context, temporary registry credentials and owned-worker cleanup."""
 from contextlib import contextmanager
 import os
 from pathlib import Path
@@ -16,21 +16,23 @@ AMBIENT = {"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PA
 
 
 class Docker:
-    """Every invocation names its context; the host-wide active context is never changed."""
+    """Every invocation names the account's current context; that context is never changed."""
 
-    def __init__(self, context):
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+", context or ""):
-            raise DeployError("Select an explicit Docker context name")
+    def __init__(self, context=None):
+        if context is None:
+            context = run(["docker", "context", "show"], timeout=30).strip() or "default"
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", context):
+            raise DeployError("The current Docker context has an unusable name; run `docker context use <name>`")
         self.context = context
         self.registry_config = None
 
-    def environment(self):
+    def environment(self, extra=None):
         environment = {key: value for key, value in os.environ.items()
                        if key not in INTERPOLATION | AMBIENT
-                       and not key.startswith(("COMPOSE_", "PEOPLE_GATOR_", "AWS_"))}
+                       and not key.startswith(("COMPOSE_", "PEOPLE_GATOR_", "DEPLOY_", "AWS_", "PG"))}
         if self.registry_config:
             environment["DOCKER_CONFIG"] = self.registry_config
-        return environment
+        return {**environment, **(extra or {})}
 
     @staticmethod
     def starts_container(args):
@@ -39,7 +41,8 @@ class Docker:
             return True
         return args[3] == "compose" and "run" in args and "exec" not in args
 
-    def run(self, args, *, input=None, stdin=None, timeout=600, diagnostic=None, echo=False, progress=None):
+    def run(self, args, *, input=None, stdin=None, timeout=600, diagnostic=None, echo=False, progress=None, extra_env=None):
+        """``extra_env`` reaches only this subprocess, for ``docker run -e NAME`` pass-through of secrets."""
         args = [str(value) for value in args]
         owned = None
         if args[0] == "docker":
@@ -53,7 +56,7 @@ class Docker:
                     owned = "people-gator-operation-" + secrets.token_hex(12)
                     args[index + 1:index + 1] = ["--name", owned]
         try:
-            return run(args, env=self.environment(), input=input, stdin=stdin, timeout=timeout,
+            return run(args, env=self.environment(extra_env), input=input, stdin=stdin, timeout=timeout,
                        diagnostic=diagnostic, echo=echo, progress=progress)
         except BaseException:
             if owned:

@@ -115,8 +115,9 @@ or use `compose.dev.yaml` with Traefik and Compose Watch. Production-format
 frontend images serve static assets through unprivileged nginx; backend images
 validate the migrated PostgreSQL schema before accepting traffic. PR previews
 use one database and storage volume per PR and immutable image digests. The
-`people-gator-deploy` utility, installed from the reviewed `main` workflow
-revision, also runs staging and tagged releases. Descriptors and state stay
-outside its versioned installations.
+`people-gator-deploy` utility, run by the CI workflow's deploy jobs from the
+deployed commit's checkout with GitHub Environment settings, also runs staging
+and tagged releases. Secrets stay in GitHub Environments and host state
+directories.
 See [Deployment](DEPLOYMENT.md) and
 [Observability](OBSERVABILITY.md).

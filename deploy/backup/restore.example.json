@@ -1,6 +1,6 @@
 {
   "database": {
-    "host": "preview-postgres",
+    "host": "postgres",
     "port": 5432,
     "user": "recovery_provisioner",
     "password": "PRIVATE_PROVISIONING_PASSWORD",

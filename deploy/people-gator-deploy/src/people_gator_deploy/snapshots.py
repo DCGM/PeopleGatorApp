@@ -132,16 +132,24 @@ def download(client, storage, key, destination):
             "application_revision": revision}
 
 
-def read_source(path):
-    require(private_file(Path(path)), "snapshot_source_file needs an owned private regular JSON file")
+def parse_source(text):
     try:
-        storage = json.loads(Path(path).read_text())
-    except (OSError, ValueError):
-        raise DeployError("Cannot read snapshot_source_file JSON") from None
+        storage = json.loads(text)
+    except ValueError:
+        raise DeployError("Snapshot source is not valid JSON") from None
     require(isinstance(storage, dict) and set(storage) == {
         "endpoint_url", "region", "bucket", "prefix", "access_key_id", "secret_access_key"},
         "Snapshot source requires endpoint_url, region, bucket, prefix and read-only access_key_id/secret_access_key")
     return validate_storage(storage)
+
+
+def read_source(path):
+    require(private_file(Path(path)), "snapshot_source_file needs an owned private regular JSON file")
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        raise DeployError("Cannot read snapshot_source_file") from None
+    return parse_source(text)
 
 
 def unchanged(client, storage, provenance):
