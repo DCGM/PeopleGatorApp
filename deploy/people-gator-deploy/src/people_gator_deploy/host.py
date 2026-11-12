@@ -122,9 +122,10 @@ def routed_readiness(host: str, *, extra: dict[str, bytes] | None = None, attemp
                     if marker is not None and marker not in body.lower():
                         raise ValueError("Unexpected routed response")
                 break
-            except Exception:
+            except Exception as error:
                 if attempt == attempts - 1:
-                    raise DeployError(f"Routed readiness failed for https://{host}{path}; "
+                    reason = getattr(error, "reason", None) or error
+                    raise DeployError(f"Routed readiness failed for https://{host}{path}: {reason}; "
                                       "verify proxy/DNS/TLS and private service logs") from None
                 time.sleep(delay)
 
