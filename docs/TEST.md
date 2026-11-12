@@ -184,7 +184,7 @@ per worker; use `-n 0` for those checks.
 The controller drops its allocated `pytest_worker_<uuid>` databases and the
 run's `pytest_worker_<uuid>_seed` template on shutdown, including after worker
 failure and partial provisioning failure; cases drop their copies
-(`<template database>_<id>`) themselves. Killing the controller forcibly can
+(`<template database>_<8 hex>`) themselves. Killing the controller forcibly can
 leave those databases behind; remove only the names allocated by that invocation
 on the disposable test server. Without workers, the template is
 `<schema-test database>_seed` and the session drops it. Never enable these
