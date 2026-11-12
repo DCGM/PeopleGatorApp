@@ -993,9 +993,8 @@ onBeforeUnmount(() => {
                 class="viewer-tools"
                 aria-label="Page viewer controls"
               >
-                <template #start>
+                <template v-if="isWideWorkspace && !transcriptionVisible" #start>
                   <Button
-                    v-if="isWideWorkspace && !transcriptionVisible"
                     type="button"
                     variant="ghost"
                     size="icon-sm"
@@ -1023,9 +1022,8 @@ onBeforeUnmount(() => {
                   @reset-view="resetView"
                   @toggle-badge-names="showBadgeNames = !showBadgeNames"
                 />
-                <template #end>
+                <template v-if="isWideWorkspace && !sidebarVisible" #end>
                   <Button
-                    v-if="isWideWorkspace && !sidebarVisible"
                     type="button"
                     variant="ghost"
                     size="icon-sm"

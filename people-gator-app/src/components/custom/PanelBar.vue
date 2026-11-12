@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
 // One height for every page editor top bar. Controls stay on one line, centered
 // when they fit and scrolling horizontally from the first control when they do not.
+// Panel toggles in the edge slots are divided from the bar's own controls.
 const props = withDefaults(
   defineProps<{
     as?: string
@@ -25,7 +27,10 @@ const props = withDefaults(
       )
     "
   >
-    <slot name="start" />
+    <template v-if="$slots.start">
+      <slot name="start" />
+      <Separator orientation="vertical" class="data-[orientation=vertical]:h-6" />
+    </template>
     <ScrollArea orientation="horizontal" class="min-w-0 flex-1">
       <div
         :role="props.label ? 'toolbar' : undefined"
@@ -35,6 +40,9 @@ const props = withDefaults(
         <slot />
       </div>
     </ScrollArea>
-    <slot name="end" />
+    <template v-if="$slots.end">
+      <Separator orientation="vertical" class="data-[orientation=vertical]:h-6" />
+      <slot name="end" />
+    </template>
   </component>
 </template>

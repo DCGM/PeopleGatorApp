@@ -20,6 +20,15 @@ describe('PanelBar', () => {
       expect(toolbar.classes()).toEqual(expect.arrayContaining(['mx-auto', 'w-max']))
       expect(toolbar.classes()).not.toContain('flex-wrap')
       expect(wrapper.get('[data-slot="scroll-area"]').find('[role="toolbar"]').exists()).toBe(true)
+      // Panel toggles at either edge are divided from the bar's own controls.
+      const children = [...wrapper.element.children]
+      expect(children.map((child) => child.getAttribute('data-slot') ?? child.tagName)).toEqual([
+        'BUTTON',
+        'separator',
+        'scroll-area',
+        'separator',
+        'BUTTON',
+      ])
       expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
         'Open',
         'Zoom',
@@ -30,9 +39,10 @@ describe('PanelBar', () => {
     }
   })
 
-  it('adds no toolbar role without a label', () => {
+  it('adds no toolbar role or panel dividers without a label or edge actions', () => {
     const wrapper = mount(PanelBar, { slots: { default: '<div role="tablist" />' } })
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-slot="separator"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
