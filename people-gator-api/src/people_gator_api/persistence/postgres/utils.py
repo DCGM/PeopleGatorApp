@@ -635,6 +635,7 @@ def search_page(
 from .entity_link_queries import (
     evidence_predicate, load_link_stats, annotation_conditions, touch_conditions,
     LINK_FIELDS, document_sources, library_sources, page_sources, scope_conditions,
+    verification_predicate,
 )
 
 def creation_metadata(record) -> dict:
@@ -690,6 +691,10 @@ def source_response(source: Source) -> GenericSourceResponse:
             page_id=source.page_id,
             page_number=source.page_number,
             registered_page_count=getattr(source, "_registered_page_count", None),
+            verification_state=source.verification_state,
+            verified_at=source.verified_at,
+            verified_by_user_id=source.verified_by_user_id,
+            verified_by_api_key_id=source.verified_by_api_key_id,
         )
     elif isinstance(source, Document):
         common.update(library=source.library, document_id=source.document_id, name=source.name,
@@ -888,6 +893,9 @@ def source_filters(
     pages = missing_to_none(filter_values.page_source_id)
     if pages is not None:
         filters.append(Source.id.in_(page_sources(pages)))
+    verification = missing_to_none(filter_values.verification_state)
+    if verification is not None:
+        filters.append(verification_predicate(verification))
     unassigned = missing_to_none(filter_values.has_unassigned_faces)
     if unassigned is not None:
         from .entity_link_queries import source_scope

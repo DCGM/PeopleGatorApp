@@ -22,7 +22,7 @@ from people_gator_api.schemas.common import (
     GenericListResponse,
     ListFilterBase,
 )
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import SourceKind, VerificationState
 from people_gator_api.schemas.sorting import (
     DocumentSortField,
     PageSortField,
@@ -41,6 +41,23 @@ class PagePatchRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     page_number: PageNumber | None = None
+    verification_state: VerificationState | None = Field(
+        default=None,
+        description="Verify the page or remove its verification; omission preserves it. Repeating the current state changes nothing.",
+    )
+
+    @model_validator(mode="after")
+    def validate_verification_state(self) -> Self:
+        if "verification_state" in self.model_fields_set and self.verification_state is None:
+            raise ValueError("verification_state cannot be null")
+        return self
+
+
+VERIFIED_PAGE_COUNT_DESCRIPTION = "Registered pages in this library/document that are verified."
+DOCUMENT_VERIFICATION_DESCRIPTION = (
+    "Derived from registered pages: verified when the document has at least one "
+    "registered page and all of them are verified."
+)
 
 
 type DocumentName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -415,6 +432,11 @@ class GenericSourceResponse(SourceResponseBase):
     last_touched_by_user_name: str | None = None
     last_touched_by_api_key_name: str | None = None
     page_number: PageNumber | None = None
+    verification_state: VerificationState | None = None
+    verified_at: AwareDatetime | None = None
+    verified_by_user_id: uuid.UUID | None = None
+    verified_by_api_key_id: uuid.UUID | None = None
+    verified_page_count: int | None = Field(default=None, ge=0, description=VERIFIED_PAGE_COUNT_DESCRIPTION)
     name: str | None = None
     library: str | None = Field(
         default=None,
@@ -472,6 +494,10 @@ class PageResponse(SourceResponseBase):
     page_id: uuid.UUID
     page_number: PageNumber | None = None
     registered_page_count: int | None = Field(default=None, ge=0, description="Registered pages in this library/document, not the original document length.")
+    verification_state: VerificationState = VerificationState.not_verified
+    verified_at: AwareDatetime | None = None
+    verified_by_user_id: uuid.UUID | None = None
+    verified_by_api_key_id: uuid.UUID | None = None
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> PageResponse:
@@ -495,6 +521,10 @@ class PageResponse(SourceResponseBase):
             page_id=generic.page_id,
             page_number=generic.page_number,
             registered_page_count=generic.registered_page_count,
+            verification_state=generic.verification_state or VerificationState.not_verified,
+            verified_at=generic.verified_at,
+            verified_by_user_id=generic.verified_by_user_id,
+            verified_by_api_key_id=generic.verified_by_api_key_id,
         )
 
 
@@ -511,6 +541,8 @@ class DocumentResponse(SourceResponseBase):
     last_touched_by_user_name: str | None = None
     last_touched_by_api_key_name: str | None = None
     name: str | None = None
+    verification_state: VerificationState = Field(default=VerificationState.not_verified, description=DOCUMENT_VERIFICATION_DESCRIPTION)
+    verified_page_count: int | None = Field(default=None, ge=0, description=VERIFIED_PAGE_COUNT_DESCRIPTION)
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> DocumentResponse:
@@ -537,6 +569,8 @@ class DocumentResponse(SourceResponseBase):
             last_touched_by_user_name=generic.last_touched_by_user_name,
             last_touched_by_api_key_name=generic.last_touched_by_api_key_name,
             name=generic.name,
+            verification_state=generic.verification_state or VerificationState.not_verified,
+            verified_page_count=generic.verified_page_count,
         )
 
 
@@ -608,6 +642,10 @@ class GenericSourceListFilter(ListFilterBase, SharedFilter, AnnotationCountFilte
     source_type: list[SourceKind] | MissingType = Field(
         default=MISSING,
         description="Filter by source type."
+    )
+    verification_state: list[VerificationState] | MissingType = Field(
+        default=MISSING,
+        description="Filter by verification: stored for pages, derived from registered pages for documents.",
     )
     has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
     url: list[AnyUrl] | MissingType = Field(
@@ -700,6 +738,10 @@ class SourceListFilter(ListFilterBase, SharedFilter):
 class PageListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
     """Filter for listing pages."""
 
+    verification_state: list[VerificationState] | MissingType = Field(
+        default=MISSING,
+        description="Filter by page verification state.",
+    )
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
@@ -759,12 +801,17 @@ class PageListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
             has_mentions=self.has_mentions,
             has_faces=self.has_faces,
             has_entities=self.has_entities,
+            verification_state=self.verification_state,
         )
 
 
 class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter, DocumentCountRangeFilter):
     """Filter for listing documents."""
 
+    verification_state: list[VerificationState] | MissingType = Field(
+        default=MISSING,
+        description="Filter by derived document verification state. " + DOCUMENT_VERIFICATION_DESCRIPTION,
+    )
     has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
@@ -797,6 +844,7 @@ class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter, Do
             **self.count_values(),
             **self.range_values(),
             has_unassigned_faces=self.has_unassigned_faces,
+            verification_state=self.verification_state,
             source_type=[SourceKind.document],
             url=self.url,
             document_id=self.document_id,

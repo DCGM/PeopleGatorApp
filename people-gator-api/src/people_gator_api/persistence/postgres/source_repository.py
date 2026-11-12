@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from typing import Any, cast as type_cast
 
 from sqlalchemy import (
@@ -26,7 +27,7 @@ from people_gator_api.persistence.contracts import (
     CreateResult,
     SourceRepository,
 )
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import SourceKind, VerificationState
 from people_gator_api.schemas.missing import (
     MISSING,
     MissingType,
@@ -75,6 +76,7 @@ from people_gator_api.persistence.postgres.utils import (
     load_link_stats,
     source_filters,
 )
+from people_gator_api.persistence.postgres.entity_link_queries import document_verified_page_count
 
 SOURCE_TEXT_CANDIDATE_LIMIT = 200
 
@@ -218,6 +220,7 @@ class PostgresSourceRepository(SourceRepository):
                 ],
                 "document_id": lambda desc: [SortKey(document.document_id, "uuid", desc)],
                 "page_count": lambda desc: [SortKey(document_page_count(), "number", desc)],
+                "verified_page_count": lambda desc: [SortKey(document_verified_page_count(), "number", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
         if counts is not None:
@@ -367,14 +370,25 @@ class PostgresSourceRepository(SourceRepository):
             for item, result in outcomes
         ]
 
+    @staticmethod
+    def _page_changes(payload: PagePatchRequest, page_number: int | None, state: VerificationState) -> dict[str, Any]:
+        """Requested fields that differ from the stored page; repeats change nothing."""
+        changes: dict[str, Any] = {}
+        if "page_number" in payload.model_fields_set and page_number != payload.page_number:
+            changes["page_number"] = payload.page_number
+        if "verification_state" in payload.model_fields_set and state != payload.verification_state:
+            changes["verification_state"] = payload.verification_state
+        return changes
+
     async def patch_page(
         self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor, touch: bool = True,
     ) -> PageResponse | None:
-        row = (await self._session.execute(select(Page.page_number).where(Page.id == source_id))).first()
+        row = (await self._session.execute(
+            select(Page.page_number, Page.verification_state).where(Page.id == source_id)
+        )).first()
         if row is None:
             return None
-        current = row[0]
-        if "page_number" in payload.model_fields_set and current != payload.page_number:
+        if self._page_changes(payload, row[0], row[1]):
             # Touching the parent document locks further sources, so touching
             # edits keep the graph lock order shared with merges and deletes.
             if touch:
@@ -386,11 +400,19 @@ class PostgresSourceRepository(SourceRepository):
             if page is None:
                 await self._session.rollback()
                 return None
-            if page.page_number != payload.page_number:
-                page.page_number = payload.page_number
+            changes = self._page_changes(payload, page.page_number, page.verification_state)
+            if changes:
+                if "page_number" in changes:
+                    page.page_number = changes["page_number"]
+                if "verification_state" in changes:
+                    verified = changes["verification_state"] == VerificationState.verified
+                    page.verification_state = changes["verification_state"]
+                    page.verified_at = datetime.now(timezone.utc) if verified else None
+                    page.verified_by_user_id = context.user_id if verified else None
+                    page.verified_by_api_key_id = getattr(context, "api_key_id", None) if verified else None
                 if touch:
                     await touch_sources(self._session, [source_id], context)
-                await commit(self._session, "page number update failed")
+                await commit(self._session, "page update failed")
             else:
                 await self._session.rollback()
         return await self.get_page(source_id)

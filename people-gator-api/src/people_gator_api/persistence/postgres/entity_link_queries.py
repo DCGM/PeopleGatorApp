@@ -1,6 +1,7 @@
 """Shared document scope, same-witness filters and batched link aggregates."""
 
-from sqlalchemy import tuple_, select, union_all, or_, exists, func
+from sqlalchemy import tuple_, select, union_all, or_, and_, exists, func, true
+from people_gator_api.schemas.enums import VerificationState
 from people_gator_api.schemas.entity_links import EntityLinkStats
 from .models import Source, Document, Page, Entity, ImageOccurrence, TextMention, User, APIKey
 
@@ -214,17 +215,27 @@ async def load_document_summaries(session, objects):
     if not documents:
         return
     for obj in documents.values():
-        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0, "first_page_source_id": None, "first_page_number": None}
+        obj._document_summary = {
+            "registered_page_count": 0, "linked_entity_count": 0, "first_page_source_id": None,
+            "first_page_number": None, "verified_page_count": 0,
+            "verification_state": VerificationState.not_verified,
+        }
     document, page = Document.__table__.c, Page.__table__.c
+    verified = func.count(page.id).filter(page.verification_state == VerificationState.verified.value)
     pages = (
         # Count before DISTINCT ON selects the first numbered page for each document.
-        select(document.id, func.count(page.id).over(partition_by=document.id), page.id, page.page_number)
+        select(document.id, func.count(page.id).over(partition_by=document.id), page.id, page.page_number,
+               verified.over(partition_by=document.id))
         .select_from(Document.__table__.join(Page.__table__,
             (page.library == document.library) & (page.document_id == document.document_id)))
         .where(document.id.in_(documents)).distinct(document.id).order_by(document.id, page.page_number.asc().nulls_last(), page.id)
     )
-    for owner, count, first_page, number in await session.execute(pages):
-        documents[owner]._document_summary.update(registered_page_count=count, first_page_source_id=first_page, first_page_number=number)
+    for owner, count, first_page, number, verified_count in await session.execute(pages):
+        documents[owner]._document_summary.update(
+            registered_page_count=count, first_page_source_id=first_page, first_page_number=number,
+            verified_page_count=verified_count,
+            verification_state=VerificationState.verified if count and verified_count == count else VerificationState.not_verified,
+        )
     linked = linked_entity_counts(list(documents))
     for owner, count in await session.execute(linked):
         documents[owner]._document_summary["linked_entity_count"] = count
@@ -238,3 +249,42 @@ async def load_document_summaries(session, objects):
         documents[owner]._document_summary.update(
             last_touched_by_user_name=user, last_touched_by_api_key_name=key,
         )
+
+
+def document_verified_page_count():
+    """Verified registered pages sharing the document's library/archive identity."""
+    pages = Page.__table__.alias("verified_pages")
+    documents = Document.__table__.c
+    return (
+        select(func.count()).select_from(pages)
+        .where(pages.c.library == documents.library, pages.c.document_id == documents.document_id,
+               pages.c.verification_state == VerificationState.verified.value)
+        .scalar_subquery()
+    )
+
+
+def verification_predicate(states):
+    """Pages match their stored state; documents their state derived from registered pages.
+
+    A document is verified when it has a registered page and none is unverified.
+    """
+    wanted = set(states)
+    pages = Page.__table__.alias("verification_pages")
+    documents = Document.__table__.c
+    same_document = (pages.c.library == documents.library) & (pages.c.document_id == documents.document_id)
+    document_verified = and_(
+        exists(select(1).select_from(pages).where(same_document)),
+        ~exists(select(1).select_from(pages).where(
+            same_document, pages.c.verification_state != VerificationState.verified.value,
+        )),
+    )
+    if wanted >= {VerificationState.verified, VerificationState.not_verified}:
+        document_match = true()
+    elif VerificationState.verified in wanted:
+        document_match = document_verified
+    else:
+        document_match = ~document_verified
+    return or_(
+        and_(Source.source_type == "page", Page.__table__.c.verification_state.in_([item.value for item in wanted])),
+        and_(Source.source_type == "document", document_match),
+    )

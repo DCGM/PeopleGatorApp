@@ -28,6 +28,7 @@ from people_gator_api.schemas.enums import (
     ScoreAggregation,
     ScoreFusion,
     SourceKind,
+    VerificationState,
 )
 from people_gator_api.schemas.faces import FaceListFilter
 from people_gator_api.schemas.mentions import TextMentionListFilter
@@ -579,6 +580,10 @@ def page_list_filter_dependency(
         bool | None,
         _model_parameter(PageListFilter, "has_entities", "filter"),
     ] = None,
+    verification_state: Annotated[
+        list[VerificationState] | None,
+        _model_parameter(PageListFilter, "verification_state", "filter"),
+    ] = None,
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
@@ -595,6 +600,7 @@ def page_list_filter_dependency(
         has_mentions=has_mentions,
         has_faces=has_faces,
         has_entities=has_entities,
+        verification_state=verification_state,
     )
 
 
@@ -627,6 +633,10 @@ def document_list_filter_dependency(
         _model_parameter(DocumentListFilter, "mention_id", "filter"),
     ] = None,
     has_unassigned_faces: Annotated[bool | None, _model_parameter(DocumentListFilter, "has_unassigned_faces", "filter")] = None,
+    verification_state: Annotated[
+        list[VerificationState] | None,
+        _model_parameter(DocumentListFilter, "verification_state", "filter"),
+    ] = None,
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
@@ -634,6 +644,7 @@ def document_list_filter_dependency(
         **counts,
         **ranges,
         has_unassigned_faces=has_unassigned_faces,
+        verification_state=verification_state,
 
         url=url,
         document_id=document_id,

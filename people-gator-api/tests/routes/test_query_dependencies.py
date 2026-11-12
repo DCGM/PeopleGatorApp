@@ -94,6 +94,8 @@ LIST_FILTERS = {
 }
 LIST_FILTERS["/documents"].add("has_unassigned_faces")
 for path in ("/documents", "/pages"):
+    LIST_FILTERS[path].add("verification_state")
+for path in ("/documents", "/pages"):
     LIST_FILTERS[path].update("min_" + field for field in ANNOTATION_COUNT_FIELDS)
 # #111: documents alone add count maxima and linked-people bounds.
 LIST_FILTERS["/documents"].update("max_" + field for field in DOCUMENT_RANGE_FIELDS)
@@ -173,8 +175,8 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
 @pytest.mark.parametrize(("path", "values"), [
     ("/entities", ["name", "entity_id", "last_touched_at", "created_at"]),
     ("/search-entities", ["relevance", "name", "entity_id", "last_touched_at", "created_at"]),
-    ("/documents", ["name", "document_id", "library", "page_count", "last_touched_at"]),
-    ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "last_touched_at"]),
+    ("/documents", ["name", "document_id", "library", "page_count", "verified_page_count", "last_touched_at"]),
+    ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "verified_page_count", "last_touched_at"]),
     ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at"]),
     ("/search-pages", ["page_number", "relevance", "library", "document_id", "page_id", "last_touched_at"]),
     ("/faces", ["detection_id", "last_touched_at", "link_state", "confidence", "source", "person"]),
