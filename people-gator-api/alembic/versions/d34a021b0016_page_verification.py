@@ -19,8 +19,20 @@ TABLE = "pg_demo_pages"
 
 
 def upgrade():
-    # Create the type in the active schema even if it also exists later on the search path.
-    ENUM.create(op.get_bind(), checkfirst=False)
+    connection = op.get_bind()
+    # ORM bootstrap may have created the enum before the page columns existed.
+    # Only reuse a matching type in this schema.
+    existing = connection.execute(sa.text("""
+        SELECT t.typtype::text, array_agg(e.enumlabel::text ORDER BY e.enumsortorder)
+        FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        LEFT JOIN pg_enum e ON e.enumtypid = t.oid
+        WHERE n.nspname = current_schema() AND t.typname = :name
+        GROUP BY t.oid, t.typtype
+    """), {"name": ENUM.name}).first()
+    if existing is None:
+        ENUM.create(connection, checkfirst=False)
+    elif existing[0] != "e" or list(existing[1]) != ENUM.enums:
+        raise ValueError(f"Existing {ENUM.name} type does not match the migration")
     op.add_column(TABLE, sa.Column("verification_state", ENUM, nullable=False, server_default="not_verified"))
     op.add_column(TABLE, sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column(TABLE, sa.Column("verified_by_user_id", sa.UUID(), nullable=True))
