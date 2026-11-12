@@ -1,10 +1,13 @@
 """Exercise the preview dataset against migrated PostgreSQL and real local media."""
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterator
+import asyncio
 import io
+import os
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -77,20 +80,76 @@ from people_gator_api.seeding.fixtures import (
 )
 from people_gator_api.services import filesystem_service
 from people_gator_api.settings import settings
+from conftest import migrated_schema
+from preview_seed_snapshot import SeedTemplate, build_template, fresh_seed, starts_with_seed
 
 
 type SeedTarget = tuple[Database, LocalFilesystem, AsyncEngine]
 
 
+@pytest.fixture(scope="session")
+def seed_templates() -> Iterator[dict[str, SeedTemplate]]:
+    """This worker's fresh preview seed, built by the first eligible case."""
+    templates: dict[str, SeedTemplate] = {}
+    yield templates
+    for template in templates.values():
+        asyncio.run(template.drop(template.database))
+
+
 @pytest_asyncio.fixture
 async def seed_target(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, migrated_postgres: AsyncEngine,
+    request: pytest.FixtureRequest, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch, seed_templates: dict[str, SeedTemplate],
 ) -> AsyncIterator[SeedTarget]:
+    """A migrated empty store, or a copy of a fresh seed (see preview_seed_snapshot)."""
     filesystem = LocalFilesystem(tmp_path)
     monkeypatch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
     monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", False)
-    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
-        yield postgres_database(session), filesystem, migrated_postgres
+    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
+    if not url:
+        pytest.skip("requires a disposable schema test database")
+    if not starts_with_seed(request.function):
+        async with migrated_schema(url) as engine:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                yield postgres_database(session), filesystem, engine
+        return
+
+    template = await worker_template(url, tmp_path_factory, seed_templates)
+    async with seeded_copy(template, filesystem) as target:
+        database = target[0]
+        real_seed = preview.seed_preview
+
+        async def seed_copy(target_database, target_filesystem):
+            # The case's first action; later calls run the real seed.
+            assert target_database is database and target_filesystem is filesystem
+            monkeypatch.setattr(preview, "seed_preview", real_seed)
+            return template.result.model_copy(deep=True)
+
+        monkeypatch.setattr(preview, "seed_preview", seed_copy)
+        yield target
+
+
+async def worker_template(
+    url: str, tmp_path_factory: pytest.TempPathFactory, templates: dict[str, SeedTemplate],
+) -> SeedTemplate:
+    if url not in templates:
+        storage = tmp_path_factory.mktemp("preview-seed-template")
+        with pytest.MonkeyPatch.context() as patch:
+            filesystem = LocalFilesystem(storage)
+            patch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
+            templates[url] = await build_template(url, storage, preview.seed_preview)
+    return templates[url]
+
+
+@asynccontextmanager
+async def seeded_copy(template: SeedTemplate, filesystem: LocalFilesystem) -> AsyncIterator[SeedTarget]:
+    name, engine = await template.clone(filesystem.root)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            yield postgres_database(session), filesystem, engine
+    finally:
+        await engine.dispose()
+        await template.drop(name)
 
 
 async def counts(database):
@@ -112,6 +171,7 @@ async def counts(database):
 
 
 @pytest.mark.asyncio
+@fresh_seed
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
@@ -283,6 +343,38 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             )
             with Image.open(io.BytesIO(crop.content)) as image:
                 assert 0 < image.width <= 256 and image.width == image.height
+
+
+@pytest.mark.asyncio
+@fresh_seed
+async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates, tmp_path_factory):
+    """Cases starting with a seed get the worker's copy; it must equal a real seed."""
+    database, filesystem, _ = seed_target
+    fresh = await preview.seed_preview(database, filesystem)
+    template = await worker_template(
+        os.environ["PEOPLE_GATOR_SCHEMA_TEST_URL"], tmp_path_factory, seed_templates)
+
+    copy_filesystem = LocalFilesystem(tmp_path_factory.mktemp("copy"))
+    async with seeded_copy(template, copy_filesystem) as (copy, storage, _):
+        copied = template.result.model_copy(deep=True)
+        # Database-generated identities differ; fixture keys, counts and media do not.
+        for field in type(fresh).model_fields:
+            assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
+        assert await counts(copy) == await counts(database) == (47, 168, 123)
+
+        def files(root: Path) -> dict[Path, bytes]:
+            return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+
+        fresh_files, copied_files = files(filesystem.root), files(storage.root)
+        assert copied_files.keys() == fresh_files.keys()
+        # Seed state files record database-generated identities and times.
+        identities = {Path(preview.MANIFEST_KEY), Path(preview.UPGRADES_KEY)}
+        assert {key: value for key, value in copied_files.items() if key not in identities} == {
+            key: value for key, value in fresh_files.items() if key not in identities
+        }
+        # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
+        assert await preview.seed_preview(copy, storage) == copied
+        assert await counts(copy) == (47, 168, 123)
 
 
 @pytest.mark.asyncio
