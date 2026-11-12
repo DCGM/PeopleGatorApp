@@ -83,6 +83,7 @@ This does not automatically seed the actual staging environment.
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
+| Page and document verification (#149) | Open `document-verification`: **Verification: all pages verified** (2 / 2) and **Verification: in progress** (1 / 3) in `preview-verification`. See [Page verification](#page-verification-149). |
 | Deactivated reviewer attribution (#66) | Open `deactivated-reviewer`: **Olga Expiry** matches **Modified by: Preview former reviewer**, an inactive user |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
@@ -1563,3 +1564,28 @@ entries through repository queries, multi-batch traversal and actual page media,
 then confirms reviewed document/mention state survives reseeding. Browser
 layout storage is exercised separately by frontend tests and the maintained
 `check-document-persistence.mjs` browser check.
+
+## Page verification (#149)
+
+Two synthetic documents in `preview-verification` show page verification and
+the document state derived from it. The reviewer verifies three pages once:
+
+| Document | Pages | Derived state |
+| --- | --- | --- |
+| Verification: all pages verified | page 1 (with an unassigned face), page 2 | Verified, 2 / 2 |
+| Verification: in progress | page 1 verified; pages 2 and 3 not verified | Not verified, 1 / 3 |
+
+- Open `document-verification`, then show the **Verification** and **Verified
+  pages** columns. `document-verification-not-verified` applies the
+  **Verification: Not verified** filter.
+- Open `page-verification`: page 2 of the in-progress document with the info
+  panel open and the page strip set to **Not verified**. **Verify page** in the
+  info panel, then verify page 3; the document becomes Verified.
+- Page 1 of the first document is verified while its face stays unassigned:
+  page verification never changes evidence link states.
+
+Reruns add missing pages and verify each listed page only once. A checkpoint is
+saved before each write, so an interrupted run resumes without re-verifying a
+page a reviewer has since changed. Integration tests check the derived states,
+counts, filters, the example links, rerun preservation of a removed verification
+and checkpoint recovery.

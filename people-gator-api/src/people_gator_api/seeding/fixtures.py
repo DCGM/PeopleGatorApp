@@ -211,6 +211,9 @@ DOCUMENTS = (
     Document("alignment", "preview-mzk", "Face alignment recovery"),
     Document("teleprompter", "preview-mzk", "Teleprompter reading practice"),
     Document("scan-sidebar", "preview-mzk", "Scan sidebar practice"),
+    # #149: page verification; documents derive their state from these pages.
+    Document("verification-done", "preview-verification", "Verification: all pages verified"),
+    Document("verification-partial", "preview-verification", "Verification: in progress"),
 )
 
 
@@ -661,7 +664,15 @@ PAGES = (
          lines=TELEPROMPTER_WRAPPED_LINES),
     *PAGE_STRIP_PAGES,
     *SIDEBAR_PAGES,
+    # #149: a verified page may still hold unverified evidence (an unassigned face).
+    Page("verification-done-1", "verification-done", 1,
+         (Face("verification-unassigned", None, 0, 0, embedded=False),)),
+    Page("verification-done-2", "verification-done", 2),
+    *(Page(f"verification-partial-{i}", "verification-partial", i) for i in range(1, 4)),
 )
+
+# Pages the seed verifies once as the reviewer; reruns keep later review edits.
+VERIFIED_PAGES = ("verification-done-1", "verification-done-2", "verification-partial-1")
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
 
