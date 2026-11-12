@@ -136,7 +136,7 @@ uv run --locked pytest tests/services/persistence/test_preview_seed.py -k reruns
 uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30 \
   --basetemp=/dev/shm/people-gator-pytest
 # Reproduce one CI shard:
-uv run --locked pytest tests -n 4 --dist=worksteal --shard=2/4 \
+uv run --locked pytest tests -n 4 --dist=worksteal --shard=2/6 \
   --basetemp=/dev/shm/people-gator-pytest
 ```
 
@@ -150,10 +150,19 @@ Nearly all of the full run is the ~100 preview-seed cases, which are CPU-bound.
 Their seed runs fsync about 2,000 small files each, so on Linux put pytest's
 temporary directory on tmpfs with `--basetemp` (about 1 GB for a full run;
 pytest empties it at the start of each run). That cut a local run from 651 s to 363 s;
-elsewhere, omit the option. The suite's `conftest.py` spaces preview-seed cases
-evenly through the run, so the progress counter tracks elapsed time.
-`--shard=I/N` runs the Ith of N parts, each with an equal share of seed cases;
-together the parts run every collected case exactly once.
+elsewhere, omit the option.
+
+A run seeds the preview once into a template database and storage copy; a
+preview-seed case that starts with a seed call gets a copy, and that first call
+returns the template's result (later calls seed for real). Other cases, and
+those decorated with `@fresh_seed`, seed an empty schema for real. See
+[preview seeding](../people-gator-api/docs/PREVIEW-SEEDING.md#ci-and-deployment).
+This needs `CREATEDB` even with `-n 0`.
+
+The suite's `conftest.py` spaces preview-seed cases evenly through the run, so
+the progress counter tracks elapsed time. `--shard=I/N` runs the Ith of N parts,
+each with an equal share of fresh-seed, copied-seed and fast cases; together the
+parts run every collected case exactly once.
 
 For each worker, the pytest controller creates a separate empty database for
 each configured `PEOPLE_GATOR_POSTGRES_TEST_URL` and
@@ -172,10 +181,13 @@ each case so bootstrap tests do not depend on collection order. Live Weaviate
 opt-ins are rejected with parallel execution because that service is not isolated
 per worker; use `-n 0` for those checks.
 
-The controller drops its allocated `pytest_worker_<uuid>` databases on shutdown,
-including after worker failure and partial provisioning failure. Killing the
-controller forcibly can leave those databases behind; remove only the names
-allocated by that invocation on the disposable test server. Never enable these
+The controller drops its allocated `pytest_worker_<uuid>` databases and the
+run's `pytest_worker_<uuid>_seed` template on shutdown, including after worker
+failure and partial provisioning failure; cases drop their copies
+(`<template database>_<id>`) themselves. Killing the controller forcibly can
+leave those databases behind; remove only the names allocated by that invocation
+on the disposable test server. Without workers, the template is
+`<schema-test database>_seed` and the session drops it. Never enable these
 commands against project or production stores.
 
 Compare timings on one machine with the same URLs/services, running separately:
@@ -201,10 +213,10 @@ pull request:
 1. Frontend dependency installation, type checking and the Vitest suite.
 2. Backend locked dependency installation and disposable PostgreSQL databases
    for repository tests (`ci`), schema tests (`ci_schema`) and CLI smoke (`ci_seed`).
-3. The backend pytest suite as four parallel shards (`--shard=1/4` … `4/4`),
+3. The backend pytest suite as six parallel shards (`--shard=1/6` … `6/6`),
    each on its own runner and PostgreSQL service with four isolated workers,
    tmpfs `--basetemp` and durability disabled on the throwaway server. Each
-   shard takes about 5–6 minutes; see [test performance](TEST-PERFORMANCE.md).
+   shard takes about 2–3 minutes; see [test performance](TEST-PERFORMANCE.md).
 4. In parallel, the `tools` part: real CLI migration → seed → seed → schema
    check using disposable local storage, then the deployment utility tests from
    the same checkout, including the workflow and runner-guard tests, with live

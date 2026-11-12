@@ -139,10 +139,21 @@ to keep seed compatibility and add representative examples in the same change.
 ## CI and deployment
 
 The CI workflow migrates a separate `ci_seed` database, executes the actual seed
-CLI twice, and validates the result before the ordinary backend test suite. It
-uses throwaway local storage. Seed integration tests also run in isolated schemas on
+CLI twice, and validates the result, alongside the ordinary backend test suite. It
+uses throwaway local storage. Seed integration tests also run on
 `PEOPLE_GATOR_SCHEMA_TEST_URL`, checking filters, vector discovery, OCR highlights,
 face crops, reruns, review edits, merges/deletions and checkpoint recovery.
+
+Each test run seeds the preview once into a template database and storage
+directory. A test whose body starts with `database, filesystem, ... = seed_target`
+and then `await preview.seed_preview(database, filesystem)` receives a copy of
+that template, and its first seed call returns the template's result; later
+calls run the real seed. Any other test, or one decorated with `@fresh_seed`,
+starts from an empty migrated schema and seeds for real, so upgrade and
+recovery tests that prepare state or patch the seed first keep a real first
+seed automatically. Use `@fresh_seed` when a test must check the fresh seed
+itself. `test_worker_seed_copy_matches_a_fresh_seed` checks that a copy equals a
+real fresh seed. See [test performance](../../docs/TEST-PERFORMANCE.md#ci-runner-speed-up-156).
 
 The same run's `deploy-preview` job runs the deployment utility from the PR's
 checkout. It removes the selected PR's old containers while retaining its
