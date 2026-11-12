@@ -54,6 +54,9 @@ class Staging(Host):
         # Raw diagnostics remain outside Actions, collectors and utility installations.
         return self.staging_root / "last-error.log"
 
+    def has_snapshot_source(self):
+        return "snapshot_source_file" in self.config or "snapshot" in self.config
+
     def snapshot_input(self):
         if "snapshot_source_file" in self.config:
             return snapshots.read_source(self.config["snapshot_source_file"])
@@ -252,14 +255,19 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         run = self.eligible_main(sha)
         active_path = self.staging_root / "state.json"
         old = json.loads(active_path.read_text()) if active_path.exists() else None
-        if not old and not refresh:
+        # Without a production backup source (no production yet), the first update
+        # starts staging on an empty, migrated database; `refresh` can load a
+        # production snapshot once STAGING_BACKUP_S3_* is set.
+        blank = not old and not refresh and not self.has_snapshot_source()
+        if not old and not refresh and not blank:
             raise StagingConfigurationError(
                 "Explicit snapshot initialization is required before normal staging deployment: "
                 "run people-gator-deploy staging snapshot-init (or the CI workflow with operation=snapshot-init)."
             )
+        fresh = refresh or blank  # a new database generation
         images = {part: self.image(part, run) for part in ("frontend", "backend")}
         self.fence(run)
-        generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32)} if refresh else dict(old)
+        generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32)} if fresh else dict(old)
         directory = self.staging_root / ("generation-" + generation["generation"])
         directory.mkdir(mode=0o700, exist_ok=True)
         candidate = directory / "candidate.env"
@@ -268,6 +276,9 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         write_private(directory / "candidate.json", json.dumps({**generation, "sha": run["head_sha"], "images": images}))
         if refresh:
             self.prepare(generation, values, directory)
+        elif blank:
+            print("Staging: no production backup source configured; starting with an empty database", flush=True)
+            self.provision(values)
         self.fence(run)  # before any candidate migration
         self.command(self.compose_staging(candidate, "run", "--rm", "--no-deps", "migrate"))
         self.worker("validate", values, directory)
@@ -276,13 +287,13 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         self.command(self.compose_staging(candidate, "run", "--rm", "--no-deps", "check"))
         self.fence(run)  # full check can overlap a new main push too
         activation = secrets.token_hex(16)
-        write_private(self.staging_root / "activation.json", json.dumps({"activation": activation, "candidate": str(candidate), "refresh": refresh}))
+        write_private(self.staging_root / "activation.json", json.dumps({"activation": activation, "candidate": str(candidate), "refresh": fresh}))
         try:
             self.command(self.compose_staging(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "backend"))
             self.command(self.compose_staging(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "frontend"))
             self.readiness()
         except BaseException:
-            if refresh:
+            if fresh:
                 self.recover_activation()  # old database never migrated or overwritten
             # Normal migrations may already have upgraded the retained schema.
             # Retain the journal; an operator must choose a compatible recovery.
@@ -302,4 +313,6 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         if refresh:
             provenance = generation["provenance"]
             text += f"\nDatabase snapshot SHA-256: `{provenance['sha256']}`\n"
+        elif blank:
+            text += "\nDatabase: new and empty (no production backup source)\n"
         summary(text)

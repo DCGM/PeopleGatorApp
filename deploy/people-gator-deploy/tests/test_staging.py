@@ -61,7 +61,7 @@ class FakeStaging(staging.Staging):
         self.events.append("pull-" + part)
         return IMAGES[part]
 
-    def command(self, args, *, sql=None):
+    def command(self, args, *, sql=None, env=None):
         self.inputs.append(sql)
         operation = " ".join(args[args.index("-f") + 2:]) if "-f" in args else " ".join(args)
         self.events.append(operation)
@@ -274,6 +274,41 @@ class StagingTests(unittest.TestCase):
         with self.assertRaisesRegex(DeployError, "STAGING_BACKUP_S3_"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
+
+    def test_without_a_backup_source_the_first_update_starts_an_empty_database(self):
+        controller = self.controller
+        del controller.config["snapshot"]  # no production backups exist yet
+        controller.deploy()
+        state = json.loads((controller.staging_root / "state.json").read_text())
+        self.assertRegex(state["generation"], r"^[a-f0-9]{16}$")
+        self.assertNotIn("provenance", state)
+        self.assertNotIn("prepare", controller.events)
+        name = "staging_" + state["generation"]
+        sql = "\n".join(text for text in controller.inputs if text)
+        self.assertIn(f"CREATE DATABASE {name} OWNER {name}", sql)
+        self.assertIn("CREATE EXTENSION IF NOT EXISTS vector", sql)
+        gates = ["run --rm --no-deps migrate", "worker-validate", "run --rm --no-deps check",
+                 "up -d --wait --wait-timeout 180 backend", "https-readiness"]
+        indices = [controller.events.index(gate) for gate in gates]
+        self.assertEqual(indices, sorted(indices))
+        self.assertFalse((controller.staging_root / "previous.json").exists())
+        # Later updates keep that database.
+        controller.events.clear(); controller.inputs.clear()
+        controller.run.update(id=101, head_sha="c" * 40)
+        controller.main_sha = controller.run["head_sha"]
+        controller.deploy()
+        self.assertEqual(json.loads((controller.staging_root / "state.json").read_text())["generation"], state["generation"])
+        self.assertFalse(any(text and "CREATE DATABASE" in text for text in controller.inputs))
+
+    def test_a_failed_empty_start_takes_the_candidate_down_and_leaves_no_state(self):
+        controller = self.controller
+        del controller.config["snapshot"]
+        controller.fail = "readiness"
+        with self.assertRaisesRegex(RuntimeError, "readiness"):
+            controller.deploy()
+        self.assertFalse((controller.staging_root / "state.json").exists())
+        self.assertFalse((controller.staging_root / "activation.json").exists())
+        self.assertIn("down --timeout 30", controller.events)
 
     def test_backend_consumes_external_storage_while_database_tools_do_not(self):
         controller = self.controller
