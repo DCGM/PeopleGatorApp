@@ -1,7 +1,7 @@
 # Local development and test stores
 
-Run commands from the directories shown. Use an existing checkout; in Codex cloud
-each task is already isolated, so do not create a worktree unless requested.
+Run commands from the directories shown, inside your task's worktree under
+`../PeopleGatorApp-worktrees/` (see [AGENTS.md](../AGENTS.md#worktrees)).
 Keep credentials, `.env` files, media and disposable databases out of Git.
 
 ## Prerequisites and installation

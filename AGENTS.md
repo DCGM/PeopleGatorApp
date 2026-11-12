@@ -3,8 +3,7 @@
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the `main`-based contribution workflow,
 [docs/START_HERE.md](docs/START_HERE.md) for code navigation and
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and test stores.
-Use the existing checkout in isolated cloud tasks; do not create an additional
-Git worktree unless the user requests one.
+Do all work in a dedicated Git worktree, as described in [Worktrees](#worktrees).
 
 All future implementation jobs must follow this GitHub workflow:
 
@@ -15,8 +14,9 @@ All future implementation jobs must follow this GitHub workflow:
    one describing the problem, intended behavior and scope, then work against it.
 2. Create or reuse a dedicated branch for that issue, with the issue number in
    its name (for example, `issue2` or `issue/2-description`). Base new branches on
-   the intended PR target. Keep implementation work off the default branch and
-   preserve unrelated user changes in the worktree.
+   the intended PR target. Check the branch out in its own new worktree before
+   making any change, and do all further work there. Keep implementation work
+   off the default branch.
 3. Commit as each coherent functional unit is complete and appropriately
    verified. Make partial implementation commits reviewable and working; do not
    wait until the entire issue is finished to commit everything together. Scope
@@ -32,6 +32,50 @@ All future implementation jobs must follow this GitHub workflow:
 5. Address review and CI findings with further focused commits on the same issue
    branch. Finish through the pull request workflow; merge only when the user has
    authorized merging. Do not include unrelated work in the commits or PR.
+6. After the PR merges, clean up its worktree and local branch as described in
+   [Worktrees](#worktrees).
+
+# Worktrees
+
+Agents work exclusively in `../PeopleGatorApp-worktrees/` (relative to the main
+checkout), with each worktree in its own folder there. Do not edit, build,
+switch branches or commit in the main checkout; use it only for `git fetch` and
+`git worktree` commands. Do not create worktrees anywhere else.
+
+- **Implementation:** one folder per issue, named `issue<N>-<slug>`.
+
+  ```bash
+  git fetch origin
+  # New branch from main:
+  git worktree add -b issue/<N>-<slug> ../PeopleGatorApp-worktrees/issue<N>-<slug> origin/main
+  # Existing branch:
+  git worktree add ../PeopleGatorApp-worktrees/issue<N>-<slug> issue/<N>-<slug>
+  ```
+
+- **Review:** reviewers also create a fresh worktree, named `review-pr<N>`.
+  Use a detached checkout for read-only review; check out the PR branch instead
+  when pushing review fixes.
+
+  ```bash
+  git fetch origin pull/<N>/head
+  git worktree add --detach ../PeopleGatorApp-worktrees/review-pr<N> FETCH_HEAD
+  ```
+
+- Run installs, tests, seeds and dev servers from inside the worktree. Never
+  touch another agent's worktree.
+- **Cleanup after merge:** confirm the PR is merged
+  (`gh pr view <N> --json state`) and that the worktree has no uncommitted or
+  unpushed work. Stop its dev servers and containers and drop disposable
+  databases created for it, then remove the worktree and local branch:
+
+  ```bash
+  git worktree remove ../PeopleGatorApp-worktrees/<folder>
+  git branch -d <branch>
+  git worktree prune
+  ```
+
+  Remove review worktrees once the review is finished or the PR is merged or
+  closed. If a worktree holds unpushed work, ask the user before removing it.
 
 # Keeping pull-request previews representative
 
