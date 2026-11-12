@@ -45,8 +45,10 @@ import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import PanelBar from '@/components/custom/PanelBar.vue'
 import {
+  GALLERY_NOT_VERIFIED_KEY,
   GALLERY_PERSON_KEY,
   LEGACY_GALLERY_PERSON_KEY,
+  useGalleryNotVerified,
   useGalleryPerson,
 } from '@/viewmodels/gallery-person'
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
@@ -185,6 +187,7 @@ const peopleScope = setting('peopleScope')
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
 const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
+const galleryNotVerified = useGalleryNotVerified()
 const gallerySelectedPerson = useEntityQuery(computed(() => selectedPersonId.value || ''))
 const galleryExpanded = useGalleryView()
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
@@ -219,6 +222,7 @@ const gallery = useDocumentPageGallery(
   gallerySort,
   galleryPerson,
   selectedPersonId,
+  galleryNotVerified,
 )
 function galleryLocation(item: PageGalleryItem) {
   return {
@@ -226,6 +230,7 @@ function galleryLocation(item: PageGalleryItem) {
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
     query: {
       [GALLERY_PERSON_KEY]: galleryPersonOnly.value ? 'on' : undefined,
+      [GALLERY_NOT_VERIFIED_KEY]: galleryNotVerified.value ? 'on' : undefined,
       selectedPerson: selectedPersonId.value || undefined,
       [GALLERY_SORT_KEYS.field]: route.query[GALLERY_SORT_KEYS.field],
       [GALLERY_SORT_KEYS.direction]: route.query[GALLERY_SORT_KEYS.direction],
@@ -1135,6 +1140,7 @@ onBeforeUnmount(() => {
                 :selected-person-id="selectedPersonId"
                 :selected-person-name="gallerySelectedPerson.data.value?.name"
                 v-model:person-only="galleryPersonOnly"
+                v-model:not-verified-only="galleryNotVerified"
                 :document-url="documentQuery.data.value?.url"
                 :items="gallery.items.value"
                 :total-count="gallery.totalCount.value"

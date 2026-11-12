@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import AnnotationLastChange from './AnnotationLastChange.vue'
 import ListPagination from './ListPagination.vue'
 import PageNumberEditor from './PageNumberEditor.vue'
+import PageVerification from './PageVerification.vue'
 import SortSelect from './SortSelect.vue'
 import { SIDEBAR_TITLE } from './sidebar-title'
 import type { PageResponse } from '@/client'
@@ -46,6 +47,7 @@ function dayLabel(key: string) {
       <div class="space-y-5">
         <section aria-labelledby="page-info-title" class="min-w-0 space-y-3">
           <h3 id="page-info-title" :class="SIDEBAR_TITLE">This page</h3>
+          <PageVerification v-if="page" :page="page" />
           <PageNumberEditor v-if="page" :page="page" />
           <AnnotationLastChange
             v-if="page"

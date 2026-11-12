@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
+import { BadgeCheck, ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
@@ -34,6 +34,7 @@ const props = defineProps<{
 }>()
 const expanded = defineModel<boolean>('expanded', { default: false })
 const personOnly = defineModel<boolean>('personOnly', { default: false })
+const notVerifiedOnly = defineModel<boolean>('notVerifiedOnly', { default: false })
 const sort = defineModel<SortState<PageSortField>>('sort')
 
 const emit = defineEmits<{
@@ -55,7 +56,7 @@ watch(
 )
 
 function itemName(item: PageGalleryItem) {
-  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
+  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.verified ? ', verified' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
 }
 
 /** Scroll only the strip, never the window, so the scan stays where it is. */
@@ -126,7 +127,9 @@ useAutomaticPagination({
               <PagePosition
                 class="shrink-0"
                 :number="pageNumber"
-                :total="documentPageCount ?? (personOnly ? undefined : totalCount)"
+                :total="
+                  documentPageCount ?? (personOnly || notVerifiedOnly ? undefined : totalCount)
+                "
               />
             </div>
             <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
@@ -152,6 +155,15 @@ useAutomaticPagination({
                     ? `${selectedPersonName || 'Selected person'} only`
                     : 'Person only'
                 }}</span></Toggle
+              >
+              <Toggle
+                v-model="notVerifiedOnly"
+                variant="outline"
+                size="sm"
+                class="min-w-0"
+                aria-label="Not verified pages only"
+                title="Not verified pages only"
+                >Not verified</Toggle
               >
               <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
                 <SortControl
@@ -188,7 +200,10 @@ useAutomaticPagination({
         v-else-if="
           !props.loading &&
           (documentPageCount === 1 ||
-            (documentPageCount == null && !personOnly && props.totalCount === 1))
+            (documentPageCount == null &&
+              !personOnly &&
+              !notVerifiedOnly &&
+              props.totalCount === 1))
         "
         class="sr-only"
         role="status"
@@ -268,6 +283,13 @@ useAutomaticPagination({
                     </span>
                   </template>
                 </LoadableImage>
+                <span
+                  v-if="item.verified"
+                  data-page-verified
+                  class="absolute right-0.5 bottom-0.5 rounded-full bg-background p-0.5"
+                  title="Page verified"
+                  ><BadgeCheck class="size-3.5" aria-hidden="true"
+                /></span>
               </div>
               <span
                 class="w-full truncate text-center font-mono text-[0.6875rem] leading-tight"

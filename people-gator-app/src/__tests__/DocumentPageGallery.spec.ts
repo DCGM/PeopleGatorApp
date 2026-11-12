@@ -13,6 +13,7 @@ const item = (index: number, current = false): PageGalleryItem => ({
   pageId: `page-${index}`,
   label: `page-${index}`,
   current,
+  verified: index === 3,
   thumbnailUrl: index === 2 ? '' : `blob:${index}`,
   thumbnailLoading: false,
   thumbnailFailed: index === 2,
@@ -78,7 +79,7 @@ describe('DocumentPageGallery', () => {
     expect(links.map((link) => link.attributes('aria-label'))).toEqual([
       'Page page-1, current page',
       'Page page-2',
-      'Page page-3',
+      'Page page-3, verified',
     ])
     expect(links.map((link) => link.attributes('aria-current'))).toEqual([
       'page',
@@ -164,6 +165,7 @@ describe('DocumentPageGallery', () => {
     expect(wrapper.get('[role=alert]').text()).toContain('Could not load document pages.')
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
       'Person only',
+      'Not verified',
       '',
       'Retry pages',
     ])
@@ -214,6 +216,20 @@ describe('DocumentPageGallery', () => {
     await wrapper.setProps({ items: [item(1, true)], totalCount: 1, loading: false })
     expect(wrapper.text()).toContain('1 registered pages')
     expect(wrapper.text()).toContain('This document has one registered page.')
+    wrapper.unmount()
+  })
+
+  it('marks verified pages and toggles the not-verified scope (#149)', async () => {
+    const { wrapper } = await mountGallery()
+    const links = wrapper.findAll('ol a')
+    expect(links[2]!.attributes('aria-label')).toContain(', verified')
+    expect(links[0]!.attributes('aria-label')).not.toContain('verified')
+    expect(wrapper.findAll('[data-page-verified]')).toHaveLength(1)
+    expect(links[2]!.find('[data-page-verified]').exists()).toBe(true)
+    const toggle = wrapper.get('button[aria-label="Not verified pages only"]')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('update:notVerifiedOnly')).toEqual([[true]])
     wrapper.unmount()
   })
 })
