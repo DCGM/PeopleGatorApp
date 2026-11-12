@@ -5,7 +5,8 @@
 # pull request, branch or tag can request them. This hook runs before every job
 # and admits only this repository's own events for the runner's environment:
 #
-#   preview  same-repository pull requests (refs/pull/<n>/merge) and main (pruning)
+#   preview  same-repository pull requests (refs/pull/<n>/merge; once closed,
+#            their base branch for preview removal) and main (pruning)
 #   staging  main
 #   release  v* tags whose commit is already on main
 #
@@ -46,11 +47,14 @@ case "$event" in
     pull_request | pull_request_target)
         # The workflow file comes from the pull request itself, so its own
         # conditions cannot be trusted: read the head repository from the event.
-        head_repository="$(python3 -c 'import json, sys
+        pull_request="$(python3 -c 'import json, sys
 with open(sys.argv[1]) as stream:
-    head = json.load(stream)["pull_request"]["head"]
-print((head.get("repo") or {}).get("full_name", ""))' "${GITHUB_EVENT_PATH:?}" 2>/dev/null)" \
+    event = json.load(stream)
+head = event["pull_request"]["head"]
+print((head.get("repo") or {}).get("full_name", ""), event.get("action", ""))' "${GITHUB_EVENT_PATH:?}" 2>/dev/null)" \
             || refuse "cannot read the pull request event"
+        head_repository="${pull_request% *}"
+        action="${pull_request##* }"
         [ "$head_repository" = "$repository" ] || refuse "pull requests from other repositories never run here"
         ;;
 esac
@@ -59,6 +63,8 @@ tagged_release=0
 for environment in $environments; do
     case "$environment:$event:$ref" in
         preview:pull_request:refs/pull/*/merge) exit 0 ;;
+        # A closed pull request's ref is its base branch; only its preview removal runs then.
+        preview:pull_request:refs/heads/*) [ "${action:-}" = closed ] && exit 0 ;;
         preview:push:refs/heads/main | preview:schedule:refs/heads/main | preview:workflow_dispatch:refs/heads/main) exit 0 ;;
         staging:push:refs/heads/main | staging:workflow_dispatch:refs/heads/main) exit 0 ;;
         release:push:refs/tags/v* | release:workflow_dispatch:refs/tags/v*) tagged_release=1 ;;
