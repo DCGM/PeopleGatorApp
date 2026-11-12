@@ -116,7 +116,8 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (47, 168, 123)
-    assert len(result.documents) == 59 and len(result.pages) == 136
+    assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
+    assert result.pages.keys() == {page.key for page in PAGES}
 
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
@@ -255,6 +256,8 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             with pytest.raises(SourceResolutionError) as missing_layout:
                 await get_page_layout(document.library, document.document_id, page.page_id)
             assert missing_layout.value.status_code == 404
+        if page.key == "faces-no-ocr-1":
+            assert not page.has_layout
             stored = await database.sources.get_page(result.pages[page.key])
             assert stored.entity_link_stats.faces.unassigned == 2
             assert stored.entity_link_stats.mentions.total == 0
@@ -1320,11 +1323,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
         batches.append(await database.sources.document_library_filter_options(
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
-    expected_libraries = [
-        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-page-strip', 'preview-page-strip-mirror', 'preview-pagination',
-        'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
-        'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
-    ]
+    expected_libraries = sorted({document.library for document in DOCUMENTS if document.registered})
     assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
     assert all(len(batch.items) == 1 for batch in batches)
     assert [batch.items[0].library for batch in batches] == expected_libraries
