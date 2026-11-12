@@ -50,17 +50,44 @@ that are not meaningful.
 | … with `-n 6` | 1238 s, 2 timeouts | — |
 | … with `-n 8` | — | 218 s |
 | … shard 1 of 3 (`--shard=1/3`) | 348 s | — |
-| Final: seed cases spread, tmpfs, durability off, `--shard=I/4` | 274–360 s per shard (3 runs) | 372 s (no shard, durability on) |
+| Seed cases spread, tmpfs, durability off, `--shard=I/4` | 274–360 s per shard (3 runs) | 372 s (no shard, durability on) |
+| … + one fresh seed per worker, copied into eligible cases | 186–259 s per shard | 200 s (no shard) |
+| … + one template per run, shards balanced by cost, `--shard=I/6` (final) | see below | 194 s (no shard) |
 
 tmpfs and disabled durability help a lot locally but are within runner noise
-on CI, where the work is CPU-bound. Splitting the suite across runners is what
-shortens the CI critical path. Reusing seeded state between cases (a template
-database plus storage snapshot) would cut the seed work further, but it
-replaces a case's first real seed run, which the issue excludes.
+on CI, where the work is CPU-bound. What shortens the CI critical path is
+doing less seed work and splitting the rest across runners.
+
+### Reusing the fresh seed
+
+Most preview-seed cases begin by seeding an empty migrated store, the same
+seconds of CPU every time. The first case of a run that needs it seeds once
+into a template database and storage directory, under a file lock in the
+run's shared temporary directory; the other workers reuse it. An eligible case
+gets `CREATE DATABASE … TEMPLATE` (about 0.3 s locally) and a storage copy,
+and its first `seed_preview` call returns the template's result. Every later
+call in the case (reruns after edits, upgrades, checkpoint recovery) runs the
+real seed, so those behaviors are still verified against real seed runs.
+
+A case is eligible only when its body starts with the `seed_target` unpacking
+followed directly by `await preview.seed_preview(database, filesystem)`, read
+from its source, so nothing it does can precede the replaced call. That covers
+74 of the module's 94 test functions. The 18 that prepare legacy state, patch
+the seed or test recovery before seeding keep a real fresh seed automatically.
+So do `test_seed_graph_vectors_filters_and_media_are_usable` and
+`test_worker_seed_copy_matches_a_fresh_seed` (`@fresh_seed`); the latter
+checks that a copy matches a real fresh seed: fixture keys, record counts,
+all 299 other stored files, and a rerun that keeps every identity and adds nothing.
+Copies also re-register the face models' index definitions on the ORM table,
+as the replaced seed run would have done in the process.
+
+Fresh-seed cases still cost two to three times as much as copied ones, so
+shards split three tiers round robin (fresh seed, copied seed, fast) and each
+tier is spaced evenly through the shard.
 
 ### Result
 
-The `backend` job is a matrix: four pytest shards and a `tools` part (CLI
+The `backend` job is a matrix: six pytest shards and a `tools` part (CLI
 migration/seed smoke test, snapshot and deployment utility suites, utility
 installation), all in parallel. Each shard has its own PostgreSQL service,
 private worker databases and tmpfs `--basetemp`.
@@ -68,19 +95,21 @@ private worker databases and tmpfs `--basetemp`.
 | CI run | Slowest shard (pytest) | `backend` job wall time |
 | --- | --- | --- |
 | Before: [43271445350](https://github.com/DCGM/PeopleGatorApp/actions/runs/43271445350) | 1332 s (one job) | 24 min 0 s |
-| After, run 1: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s (others 282–342 s) | 6 min 16 s |
-| After, run 2: [43283091214](https://github.com/DCGM/PeopleGatorApp/actions/runs/43283091214) | 320 s (others 295–319 s) | 5 min 50 s |
-| After, run 3: [43284470634](https://github.com/DCGM/PeopleGatorApp/actions/runs/43284470634) | 360 s (others 274–329 s) | 6 min 31 s |
+| 4 shards, run 1: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s (others 282–342 s) | 6 min 16 s |
+| 4 shards, run 2: [43283091214](https://github.com/DCGM/PeopleGatorApp/actions/runs/43283091214) | 320 s (others 295–319 s) | 5 min 50 s |
+| 4 shards, run 3: [43284470634](https://github.com/DCGM/PeopleGatorApp/actions/runs/43284470634) | 360 s (others 274–329 s) | 6 min 31 s |
+| 4 shards + seed copies: [43292218225](https://github.com/DCGM/PeopleGatorApp/actions/runs/43292218225) | 259 s (others 186–226 s) | 4 min 50 s |
+| Final, run 1: [43294289516](https://github.com/DCGM/PeopleGatorApp/actions/runs/43294289516) | 142 s (others 100–120 s) | 2 min 54 s |
 
-The job is about **3.8× faster** (24 min to 6–6.5 min). In every run the
-shards ran 221 + 221 + 219 (+1 skipped) + 220 = 881 passed and 1 skipped, the
-full collection with this branch's 11 scheduling tests. Per-case times are
-unchanged (seed cases 48–81 s on CI); each runner just has a quarter of them.
+The final job is about **8× faster** (24 min to under 3 min). Its shards ran
+883 passed and 1 skipped: the original 870 + 1 skipped, the 12 scheduling
+tests and the copy check. Per-case times of real seed runs are unchanged
+(48–81 s on CI); there are fewer of them, and each runner has a sixth.
 The tools part finishes in under two minutes.
 
-Preview-seed cases are now spaced evenly through each shard, so the progress
-counter tracks elapsed time: shard 1 reached 32% after 2.0 minutes, 65% after
-3.5 and 97% after 4.7 of 5.0 minutes.
+Each tier is spaced evenly through its shard, so the progress counter tracks
+elapsed time: final shard 1 reached 48% after 1.4 minutes and 97% after 2.2
+of 2.4 minutes. Before, progress reached 75% in 1.4 of 22 minutes.
 
 ## Parallel workers (#81)
 
