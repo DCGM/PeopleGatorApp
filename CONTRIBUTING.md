@@ -26,9 +26,9 @@ limitations in the PR.
 1. Read the relevant GitHub issue's full description and acceptance criteria.
    Reuse it; create one first if the work has no issue.
 2. Start from current `main` and create/reuse a dedicated issue branch such as
-   `issue/2-repository-documentation`. Preserve unrelated local changes; do not
-   reset the checkout. Cloud tasks already have isolated checkouts and need no
-   extra worktree unless explicitly requested.
+   `issue/2-repository-documentation`, checked out in its own worktree under
+   `../PeopleGatorApp-worktrees/` (see [AGENTS.md](AGENTS.md#worktrees)). Do not
+   reset or work in the main checkout.
 3. Implement and verify coherent functional units, committing each as it is
    ready. Scope commits to the issue and explain resulting behavior.
 4. Push the branch and open a PR targeting `main`. Link the issue (for example
@@ -38,6 +38,7 @@ limitations in the PR.
    incomplete.
 5. Address review and CI failures with further commits. Keep the PR description
    current. Merge only with authorization; do not push implementation to `main`.
+6. After merge, remove the issue worktree and local branch.
 
 ## Writing a pull request
 
