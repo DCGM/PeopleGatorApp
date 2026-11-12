@@ -265,9 +265,6 @@ const includedLines = teleprompterLines.included
 const routeLineMode = computed(() =>
   lineVisibility.value === 'custom' ? teleprompterLines.customBase.value : lineVisibility.value,
 )
-const visibleLineIndices = computed(() =>
-  includedLines.value.flatMap((included, index) => (included ? [index] : [])),
-)
 type FocusTarget = { kind: 'face'; id: string } | { kind: 'line'; id: string; entityKey?: string }
 let focusFrame: number | undefined
 const pendingFocus = ref<{ page: string; target: FocusTarget } | null>(null)
@@ -545,7 +542,6 @@ const selectedPersonCandidate = computed(() =>
 const selectedFaceIndex = computed(() =>
   faces.value.findIndex((face) => face.id === selectedFaceId.value),
 )
-const translationOptions = computed<readonly ('off' | Language)[]>(() => ['off', 'cs', 'en', 'de'])
 const selectedLineText = computed(() => transcription.value[selectedLineIndex.value]?.text ?? '')
 const translationQuery = useTranslationQuery(
   selectedLineText,
@@ -614,12 +610,6 @@ function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedEntityKey.value = transcriptionEntityKey(entity)
   requestFocus({ kind: 'line', id: entity.line_id, entityKey: transcriptionEntityKey(entity) })
   selectedPersonId.value = entity.entity_id ?? null
-  syncRoute()
-}
-
-function selectTranslation(language: Language | 'off') {
-  isTranslationOpen.value = language !== 'off'
-  if (language !== 'off') selectedLanguage.value = language
   syncRoute()
 }
 
@@ -1020,24 +1010,12 @@ onBeforeUnmount(() => {
                     @wheel.stop
                     @keydown.stop
                     v-model:link-states="linkStates"
-                    :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
-                    :line-count="visibleLineIndices.length"
-                    :selected-face-index="selectedFaceIndex"
-                    :face-count="faces.length"
                     :zoom-percent="zoomPercent"
                     :minimum-zoom-percent="minimumZoomPercent"
                     :maximum-zoom-percent="maximumZoomPercent"
-                    :translation-options="translationOptions"
-                    :is-translation-open="isTranslationOpen"
-                    :selected-language="selectedLanguage"
                     :show-badge-names="showBadgeNames"
-                    @previous-line="previousLine"
-                    @next-line="nextLine"
-                    @previous-face="previousFace"
-                    @next-face="nextFace"
                     @set-zoom="setZoom"
                     @reset-view="resetView"
-                    @select-translation="selectTranslation"
                     @toggle-badge-names="showBadgeNames = !showBadgeNames"
                   />
                 </div>

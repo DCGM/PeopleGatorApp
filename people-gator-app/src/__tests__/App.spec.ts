@@ -163,9 +163,9 @@ describe('App', () => {
     const topBar = wrapper.get('nav')
 
     expect(topBar.text()).not.toContain('People Gator')
-    expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(false)
+    expect(topBar.find('[aria-label="Zoom in"]').exists()).toBe(false)
     const tools = wrapper.get('header.viewer-tools [aria-label="Scan tools"]')
-    expect(tools.find('[aria-label="Previous line"]').exists()).toBe(true)
+    expect(tools.find('[aria-label="Zoom in"]').exists()).toBe(true)
     expect(wrapper.get('.panzoom-layer').find('[aria-label="Scan tools"]').exists()).toBe(false)
 
     const badgeNamesToggle = tools.get('[aria-label="Hide overlay badge names"]')
