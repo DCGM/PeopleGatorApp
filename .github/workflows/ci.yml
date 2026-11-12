@@ -72,16 +72,6 @@ jobs:
     runs-on: ubuntu-24.04
     # Hosted public-repository runners have 4 vCPUs; the suite takes ~18 minutes.
     timeout-minutes: 40
-    # TEMPORARY #156 experiment: compare options on identical runners.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {exp: order, basetemp: '', pgfast: '', workers: 4, shard: ''}
-          - {exp: tmpfs, basetemp: '--basetemp=/dev/shm/people-gator-pytest', pgfast: '', workers: 4, shard: ''}
-          - {exp: tmpfs-pg, basetemp: '--basetemp=/dev/shm/people-gator-pytest', pgfast: '1', workers: 4, shard: ''}
-          - {exp: tmpfs-pg-n6, basetemp: '--basetemp=/dev/shm/people-gator-pytest', pgfast: '1', workers: 6, shard: ''}
-          - {exp: tmpfs-pg-shard1of3, basetemp: '--basetemp=/dev/shm/people-gator-pytest', pgfast: '1', workers: 4, shard: '--shard=1/3'}
     services:
       postgres:
         image: pgvector/pgvector:pg18
@@ -127,13 +117,7 @@ jobs:
       - name: Create disposable schema and seed databases on the same CI server
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-        run: |
-          docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed'
-          if [ -n "${{ matrix.pgfast }}" ]; then
-            docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'ALTER SYSTEM SET fsync = off' -c 'ALTER SYSTEM SET synchronous_commit = off' -c 'ALTER SYSTEM SET full_page_writes = off' -c 'SELECT pg_reload_conf()'
-            docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -Atc 'SHOW fsync' -c 'SHOW synchronous_commit'
-          fi
-          df -h /dev/shm "$RUNNER_TEMP" /tmp; nproc; free -g
+        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed'
       - name: Smoke-test preview migrations and repeatable seeding
         working-directory: people-gator-api
         env:
@@ -146,7 +130,7 @@ jobs:
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.database check
-      - run: uv run --locked pytest tests -n ${{ matrix.workers }} --dist=worksteal --durations=50 --durations-min=1 ${{ matrix.basetemp }} ${{ matrix.shard }}
+      - run: uv run --locked pytest tests -n 4 --dist=worksteal --durations=50 --durations-min=1
         working-directory: people-gator-api
       - name: Exercise database-only snapshot preservation on synthetic data
         working-directory: people-gator-api
