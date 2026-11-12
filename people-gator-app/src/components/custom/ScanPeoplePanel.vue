@@ -36,24 +36,29 @@ import {
   type PeopleScope,
 } from '@/viewmodels/scan-sidebar'
 
-const props = defineProps<{
-  people: SimilarPersonCandidate[]
-  scored: boolean
-  loading: boolean
-  totalCount?: number
-  hasNextPage: boolean
-  isFetching: boolean
-  error?: unknown
-  searchFaceId: string | null
-  /** Embedding models available for the attached face. */
-  faceModels?: string[]
-  faceModel?: string | null
-  selectedFace: Face | null
-  viewedPersonId: string | null
-  assignmentPending?: boolean
-  loadMore: () => Promise<unknown>
-  retry: () => unknown
-}>()
+const props = withDefaults(
+  defineProps<{
+    people: SimilarPersonCandidate[]
+    scored: boolean
+    loading: boolean
+    totalCount?: number
+    hasNextPage: boolean
+    isFetching: boolean
+    error?: unknown
+    searchFaceId: string | null
+    /** Embedding models available for the attached face. */
+    faceModels?: string[]
+    faceModel?: string | null
+    selectedFace: Face | null
+    viewedPersonId: string | null
+    assignmentPending?: boolean
+    loadMore: () => Promise<unknown>
+    retry: () => unknown
+    /** False while the URL carries an invalid filter; results stay hidden. */
+    enabled?: boolean
+  }>(),
+  { enabled: true },
+)
 /** The applied name text; typing applies it after a pause, or at once on Search. */
 const text = defineModel<string>('text', { required: true })
 const scope = defineModel<PeopleScope>('scope', { required: true })
@@ -109,7 +114,7 @@ const canAttachSelected = computed(
     Boolean(props.selectedFace?.embeddingModel) && props.selectedFace?.id !== props.searchFaceId,
 )
 const countLabel = computed(() =>
-  props.loading || props.totalCount === undefined
+  !props.enabled || props.loading || props.totalCount === undefined
     ? ''
     : `${props.totalCount} ${props.totalCount === 1 ? 'result' : 'results'}`,
 )
@@ -271,7 +276,7 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
       aria-labelledby="people-results-title"
       :aria-busy="loading || isFetching"
     >
-      <div ref="results" class="px-3 pb-3 pt-2">
+      <div v-if="enabled" ref="results" class="px-3 pb-3 pt-2">
         <ul class="flex flex-col gap-2">
           <li v-for="person in people" :key="person.id">
             <SimilarPersonItem

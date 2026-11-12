@@ -24,20 +24,25 @@ import {
   type FaceView,
 } from '@/viewmodels/scan-sidebar'
 
-const props = defineProps<{
-  items: ScanFaceItem[]
-  groups: ScanFaceGroup[]
-  loading: boolean
-  hasNextPage: boolean
-  isFetching: boolean
-  error?: unknown
-  totalCount?: number
-  selectedFaceId: string | null
-  /** Evidence link-state filters narrow these faces too. */
-  filtered?: boolean
-  loadMore: () => Promise<unknown>
-  retry: () => unknown
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: ScanFaceItem[]
+    groups: ScanFaceGroup[]
+    loading: boolean
+    hasNextPage: boolean
+    isFetching: boolean
+    error?: unknown
+    totalCount?: number
+    selectedFaceId: string | null
+    /** Evidence link-state filters narrow these faces too. */
+    filtered?: boolean
+    loadMore: () => Promise<unknown>
+    retry: () => unknown
+    /** False while the URL carries an invalid filter; results stay hidden. */
+    enabled?: boolean
+  }>(),
+  { enabled: true },
+)
 const scope = defineModel<EvidenceScope>('scope', { required: true })
 const view = defineModel<FaceView>('view', { required: true })
 const sort = defineModel<SortState<FaceSortField>>('sort', { required: true })
@@ -95,7 +100,7 @@ function location(item: ScanFaceItem) {
       />
     </div>
     <ScrollArea class="min-h-0 flex-1" :aria-busy="loading || isFetching">
-      <div class="px-3 pb-3 pt-3">
+      <div v-if="enabled" class="px-3 pb-3 pt-3">
         <p v-if="!loading" class="mb-2 text-xs text-muted-foreground" role="status">
           {{ totalCount ?? items.length }}
           {{ (totalCount ?? items.length) === 1 ? 'face' : 'faces' }}

@@ -1,8 +1,10 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { h, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
+import ScanFacesPanel from '@/components/custom/ScanFacesPanel.vue'
 import ScanPeoplePanel from '@/components/custom/ScanPeoplePanel.vue'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
+import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 
@@ -134,6 +136,13 @@ describe('People panel (#103)', () => {
     })
   }
 
+  it('hides results and the count while the link has an invalid filter (#128)', () => {
+    const wrapper = panel({ enabled: false })
+    expect(wrapper.text()).not.toContain('Ada')
+    expect(wrapper.text()).not.toContain('1 result')
+    expect(wrapper.text()).not.toContain('No matching people')
+  })
+
   it('stacks Search, a one-line field, attachments, then options and the count', async () => {
     const wrapper = panel({ searchFaceId: 'face-a', scored: true, order: 'relevance' })
     const form = wrapper.get('form[role="search"]')
@@ -147,8 +156,12 @@ describe('People panel (#103)', () => {
     // Below it: attachments, then the scope and model with the count at the end.
     const context = form.get('[aria-label="Search context"]')
     const options = form.get('[aria-label="Search options"]')
-    expect(group.element.compareDocumentPosition(context.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(context.element.compareDocumentPosition(options.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      group.element.compareDocumentPosition(context.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      context.element.compareDocumentPosition(options.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(context.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
     expect(context.get('button').attributes('aria-label')).toBe('Add search context')
     expect(options.get('[aria-label="Scope: All people"]').text()).toBe('All people')
@@ -317,5 +330,33 @@ describe('People panel (#103)', () => {
     expect(wrapper.emitted('assign')).toBeUndefined()
     await wrapper.get('button[aria-label="Assign to Ada"]').trigger('click')
     expect(wrapper.emitted('assign')).toHaveLength(1)
+  })
+})
+
+describe('Faces panel (#128)', () => {
+  it('hides cached faces and the empty state while the link has an invalid filter', () => {
+    const props = {
+      items: [],
+      groups: [],
+      loading: false,
+      hasNextPage: false,
+      isFetching: false,
+      totalCount: 3,
+      selectedFaceId: null,
+      filtered: true,
+      scope: 'page' as const,
+      view: 'flat' as const,
+      sort: FACE_DEFAULT,
+      loadMore: vi.fn(() => Promise.resolve()),
+      retry: vi.fn(),
+    }
+    const global = {
+      stubs: { ...stubs, SharedFilterControls: true, SharedFilterTags: true, ListPagination: true },
+    }
+    const shown = mount(ScanFacesPanel, { props, global })
+    expect(shown.text()).toContain('3 faces')
+    const hidden = mount(ScanFacesPanel, { props: { ...props, enabled: false }, global })
+    expect(hidden.text()).not.toContain('3 faces')
+    expect(hidden.text()).not.toContain('No faces')
   })
 })
