@@ -226,8 +226,11 @@ class Host:
         connection = self.config[role]
         where = f"{connection['host']}:{connection['port']}/{connection['database']} as {connection['user']}"
         try:
-            self.command(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-d", connection["database"], role=role),
-                         sql="SELECT 1;", env=self.postgres_env(role))
+            # The password travels only in the environment and the statement is fixed,
+            # so psql's own error (wrong password, unknown host, ...) is safe to show.
+            self.docker.run(self.postgres("psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-d", connection["database"],
+                                          "-c", "SELECT 1", role=role),
+                            extra_env=self.postgres_env(role), echo=True, timeout=120)
         except DeployError:
             raise DeployError(f"Cannot connect to {where} from the {self.config.get('database_network', 'db')} "
                               f"network; check the database URL and that the server joins that network "

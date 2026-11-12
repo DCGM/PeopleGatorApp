@@ -44,6 +44,7 @@ class FakeDocker:
         args = [str(value) for value in args]
         self.calls.append(args)
         self.environments.append(extra_env or {})
+        self.options = getattr(self, "options", []) + [kwargs]
         if args[:2] == ["docker", "info"]:
             return "synthetic-host"
         if args[:3] == ["docker", "compose", "version"]:
@@ -129,6 +130,9 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(psql[psql.index("-h") + 1], "postgres")
         self.assertEqual(psql[psql.index("-U") + 1], "preview_admin")
         self.assertNotIn("admin-pw", " ".join(psql))  # the password only travels through the environment
+        check = docker.options[docker.calls.index(psql)]
+        self.assertTrue(check["echo"])  # psql's reason reaches the job log on failure
+        self.assertNotIn("input", check)  # fixed statement in argv, nothing private on stdin
         self.assertEqual(docker.environments[docker.calls.index(psql)], {"PGPASSWORD": "admin-pw"})
         self.assertEqual(docker.commands("compose"), [["docker", "compose", "version", "--short"]])
         root = environment.root
