@@ -23,12 +23,8 @@ defineEmits<{
 </script>
 
 <template>
-  <div
-    role="toolbar"
-    aria-label="Scan tools"
-    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2"
-  >
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+  <div role="toolbar" aria-label="Scan tools" class="flex select-none items-center gap-2">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
@@ -40,7 +36,7 @@ defineEmits<{
       >
         <Minus />
       </Button>
-      <ButtonGroupText class="font-mono text-sm justify-center px-1 py-0.5 min-w-9 bg-background">
+      <ButtonGroupText class="min-w-14 justify-center px-2 font-mono">
         {{ zoomPercent }}%
       </ButtonGroupText>
       <Button
@@ -66,12 +62,11 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <ButtonGroup class="shrink-0 drop-shadow-md">
+    <ButtonGroup class="shrink-0">
       <Button
         variant="outline"
         :class="scanToolbarButtonClass"
         size="sm"
-        class="font-mono text-sm"
         :aria-label="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
         :title="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
         :aria-pressed="showBadgeNames"

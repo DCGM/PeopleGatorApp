@@ -48,7 +48,7 @@ function reset() {
         :class="[scanToolbarButtonClass, 'gap-1']"
       >
         <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" />
-        <span class="hidden xl:inline">{{ linkStateVisuals[state].label }}</span>
+        <span class="hidden @3xl:inline">{{ linkStateVisuals[state].label }}</span>
       </ToggleGroupItem>
     </ToggleGroup>
     <UiTooltip

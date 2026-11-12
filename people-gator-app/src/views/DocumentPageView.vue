@@ -11,6 +11,7 @@ import {
 } from '@/composables/workspace-split'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
@@ -42,6 +43,7 @@ import type { Face } from '@/viewmodels/document-workspace.types'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
+import PanelBar from '@/components/custom/PanelBar.vue'
 import {
   GALLERY_PERSON_KEY,
   LEGACY_GALLERY_PERSON_KEY,
@@ -103,7 +105,7 @@ const transcriptionVisible = ref(true)
 const sidebarVisible = ref(true)
 const sidebarShown = computed(() => !isWideWorkspace.value || sidebarVisible.value)
 const transcriptionBar = ref<HTMLElement | null>(null)
-const viewerToolbar = ref<HTMLElement | null>(null)
+const viewerToolbar = ref<ComponentPublicInstance | null>(null)
 const transcriptionPanel = ref<WorkspacePanel | null>(null)
 const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel, transcriptionVisible)
 // Wide screens size the sidebar beside the workspace; narrow ones stack it below.
@@ -125,7 +127,9 @@ function hidePanel(side: 'left' | 'right') {
     if (side === 'left' && !isWideWorkspace.value)
       transcriptionBar.value?.querySelector('button')?.focus()
     else
-      viewerToolbar.value?.querySelector<HTMLButtonElement>(`[data-open-panel="${side}"]`)?.focus()
+      (viewerToolbar.value?.$el as HTMLElement | undefined)
+        ?.querySelector<HTMLButtonElement>(`[data-open-panel="${side}"]`)
+        ?.focus()
   })
 }
 function showPanel(side: 'left' | 'right') {
@@ -897,7 +901,7 @@ onBeforeUnmount(() => {
           <header
             v-if="!isWideWorkspace"
             ref="transcriptionBar"
-            class="shrink-0 border-b bg-background px-3 py-1.5"
+            class="flex h-14 shrink-0 items-center border-b bg-background px-3"
           >
             <Button
               type="button"
@@ -983,57 +987,59 @@ onBeforeUnmount(() => {
               :default-size="100 - workspaceSplit.defaultSize"
               class="flex min-h-0 min-w-0 flex-col"
             >
-              <header
+              <PanelBar
+                as="header"
                 ref="viewerToolbar"
-                class="viewer-tools flex min-w-0 shrink-0 items-center gap-2 border-b bg-background p-3"
+                class="viewer-tools"
                 aria-label="Page viewer controls"
               >
-                <Button
-                  v-if="isWideWorkspace && !transcriptionVisible"
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  data-open-panel="left"
-                  aria-label="Open transcription panel"
-                  title="Open transcription panel"
-                  aria-controls="transcription-panel"
-                  :aria-expanded="false"
-                  @click="showPanel('left')"
-                >
-                  <PanelLeftOpen aria-hidden="true" />
-                </Button>
-                <div class="min-w-0 flex-1 overflow-x-auto">
-                  <DocumentControls
-                    v-show="!galleryExpanded"
-                    class="w-max min-w-full flex-nowrap justify-start"
-                    @pointerdown.stop
-                    @wheel.stop
-                    @keydown.stop
-                    v-model:link-states="linkStates"
-                    :zoom-percent="zoomPercent"
-                    :minimum-zoom-percent="minimumZoomPercent"
-                    :maximum-zoom-percent="maximumZoomPercent"
-                    :show-badge-names="showBadgeNames"
-                    @set-zoom="setZoom"
-                    @reset-view="resetView"
-                    @toggle-badge-names="showBadgeNames = !showBadgeNames"
-                  />
-                </div>
-                <Button
-                  v-if="isWideWorkspace && !sidebarVisible"
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  data-open-panel="right"
-                  aria-label="Open people panel"
-                  title="Open people panel"
-                  aria-controls="people-panel"
-                  :aria-expanded="false"
-                  @click="showPanel('right')"
-                >
-                  <PanelRightOpen aria-hidden="true" />
-                </Button>
-              </header>
+                <template #start>
+                  <Button
+                    v-if="isWideWorkspace && !transcriptionVisible"
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    data-open-panel="left"
+                    aria-label="Open transcription panel"
+                    title="Open transcription panel"
+                    aria-controls="transcription-panel"
+                    :aria-expanded="false"
+                    @click="showPanel('left')"
+                  >
+                    <PanelLeftOpen aria-hidden="true" />
+                  </Button>
+                </template>
+                <DocumentControls
+                  v-show="!galleryExpanded"
+                  @pointerdown.stop
+                  @wheel.stop
+                  @keydown.stop
+                  v-model:link-states="linkStates"
+                  :zoom-percent="zoomPercent"
+                  :minimum-zoom-percent="minimumZoomPercent"
+                  :maximum-zoom-percent="maximumZoomPercent"
+                  :show-badge-names="showBadgeNames"
+                  @set-zoom="setZoom"
+                  @reset-view="resetView"
+                  @toggle-badge-names="showBadgeNames = !showBadgeNames"
+                />
+                <template #end>
+                  <Button
+                    v-if="isWideWorkspace && !sidebarVisible"
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    data-open-panel="right"
+                    aria-label="Open people panel"
+                    title="Open people panel"
+                    aria-controls="people-panel"
+                    :aria-expanded="false"
+                    @click="showPanel('right')"
+                  >
+                    <PanelRightOpen aria-hidden="true" />
+                  </Button>
+                </template>
+              </PanelBar>
               <section
                 ref="viewerElement"
                 v-show="!galleryExpanded"
@@ -1176,26 +1182,27 @@ onBeforeUnmount(() => {
           :model-value="sidebarState.tab"
           @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
         >
-          <div class="flex shrink-0 items-center gap-2 border-b p-3">
-            <Button
-              v-if="isWideWorkspace"
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Hide people panel"
-              title="Hide people panel"
-              aria-controls="people-panel"
-              :aria-expanded="true"
-              @click="hidePanel('right')"
-              ><PanelRightClose aria-hidden="true"
-            /></Button>
-            <TabsList aria-label="Page sidebar" class="w-full">
+          <PanelBar>
+            <template v-if="isWideWorkspace" #start>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Hide people panel"
+                title="Hide people panel"
+                aria-controls="people-panel"
+                :aria-expanded="true"
+                @click="hidePanel('right')"
+                ><PanelRightClose aria-hidden="true"
+              /></Button>
+            </template>
+            <TabsList aria-label="Page sidebar" class="h-8">
               <TabsTrigger value="people">People</TabsTrigger>
               <TabsTrigger value="faces">Faces</TabsTrigger>
               <TabsTrigger value="mentions">Mentions</TabsTrigger>
               <TabsTrigger value="info">Info</TabsTrigger>
             </TabsList>
-          </div>
+          </PanelBar>
           <TabsContent value="people" class="mt-0 flex min-h-0 flex-1 flex-col">
             <ScanPeoplePanel
               ref="peoplePanel"

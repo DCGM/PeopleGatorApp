@@ -214,6 +214,11 @@ async function mountView(renderActions = false) {
         AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
         AlertDialogContent: { template: '<div><slot /></div>' },
         AlertDialogFooter: { template: '<div><slot /></div>' },
+        PanelBar: {
+          props: ['as'],
+          template:
+            '<component :is="as || \'div\'"><slot name="start" /><slot /><slot name="end" /></component>',
+        },
         Tabs: { name: 'Tabs', props: ['modelValue'], template: '<div><slot /></div>' },
         TabsList: { template: '<div><slot /></div>' },
         TabsTrigger: {
