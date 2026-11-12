@@ -163,7 +163,8 @@ uv run --locked pytest tests
 ```
 
 For a faster full PostgreSQL run, use
-`uv run --locked pytest tests -n 4 --dist=worksteal` with both URLs above. Each
+`uv run --locked pytest tests -n 4 --dist=worksteal --basetemp=/dev/shm/people-gator-pytest`
+with both URLs above (on Linux; omit `--basetemp` elsewhere). Each
 worker receives private databases; the disposable user must have `CREATEDB`.
 Use `-n 2` on smaller machines or `-n 0` for debugging. See
 [test performance guidance](TEST.md#faster-backend-feedback) for isolation,

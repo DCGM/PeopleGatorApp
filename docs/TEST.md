@@ -133,7 +133,11 @@ without live PostgreSQL. Use four workers for the full database-enabled suite:
 uv run --locked pytest --lf -q
 uv run --locked pytest tests/services/persistence/test_preview_seed.py -k reruns -q
 # With both disposable PostgreSQL URLs configured as in Development:
-uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30
+uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30 \
+  --basetemp=/dev/shm/people-gator-pytest
+# Reproduce one CI shard:
+uv run --locked pytest tests -n 4 --dist=worksteal --shard=2/4 \
+  --basetemp=/dev/shm/people-gator-pytest
 ```
 
 Use `-n 2` on smaller machines, or `-n 0` for sequential debugging. Work stealing
@@ -141,6 +145,15 @@ distributes individual cases, including parametrized cases, across workers; do
 not use `--dist=loadfile`, which leaves the expensive preview-seed module on one
 worker. Keep the worker count bounded instead of using `-n auto` on shared hosts.
 Parallel execution is optional; no workers are started by default.
+
+Nearly all of the full run is the ~100 preview-seed cases, which are CPU-bound.
+Their seed runs fsync about 2,000 small files each, so on Linux put pytest's
+temporary directory on tmpfs with `--basetemp` (about 1 GB for a full run;
+pytest empties it at the start of each run). That cut a local run from 651 s to 363 s;
+elsewhere, omit the option. The suite's `conftest.py` spaces preview-seed cases
+evenly through the run, so the progress counter tracks elapsed time.
+`--shard=I/N` runs the Ith of N parts, each with an equal share of seed cases;
+together the parts run every collected case exactly once.
 
 For each worker, the pytest controller creates a separate empty database for
 each configured `PEOPLE_GATOR_POSTGRES_TEST_URL` and
@@ -176,7 +189,9 @@ time uv run --locked pytest -q -n 4 --dist=worksteal --durations=0
 
 `--durations=0` includes setup, call and teardown timings. Repeat the chosen full
 run to check cleanup and ordering. The [issue #81 measurements](TEST-PERFORMANCE.md)
-record the baseline, profiling evidence and worker-count comparison.
+record the baseline, profiling evidence and worker-count comparison; the
+[issue #156 measurements](TEST-PERFORMANCE.md#ci-runner-speed-up-156) compare
+the CI options.
 
 ### What CI runs
 
@@ -186,12 +201,15 @@ pull request:
 1. Frontend dependency installation, type checking and the Vitest suite.
 2. Backend locked dependency installation and disposable PostgreSQL databases
    for repository tests (`ci`), schema tests (`ci_schema`) and CLI smoke (`ci_seed`).
-3. Real CLI migration → seed → seed → schema check using disposable local storage,
-   followed by the backend pytest suite with four isolated PostgreSQL workers.
-4. The deployment utility tests from the same checkout, including the workflow
-   and runner-guard tests, with live PostgreSQL isolation enabled; it does not
-   enable live Weaviate or OTLP log delivery. The utility is then installed
-   exactly as the deploy jobs install it.
+3. The backend pytest suite as four parallel shards (`--shard=1/4` … `4/4`),
+   each on its own runner and PostgreSQL service with four isolated workers,
+   tmpfs `--basetemp` and durability disabled on the throwaway server. Each
+   shard takes about 5–6 minutes; see [test performance](TEST-PERFORMANCE.md).
+4. In parallel, the `tools` part: real CLI migration → seed → seed → schema
+   check using disposable local storage, then the deployment utility tests from
+   the same checkout, including the workflow and runner-guard tests, with live
+   PostgreSQL isolation enabled; it does not enable live Weaviate or OTLP log
+   delivery. The utility is then installed exactly as the deploy jobs install it.
 5. After frontend/backend checks pass, production image builds; same-repository
    events publish them to GHCR as `sha-<commit>`. Forks receive checks and a
    build without publication.
