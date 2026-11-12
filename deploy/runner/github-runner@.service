@@ -1,0 +1,17 @@
+# GitHub Actions runner in ~/actions-runner/<instance>, as a systemd user service.
+# Installed by deploy/runner/install.sh; lingering keeps it running without a login.
+[Unit]
+Description=GitHub Actions runner %i
+
+[Service]
+WorkingDirectory=%h/actions-runner/%i
+ExecStart=%h/actions-runner/%i/runsvc.sh
+Restart=always
+RestartSec=10
+# Let a running job finish its current step before the runner stops.
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,40 @@
+# Static Traefik configuration for a PeopleGator deploy host. Copy it to a
+# private path, point TRAEFIK_CONFIG at it, and set the ACME e-mail. Only HTTPS
+# is served: the application stacks route on the `websecure` entry point.
+# Traefik listens on 443 inside its container; the host port is HTTPS_PORT in the
+# stack's env file.
+entryPoints:
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        # Every router on this entry point gets a certificate for its own host
+        # name from the resolver below, on its first request; the application
+        # stacks need no certificate labels.
+        certResolver: letsencrypt
+
+# Web dashboard, served only through the authenticated router that the shared
+# stack defines on TRAEFIK_DASHBOARD_HOST (never on an open port).
+api:
+  dashboard: true
+
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+    network: web
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@peoplegator.dev
+      storage: /acme/acme.json
+      # TLS-ALPN-01: Let's Encrypt connects to the public HTTPS port 443 of each
+      # host name. That is this Traefik directly, or an edge proxy forwarding the
+      # TLS stream unchanged (TCP router with `tls.passthrough`) to HTTPS_PORT.
+      tlsChallenge: {}
+      # Uncomment while testing to avoid Let's Encrypt rate limits:
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+log:
+  level: INFO

@@ -14,83 +14,20 @@ This token is browser-visible by design. Account passwords and server OTLP
 exporter authorization never belong in browser settings, Git, image build args
 or frontend `VITE_*` variables.
 
-Create an operator-owned mode-600 file outside the checkout, utility installation
-and deployment state directories, for example `/home/RUNNER/private/people-gator-telemetry.env`:
+Each environment's settings ([GitHub setup](../deploy/GITHUB-SETUP.md)) carry
+two optional groups, prefixed `PREVIEW_`, `STAGING_` or `PRODUCTION_`:
 
-```dotenv
-PEOPLE_GATOR_API__RUM__ENABLED=true
-PEOPLE_GATOR_API__RUM__CLIENT_TOKEN=REPLACE_WITH_DEDICATED_RUM_TOKEN
-PEOPLE_GATOR_API__RUM__SITE=openobserve.capturemyhand.com
-PEOPLE_GATOR_API__RUM__ORGANIZATION_IDENTIFIER=default
-PEOPLE_GATOR_API__RUM__APPLICATION_ID=people-gator-app
-PEOPLE_GATOR_API__RUM__SESSION_SAMPLE_RATE=100
-PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE=100
-PEOPLE_GATOR_API__OTEL__ENABLED=true
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://lgtm:4318/v1/traces
-OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://lgtm:4318/v1/logs
-OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://lgtm:4318/v1/metrics
-```
+| Name | Kind | Meaning |
+| --- | --- | --- |
+| `OTEL_ENDPOINT` | variable | OTLP HTTP base URL on the `logging` network, for example `http://lgtm:4318`; the deployment derives the `/v1/traces`, `/v1/logs` and `/v1/metrics` endpoints and enables the SDK |
+| `OTEL_HEADERS` | secret | Becomes `OTEL_EXPORTER_OTLP_HEADERS`, for example `Authorization=Basic …` |
+| `RUM_CLIENT_TOKEN` | secret | The dedicated browser RUM token; enables RUM |
+| `RUM_SITE` | variable | RUM site, default `openobserve.capturemyhand.com` |
 
-Use literal, unquoted `KEY=value` entries. The deployment telemetry file uses
-Compose's raw env-file format, so dollar signs are not expanded and quotes would
-become part of the value. Only API RUM, API OTEL and `OTEL_EXPORTER_OTLP*` keys are
-allowed; deployment identity and application/storage/auth settings cannot be
-supplied through this file. Do not print its contents or rendered Compose
-configuration into CI logs. Replace `lgtm` with the actual reachable collector
-hostname if different.
-
-For **each** environment descriptor (`pr`, `staging`, `release`), merge:
-
-```json
-{
-  "telemetry_file": "/home/RUNNER/private/people-gator-telemetry.env",
-  "otel_network": "logging"
-}
-```
-
-Use that host's absolute file path and collector's Docker network. The same file
-can be referenced by multiple environments on one host; other hosts need their
-own operator-managed copy. Existing staging/release `runtime_file` settings are
-retained. Telemetry-file values override matching runtime-file values. Only the
-API runtime container receives this extra file, not frontend, migration, seed,
-check or database snapshot workers. Without `telemetry_file`, telemetry remains
-disabled by default (existing staging/release runtime settings can still enable
-it). The extra backend network defaults to the web network when `otel_network`
-is absent.
-
-The API serves an explicit allowlist of public RUM settings at
-`GET /api/v1/rum-config`, with `Cache-Control: no-store`. It is unauthenticated
-because monitoring starts before login; it exposes no backend OTLP credentials.
-It is an operational endpoint excluded from application OpenAPI/client generation,
-owned by `routes/v1/rum_config.py` and registered through the v1 router.
-The frontend reads it before loading router/client modules. Disabled settings,
-older-backend 404s and failed requests leave the app usable; configuration fetch
-has a three-second timeout. A missing token with RUM enabled is a server
-configuration error and fails settings validation.
-
-The frontend uses HTTPS ingestion, masks captured page content (including replay),
-and does not identify users. With RUM enabled, both `SESSION_SAMPLE_RATE` and
-`SESSION_REPLAY_SAMPLE_RATE` default to **100**, so every newly sampled session
-is eligible for recording. The frontend starts the replay recorder after RUM
-initialization without forcing sessions into the sample.
-
-Set `PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE` to any percentage from
-0 to 100 (fractions allowed): 0 disables replay, 25 records approximately 25% of
-tracked sessions, and 100 records all tracked sessions. Replay sampling applies
-within the overall `SESSION_SAMPLE_RATE`; both must be 100 to record every
-session. RUM remains disabled by default and requires its dedicated client token.
-The public `/api/v1/rum-config` response includes `sessionReplaySampleRate` only
-when enabled. An older backend that omits this field keeps replay disabled.
-
-Change the operator-owned telemetry file and recreate the API runtime through
-the reviewed deployment lifecycle, then reload browser tabs to fetch the new
-settings; no credential-specific frontend rebuild is required. SDK sampling can
-persist for an existing session, so use a new browser session when verifying a
-changed rate. Do not change shared collectors or store telemetry tokens in fixtures.
-
-Browser errors are forwarded to OpenObserve logs; console messages are not
-forwarded automatically. API paths, error messages and interaction metadata can
-still contain application information.
+The deploy job renders them into a private `telemetry.env` that only the API
+runtime container reads (not frontend, migration, seed, check or database
+snapshot workers). Leave a group unset to keep that feature off. Do not print the
+rendered file or Compose configuration into CI logs.
 
 ## Deployment identity
 
@@ -129,11 +66,10 @@ settings. OpenObserve must allow browser ingestion from PR, staging and release
 origins; ensure any proxy/CSP permits HTTPS connections to its host.
 
 The existing LGTM collector must have an OTLP HTTP receiver reachable from the
-backend's `otel_network` and a **traces** pipeline forwarding to OpenObserve.
-Working container logs alone do not establish this. The deployment utility's
-bundled Fluent Forward collector only handles container logs; this change does
-not modify that shared infrastructure or substitute it for the LGTM receiver.
-Enable or adjust trace forwarding through an explicit operator change.
+`logging` network and a **traces** pipeline forwarding to OpenObserve. Every
+stack points the backend at `OTEL_ENDPOINT` for logs, traces and metrics; there
+is no separate container-log collector. Enable or adjust trace forwarding through an explicit
+operator change.
 
 The backend SDK exports traces, metrics and structured application logs directly
 to `http://lgtm:4318` when OTEL is enabled in every deployment mode. The locked
@@ -142,8 +78,7 @@ trace/span correlation and exception attributes. Container stdout/stderr collect
 is separate; see [backend versus container logs](OBSERVABILITY.md#direct-backend-otlp-traces-metrics-and-logs)
 for duplicate copies and the release diagnostic-log path. The collector must
 accept all configured signals. If server-side authorization is required,
-put standard `OTEL_EXPORTER_OTLP_HEADERS` or per-signal headers in the private
-telemetry file. Endpoint settings contain complete URLs, passed unchanged to the
+put the standard `OTEL_EXPORTER_OTLP_HEADERS` value in the `OTEL_HEADERS` secret. Endpoint settings contain complete URLs, passed unchanged to the
 exporters:
 
 | API setting | Standard environment alias | Default |
@@ -155,22 +90,18 @@ exporters:
 Settings resolve the aliases; exporters do not read or combine endpoint parts.
 The API setting takes priority when both environment names are supplied. The
 former `HTTP_ENDPOINT` plus signal paths, unused gRPC/profile settings and generic
-backend base-URL expansion are removed. Migrate existing backend telemetry files
-to the complete per-signal URLs above. The deployment utility's separate
-container-log collector retains its own standard OTLP base configuration.
-Prefer the existing LGTM collector for routing and OpenObserve credentials.
+backend base-URL expansion are removed. The deployment derives the three URLs
+from `OTEL_ENDPOINT`. Prefer the existing LGTM collector for routing and
+OpenObserve credentials.
 Never use the browser RUM token as OTLP credentials.
 
 ## Rollout and verification
 
-1. Review and merge the implementation. Lifecycle workflows install their exact
-   reviewed `main` utility revision; PR code must not become host-controller code.
-   A preview using the older trusted controller will not consume `telemetry_file`
-   or apply the new identity/network settings. Use a fresh eligible build after
-   reviewed-main rollout to verify the complete deployment path.
-2. Create the private file, merge the descriptor fields with
-   `people-gator-deploy <environment> configure --input <private-json>` and run
-   the environment's `preflight`. Keep the shared infrastructure unchanged.
+1. Review and merge the implementation. A PR preview deploys with its own
+   branch's deploy code, so the complete path can be verified on the PR before
+   merge; staging and releases pick it up from `main` and the tag.
+2. Add the `OTEL_*` and `RUM_*` settings for each environment as described
+   above. Keep the shared infrastructure unchanged.
 3. Deploy a new eligible PR/main build or release through the normal lifecycle.
    Ensure backend startup and routed readiness succeed. No database migration,
    new seed records or frontend rebuild for credentials is needed.

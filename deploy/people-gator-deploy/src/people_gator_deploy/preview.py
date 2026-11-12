@@ -1,9 +1,9 @@
 """PR preview lifecycle: per-PR isolated database/role/storage with the synthetic preview seed.
 
-Deploys only successful same-repository PR CI builds whose head is still the
-open PR head. Redeployment preserves credentials, seeded identities, reviewed
-edits and media. Removing one closed preview never touches another preview,
-staging, releases or shared infrastructure.
+Deploys the images this workflow run published for a same-repository PR whose
+head is still the tested commit. Redeployment preserves credentials, seeded
+identities, reviewed edits and media. Removing one closed preview never touches
+another preview, staging, releases or the operator-run shared infrastructure.
 """
 from __future__ import annotations
 
@@ -35,9 +35,8 @@ class Preview(Host):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        # Per-PR state; the shared infrastructure root is kept separately.
-        self.previews = Path(config.get("previews_dir", config["state_dir"]))
-        self.domain = config.get("domain", "preview.peoplegator.dev")
+        self.previews = self.root
+        self.domain = config["domain"]
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.domain):
             raise DeployError("Invalid preview domain")
 
@@ -74,6 +73,7 @@ class Preview(Host):
         if not re.fullmatch(r"[a-f0-9]{64}", password):
             raise DeployError("Invalid database password in preview state")
         name = f"preview_pr_{number}"
+        self.harden_shared_server()
         # Names and passwords are strictly validated; SQL never comes from PR text.
         # Disable connections during creation, before revoking PUBLIC access.
         self.sql(rf"""
@@ -104,48 +104,38 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             return None
         return pr
 
-    def eligible_run(self, run_id: int) -> tuple[dict, list[int]]:
-        run = self.ci_run(run_id, event="pull_request")
-        candidates = run.get("pull_requests", [])
-        if not candidates:
-            candidates = self.api(f"commits/{run['head_sha']}/pulls?per_page=100")
-        numbers = sorted({positive_int(pr["number"]) for pr in candidates})
-        return run, numbers
-
     def env(self, number: int, state: PreviewState, images: dict[str, str], *, sha: str = "unknown", standalone_auth: bool = False) -> str:
         values = {
             "STANDALONE_AUTH": "1" if standalone_auth else "0",
             "COMMIT_SHA": sha,
+            "RUNTIME_FILE": self.config["runtime_file"],
             "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
-            "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web")),
-            "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
+            "APPLICATION_OTEL_NETWORK": self.config["otel_network"] if "otel" in self.config else self.config.get("web_network", "web"),
             "PR_NUMBER": str(number), "PREVIEW_HOST": f"pr-{number}.{self.domain}",
             "CORS_ORIGIN_REGEX": f"^https://{re.escape(f'pr-{number}.{self.domain}')}$",
+            "DB_HOST": self.config["postgres"]["host"], "DB_PORT": str(self.config["postgres"]["port"]),
             "DB_NAME": f"preview_pr_{number}", "DB_USER": f"preview_pr_{number}",
             "DB_PASSWORD": state["password"],
-            "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),
+            "DATABASE_NETWORK": self.config.get("database_network", "db"),
             "WEB_NETWORK": self.config.get("web_network", "web"),
-            "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
             "USERS_FILE": self.config["users_file"],
             "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"],
         }
         return self.dotenv(values)
 
-    def deploy(self, run_id: int) -> list[int]:
+    def deploy(self, sha: str, pr: int) -> list[int]:
         self.check_access()
-        run, candidates = self.eligible_run(run_id)
-        current = [number for number in candidates if self.current_pr(number, run["head_sha"])]
-        if not current:
-            print("No open PR still matches this run; skipping stale deployment")
+        number = positive_int(pr)
+        run = self.build(sha)
+        if not self.current_pr(number, sha):
+            print(f"PR #{number} is closed, from a fork or no longer at {sha}; skipping stale deployment")
             return []
-        if not (self.root / "infrastructure.env").exists():
-            raise DeployError("Initialize preview infrastructure first: people-gator-deploy pr install")
         users = Path(self.config["users_file"])
         if not users.is_absolute() or not users.is_file():
             raise DeployError("users_file must name an existing absolute file")
         images = {component: self.image(component, run) for component in ("frontend", "backend")}
         standalone_auth = self.image_uses_standalone_auth(images["backend"])
-        return [number for number in current if self.deploy_pr(number, run, images, standalone_auth=standalone_auth)]
+        return [number] if self.deploy_pr(number, run, images, standalone_auth=standalone_auth) else []
 
     def deploy_pr(self, number: int, run: dict, images: dict[str, str], *, standalone_auth: bool = False) -> bool:
         directory = self.previews / f"pr-{positive_int(number)}"
@@ -154,13 +144,17 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         state: PreviewState = json.loads(state_file.read_text()) if state_file.exists() else {
             "password": secrets.token_hex(32),
         }
-        version = (positive_int(run["id"]), positive_int(run["run_attempt"]))
+        version = (int(run.get("id") or 0), int(run.get("run_attempt") or 0))
         deployed_version = tuple(state.get("version", [0, 0]))
-        if deployed_version > version or (
-            deployed_version == version and tuple(state.get("seeded_version", [])) == version
-            and state.get("standalone_auth", False) == standalone_auth
-        ):
-            print(f"PR #{number} already has this run or a newer deployment")
+        # Run ids order workflow runs; operator runs outside Actions carry (0, 0)
+        # and are compared by commit only.
+        if version != (0, 0) and deployed_version > version:
+            print(f"PR #{number} already has a newer deployment")
+            return False
+        if (deployed_version == version and state.get("sha") == run["head_sha"]
+                and tuple(state.get("seeded_version", [])) == version
+                and state.get("standalone_auth", False) == standalone_auth):
+            print(f"PR #{number} already runs this build")
             return False
         if not self.current_pr(number, run["head_sha"]):
             return False
@@ -224,9 +218,21 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         if not env_file.exists():
             env_file = directory / "candidate.env"
         if env_file.exists():
-            self.command(self.compose(number, env_file, "--profile", "tools",
-                                      "down", "--volumes", "--remove-orphans", "--timeout", "30"))
-        # PostgreSQL 16 FORCE disconnects the stopped preview's remaining sessions.
+            try:
+                self.command(self.compose(number, env_file, "--profile", "tools",
+                                          "down", "--volumes", "--remove-orphans", "--timeout", "30"))
+            except DeployError:
+                # A stack saved under earlier conventions (for example a database
+                # network that no longer exists) cannot be torn down by Compose;
+                # remove its containers and volumes by project label instead.
+                project = f"label=com.docker.compose.project=people-gator-pr-{number}"
+                containers = self.command(["docker", "ps", "-aq", "--filter", project]).split()
+                if containers:
+                    self.command(["docker", "rm", "-f", *containers])
+                volumes = self.command(["docker", "volume", "ls", "-q", "--filter", project]).split()
+                if volumes:
+                    self.command(["docker", "volume", "rm", "-f", *volumes])
+        # PostgreSQL 13+ FORCE disconnects the stopped preview's remaining sessions.
         self.sql(f"DROP DATABASE IF EXISTS preview_pr_{number} WITH (FORCE);\n"
                  f"DROP ROLE IF EXISTS preview_pr_{number};\n")
         # Retain state until both Compose and DB cleanup succeed, allowing retries.
