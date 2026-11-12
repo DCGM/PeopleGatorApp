@@ -207,6 +207,39 @@ describe('DocumentPageGallery', () => {
     wrapper.unmount()
   })
 
+  it('scrolls the collapsed strip sideways with a plain up/down wheel', async () => {
+    const { wrapper } = await mountGallery()
+    const viewport = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    Object.defineProperty(viewport, 'clientWidth', { configurable: true, value: 200 })
+    Object.defineProperty(viewport, 'scrollWidth', { configurable: true, value: 600 })
+    const wheel = (init: WheelEventInit) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init })
+      viewport.dispatchEvent(event)
+      return event
+    }
+
+    expect(wheel({ deltaY: 120 }).defaultPrevented).toBe(true)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(wheel({ deltaY: -3, deltaMode: WheelEvent.DOM_DELTA_LINE }).defaultPrevented).toBe(true)
+    expect(viewport.scrollLeft).toBe(72)
+    // Native horizontal and pinch-zoom input are left alone.
+    expect(wheel({ deltaX: 50, deltaY: 10 }).defaultPrevented).toBe(false)
+    expect(wheel({ deltaY: 50, ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(viewport.scrollLeft).toBe(72)
+    // At the ends the wheel passes on to the page.
+    viewport.scrollLeft = 0
+    expect(wheel({ deltaY: -120 }).defaultPrevented).toBe(false)
+    viewport.scrollLeft = 400
+    expect(wheel({ deltaY: 120 }).defaultPrevented).toBe(false)
+
+    await wrapper.setProps({ expanded: true })
+    const grid = wrapper.get('[aria-label="Document pages grid"]').element
+    const vertical = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    grid.dispatchEvent(vertical)
+    expect(vertical.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
   it('shows loading placeholders and announces a single-page document', async () => {
     const { wrapper } = await mountGallery({ items: [], totalCount: null, loading: true })
     expect(wrapper.text()).toContain('Loading document pages…')
