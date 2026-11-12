@@ -37,10 +37,16 @@ All future implementation jobs must follow this GitHub workflow:
 
 # Worktrees
 
+The original `PeopleGatorApp/` checkout is locked to `main`: it always has the
+`main` branch checked out at the latest `origin/main`. Agents only update it
+with `git pull --ff-only` and run `git worktree` commands from it. Never switch
+branches, edit, build, install, test, run servers or commit there. If it is not
+clean on `main`, or cannot fast-forward, stop and tell the user instead of
+fixing it.
+
 Agents work exclusively in `../PeopleGatorApp-worktrees/` (relative to the main
-checkout), with each worktree in its own folder there. Do not edit, build,
-switch branches or commit in the main checkout; use it only for `git fetch` and
-`git worktree` commands. Do not create worktrees anywhere else.
+checkout), with each worktree in its own folder there. Do not create worktrees
+anywhere else.
 
 - **Implementation:** one folder per issue, named `issue<N>-<slug>`.
 
@@ -66,9 +72,11 @@ switch branches or commit in the main checkout; use it only for `git fetch` and
 - **Cleanup after merge:** confirm the PR is merged
   (`gh pr view <N> --json state`) and that the worktree has no uncommitted or
   unpushed work. Stop its dev servers and containers and drop disposable
-  databases created for it, then remove the worktree and local branch:
+  databases created for it, then update the main checkout and remove the
+  worktree and local branch:
 
   ```bash
+  git pull --ff-only   # in the main checkout, on main
   git worktree remove ../PeopleGatorApp-worktrees/<folder>
   git branch -d <branch>
   git worktree prune
