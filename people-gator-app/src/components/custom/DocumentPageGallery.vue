@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BadgeCheck, ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
+import { BadgeCheck, CircleDashed, ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
@@ -109,7 +109,7 @@ useAutomaticPagination({
       <div class="flex shrink-0 items-center gap-2">
         <div class="min-w-0 flex-1 overflow-x-auto">
           <div
-            class="gallery-header flex w-full min-w-[22rem] sm:min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
+            class="gallery-header flex w-full min-w-[24.5rem] sm:min-w-[34.5rem] flex-row flex-nowrap items-center gap-2 pb-1"
           >
             <div class="flex min-w-0 items-center gap-2">
               <h2
@@ -160,11 +160,11 @@ useAutomaticPagination({
                 v-model="notVerifiedOnly"
                 variant="outline"
                 size="sm"
-                class="min-w-0"
+                class="shrink-0"
                 aria-label="Not verified pages only"
                 title="Not verified pages only"
-                >Not verified</Toggle
-              >
+                ><CircleDashed aria-hidden="true"
+              /></Toggle>
               <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
                 <SortControl
                   v-model="sort"

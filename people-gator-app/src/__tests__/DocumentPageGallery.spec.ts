@@ -165,7 +165,7 @@ describe('DocumentPageGallery', () => {
     expect(wrapper.get('[role=alert]').text()).toContain('Could not load document pages.')
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
       'Person only',
-      'Not verified',
+      '',
       '',
       'Retry pages',
     ])
