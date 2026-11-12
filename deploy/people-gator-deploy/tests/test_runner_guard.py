@@ -37,11 +37,13 @@ class RunnerGuardTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
-    def guard(self, environment, event, ref, *, repository=REPOSITORY, sha=None, head_repository=REPOSITORY, remote=None):
+    def guard(self, environment, event, ref, *, repository=REPOSITORY, sha=None, head_repository=REPOSITORY, remote=None,
+              action="synchronize"):
         cache = tempfile.TemporaryDirectory()
         self.addCleanup(cache.cleanup)
         payload = Path(cache.name) / "event.json"
-        payload.write_text(json.dumps({"pull_request": {"head": {"repo": {"full_name": head_repository} if head_repository else None}}}))
+        payload.write_text(json.dumps({"action": action,
+                                       "pull_request": {"head": {"repo": {"full_name": head_repository} if head_repository else None}}}))
         variables = {"PATH": os.environ["PATH"], "HOME": cache.name,
                      "PEOPLE_GATOR_RUNNER_REPOSITORY": REPOSITORY, "PEOPLE_GATOR_RUNNER_REMOTE": remote or self.remote,
                      "PEOPLE_GATOR_RUNNER_CACHE": cache.name, "GITHUB_REPOSITORY": repository,
@@ -68,6 +70,14 @@ class RunnerGuardTests(unittest.TestCase):
                 self.assertAdmitted("preview", event, "refs/heads/main")
         self.assertRefused("preview", "push", "refs/heads/feature")
         self.assertRefused("preview", "push", "refs/tags/v1.0.0")
+
+    def test_preview_runner_removes_closed_pull_requests_on_their_base_branch(self):
+        # A closed pull request's GITHUB_REF is its base branch, not refs/pull/<N>/merge.
+        self.assertAdmitted("preview", "pull_request", "refs/heads/main", action="closed")
+        self.assertRefused("preview", "pull_request", "refs/heads/main", action="synchronize")
+        self.assertRefused("preview", "pull_request", "refs/heads/main", action="closed",
+                           head_repository="Fork/PeopleGatorApp", message="other repositories never run here")
+        self.assertRefused("staging", "pull_request", "refs/heads/main", action="closed")
 
     def test_fork_pull_requests_are_refused_whatever_their_workflow_says(self):
         for head in ("Fork/PeopleGatorApp", None):
