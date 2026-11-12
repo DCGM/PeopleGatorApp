@@ -13,6 +13,11 @@ entryPoints:
         # stacks need no certificate labels.
         certResolver: letsencrypt
 
+# Web dashboard, served only through the authenticated router that the shared
+# stack defines on TRAEFIK_DASHBOARD_HOST (never on an open port).
+api:
+  dashboard: true
+
 providers:
   docker:
     endpoint: unix:///var/run/docker.sock

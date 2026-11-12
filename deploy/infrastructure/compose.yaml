@@ -8,7 +8,7 @@
 # creates infra.env with a generated password and traefik.yaml only once; edit
 # those two there and rerun to apply changes):
 #
-#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
 #
 # The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
 # postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres
@@ -49,8 +49,18 @@ services:
       # Rootless Docker: DOCKER_SOCKET=$XDG_RUNTIME_DIR/docker.sock in the env file.
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - ${TRAEFIK_CONFIG:?set TRAEFIK_CONFIG to your traefik.yaml}:/etc/traefik/traefik.yaml:ro
+      # htpasswd-style users for the dashboard (the bootstrap command creates it).
+      - ${TRAEFIK_DASHBOARD_USERS:-./dashboard.users}:/etc/traefik/dashboard.users:ro
       - traefik-acme:/acme
     networks: [web]
+    labels:
+      # The dashboard (api@internal, enabled in traefik.yaml) behind basic auth.
+      - traefik.enable=true
+      - traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DASHBOARD_HOST:-traefik-preview.peoplegator.dev}`)
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard-auth
+      - traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile=/etc/traefik/dashboard.users
 
 volumes:
   postgres-data:

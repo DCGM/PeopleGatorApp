@@ -62,7 +62,7 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   deployment account, from anywhere:
 
   ```sh
-  ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+  ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
   ```
 
   It shallow-clones the repository (`ref` selects the branch), copies
@@ -70,8 +70,10 @@ gh secret set PRODUCTION_OTEL_HEADERS --body 'Authorization=Basic BASE64'
   (from [`example.env`](infrastructure/example.env), with a generated PostgreSQL
   password and the current Docker socket) and `traefik.yaml` (from
   [`traefik.example.yaml`](infrastructure/traefik.example.yaml)) only if they do
-  not exist yet, then starts the stack. Reruns refresh `compose.yaml` and keep
-  your two files. Set the ACME e-mail in `traefik.yaml` and,
+  not exist yet, then starts the stack. The first run also creates the Traefik
+  dashboard login (`dashboard.users`) and prints its password once; the dashboard
+  is at `https://traefik-preview.peoplegator.dev` (`TRAEFIK_DASHBOARD_HOST`).
+  Reruns refresh `compose.yaml` and keep your files. Set the ACME e-mail in `traefik.yaml` and,
   if needed, `HTTPS_PORT` in `infra.env`, and rerun to apply. The database URLs use
   `POSTGRES_PASSWORD` from `infra.env`.
   PostgreSQL runs as `postgres` on the internal `db` network. Traefik serves only

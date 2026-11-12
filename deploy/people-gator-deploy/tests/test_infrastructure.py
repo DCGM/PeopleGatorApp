@@ -34,6 +34,12 @@ class InfrastructureStackTests(unittest.TestCase):
         self.assertEqual(traefik["command"], ["--configfile=/etc/traefik/traefik.yaml"])
         self.assertEqual(traefik["ports"], ["${HTTPS_PORT:-443}:443"])  # HTTPS only, on a chosen host port
         self.assertNotIn("certresolver", compose)  # certificates come from traefik.yaml's entry point
+        labels = dict(label.split("=", 1) for label in traefik["labels"])
+        # The dashboard is reachable only through its host name, behind basic auth.
+        self.assertEqual(labels["traefik.http.routers.traefik-dashboard.service"], "api@internal")
+        self.assertEqual(labels["traefik.http.routers.traefik-dashboard.rule"], "Host(`${TRAEFIK_DASHBOARD_HOST:-traefik-preview.peoplegator.dev}`)")
+        self.assertEqual(labels["traefik.http.routers.traefik-dashboard.middlewares"], "traefik-dashboard-auth")
+        self.assertEqual(labels["traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile"], "/etc/traefik/dashboard.users")
 
     def test_example_traefik_config_serves_only_https_with_an_acme_resolver(self):
         config = yaml.safe_load((INFRASTRUCTURE / "traefik.example.yaml").read_text())
@@ -44,6 +50,7 @@ class InfrastructureStackTests(unittest.TestCase):
         # Per-host certificates on first request: no fixed domain list to maintain.
         self.assertEqual(websecure["http"]["tls"], {"certResolver": "letsencrypt"})
         self.assertEqual(config["providers"]["docker"], {"endpoint": "unix:///var/run/docker.sock", "exposedByDefault": False, "network": "web"})
+        self.assertEqual(config["api"], {"dashboard": True})  # no `insecure`: only the authenticated router serves it
         acme = config["certificatesResolvers"]["letsencrypt"]["acme"]
         self.assertEqual(acme["storage"], "/acme/acme.json")  # the traefik-acme volume
         self.assertEqual(acme["tlsChallenge"], {})  # TLS-ALPN-01 on public 443: no HTTP port, no DNS credentials
