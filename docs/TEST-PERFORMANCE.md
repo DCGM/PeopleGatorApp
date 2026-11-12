@@ -52,7 +52,7 @@ that are not meaningful.
 | … shard 1 of 3 (`--shard=1/3`) | 348 s | — |
 | Seed cases spread, tmpfs, durability off, `--shard=I/4` | 274–360 s per shard (3 runs) | 372 s (no shard, durability on) |
 | … + one fresh seed per worker, copied into eligible cases | 186–259 s per shard | 200 s (no shard) |
-| … + one template per run, shards balanced by cost, `--shard=I/6` (final) | see below | 194 s (no shard) |
+| … + one template per run, shards balanced by cost, `--shard=I/6` (final) | 85–173 s per shard (3 runs) | 194 s (no shard) |
 
 tmpfs and disabled durability help a lot locally but are within runner noise
 on CI, where the work is CPU-bound. What shortens the CI critical path is
@@ -100,9 +100,13 @@ private worker databases and tmpfs `--basetemp`.
 | 4 shards, run 3: [43284470634](https://github.com/DCGM/PeopleGatorApp/actions/runs/43284470634) | 360 s (others 274–329 s) | 6 min 31 s |
 | 4 shards + seed copies: [43292218225](https://github.com/DCGM/PeopleGatorApp/actions/runs/43292218225) | 259 s (others 186–226 s) | 4 min 50 s |
 | Final, run 1: [43294289516](https://github.com/DCGM/PeopleGatorApp/actions/runs/43294289516) | 142 s (others 100–120 s) | 2 min 54 s |
+| Final, run 2: [43295106708](https://github.com/DCGM/PeopleGatorApp/actions/runs/43295106708) | 173 s (others 85–119 s) | 3 min 28 s |
+| Final, run 3: [43295106708 attempt 2](https://github.com/DCGM/PeopleGatorApp/actions/runs/43295106708/attempts/2) | 161 s (others 98–145 s) | 3 min 13 s |
 
-The final job is about **8× faster** (24 min to under 3 min). Its shards ran
-883 passed and 1 skipped: the original 870 + 1 skipped, the 12 scheduling
+The final job is about **7–8× faster** (24 min to about 3 min). Shards remain
+uneven because fresh-seed cases differ in cost (the two alignment upgrade
+cases take 60–80 s each on CI) and runners vary. Its shards ran
+883 passed and 1 skipped in every run: the original 870 + 1 skipped, the 12 scheduling
 tests and the copy check. Per-case times of real seed runs are unchanged
 (48–81 s on CI); there are fewer of them, and each runner has a sixth.
 The tools part finishes in under two minutes.
