@@ -214,7 +214,10 @@ useAutomaticPagination({
         Could not check person matches.
         <Button variant="ghost" size="sm" @click="emit('retryHighlights')">Retry</Button>
       </div>
+      <!-- Reka disables both scroll axes when either scrollbar unmounts. Give
+           each orientation its own root so the old bar cannot disable the new one. -->
       <ScrollArea
+        :key="expanded ? 'grid' : 'strip'"
         type="always"
         :orientation="expanded ? 'vertical' : 'horizontal'"
         class="w-full"

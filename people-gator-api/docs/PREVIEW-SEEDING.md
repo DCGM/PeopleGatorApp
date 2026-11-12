@@ -1494,6 +1494,20 @@ resolve their source/page targets, inspect cross-batch membership and local
 thumbnail media, and preserve a reviewer's page-number edit on rerun.
 
 
+### Scrolling after expansion (#157)
+
+Open `document-page-browser-scroll` for **Page scrolling practice**, a synthetic
+document with 30 pages and local thumbnails. It opens in the compact strip.
+Choose **Expand pages**, then use the wheel, Page Down or a touch swipe over the
+grid. Scroll through the cursor batches to page 30. Choose **Collapse pages**
+and use the wheel over the strip to scroll horizontally again.
+
+The seed adds a separate document with stable page identities. Integration
+coverage resolves the entry route, reads all pages in order across cursor
+batches, checks the first and last thumbnails, and checks identity and
+processing timestamps on rerun.
+
+
 ### Document-first entry and retired Scans search (#141)
 
 Use `document-browse` to open the expanded page browser for the existing 14-page
