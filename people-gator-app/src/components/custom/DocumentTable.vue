@@ -185,6 +185,22 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
   },
   {
+    id: 'verification',
+    ...documentColumnSizing('verification'),
+    header: 'Verification',
+    accessorFn: (d) => (d.verification_state === 'verified' ? 'Verified' : 'Not verified'),
+  },
+  {
+    id: 'verified_page_count',
+    ...documentColumnSizing('verified_page_count'),
+    header: 'Verified pages',
+    accessorFn: (d) => d.verified_page_count,
+    cell: ({ row }) =>
+      row.original.verified_page_count == null || row.original.registered_page_count == null
+        ? 'Unknown'
+        : `${row.original.verified_page_count} / ${row.original.registered_page_count}`,
+  },
+  {
     accessorKey: 'linked_entity_count',
     ...documentColumnSizing('linked_entity_count'),
     header: 'Linked entities',
