@@ -5330,10 +5330,24 @@ async def test_page_verification_scenario_derives_documents_and_keeps_reviews(se
         library=["preview-verification"], verification_state=[not_verified])))
     assert {item.source_id for item in remaining.items} == {
         seed.pages["verification-partial-2"], seed.pages["verification-partial-3"]}
-    # The example opens a not-verified page with the strip scoped to such pages.
+    # Both viewer examples open page 2 beside the verified badge for page 1.
     example = urlsplit(seed.filter_examples["page-verification"])
-    assert example.path.endswith(f"/pages/{(await database.sources.get_page(seed.pages['verification-partial-2'])).page_id}")
-    assert parse_qs(example.query) == {"panel": ["info"], "gallery_not_verified": ["on"]}
+    expanded = urlsplit(seed.filter_examples["page-verification-expanded"])
+    active_page = await database.sources.get_page(seed.pages["verification-partial-2"])
+    assert expanded.path == example.path == (
+        f"/libraries/{active_page.library}/documents/{active_page.document_id}/pages/{active_page.page_id}"
+    )
+    assert parse_qs(example.query) == {"panel": ["info"]}
+    assert parse_qs(expanded.query) == {"panel": ["info"], "pages_view": ["expanded"]}
+    gallery = await database.sources.list_pages(PageListRequest(
+        limit=10, sort="page_number", sort_direction="asc",
+        filter_=PageListFilter(library=[active_page.library], document_id=[active_page.document_id]),
+    ))
+    assert [(item.source_id, item.verification_state) for item in gallery.items] == [
+        (seed.pages["verification-partial-1"], verified),
+        (active_page.source_id, not_verified),
+        (seed.pages["verification-partial-3"], not_verified),
+    ]
     assert parse_qs(urlsplit(seed.filter_examples["document-verification-not-verified"]).query) == {
         "library": ["preview-verification"], "verification": ["not_verified"]}
 

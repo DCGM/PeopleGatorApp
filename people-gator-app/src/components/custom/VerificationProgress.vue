@@ -2,8 +2,11 @@
 import { computed } from 'vue'
 import { verificationProgress } from '@/lib/verification'
 
-// A small ring and "verified/total" count for a document's pages (#149).
-const props = defineProps<{ verified?: number | null; total?: number | null }>()
+const props = defineProps<{
+  verified?: number | null
+  total?: number | null
+  hideCount?: boolean
+}>()
 const RADIUS = 6
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 const share = computed(() => verificationProgress(props.verified, props.total))
@@ -35,6 +38,6 @@ const label = computed(() =>
         :stroke-dasharray="`${share * CIRCUMFERENCE} ${CIRCUMFERENCE}`"
       />
     </svg>
-    <span aria-hidden="true">{{ known ? `${verified}/${total}` : '–/–' }}</span>
+    <span v-if="!hideCount" aria-hidden="true">{{ known ? `${verified}/${total}` : '–/–' }}</span>
   </span>
 </template>

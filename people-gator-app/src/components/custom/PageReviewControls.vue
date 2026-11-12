@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute, type LocationQuery } from 'vue-router'
-import { BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, CircleDashed } from '@lucide/vue'
-import type { DocumentResponse, PageResponse } from '@/client'
+import { BadgeCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDashed } from '@lucide/vue'
+import type { PageResponse } from '@/client'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,10 +18,9 @@ import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { useAdjacentPages } from '@/viewmodels/adjacent-pages'
 import { GALLERY_NOT_VERIFIED_KEY, GALLERY_PERSON_KEY } from '@/viewmodels/gallery-person'
 import { GALLERY_SORT_KEYS } from '@/viewmodels/sort-options'
-import VerificationProgress from './VerificationProgress.vue'
+import { GALLERY_VIEW_KEY } from '@/viewmodels/gallery-view'
 
-// Page review in the top bar (#149): document progress, verify, previous/next page.
-const props = defineProps<{ page: PageResponse; document?: DocumentResponse | null }>()
+const props = defineProps<{ page: PageResponse }>()
 const route = useRoute()
 const allowed = useCanAnnotate()
 const mutation = usePagePatchMutation()
@@ -45,6 +44,7 @@ const adjacent = useAdjacentPages(
 const KEPT = [
   GALLERY_PERSON_KEY,
   GALLERY_NOT_VERIFIED_KEY,
+  GALLERY_VIEW_KEY,
   'selectedPerson',
   'panel',
   GALLERY_SORT_KEYS.field,
@@ -68,13 +68,38 @@ const verifiedClasses =
 
 <template>
   <div class="flex shrink-0 items-center gap-1 sm:gap-2" role="group" aria-label="Page review">
-    <!-- Phones keep only Verify and Next beside the breadcrumb. -->
-    <span class="hidden sm:inline-flex">
-      <VerificationProgress
-        :verified="document?.verified_page_count"
-        :total="document?.registered_page_count"
-      />
-    </span>
+    <div class="flex items-center">
+      <Button
+        v-if="adjacent.previous.value"
+        variant="ghost"
+        size="icon-sm"
+        as-child
+        aria-label="Previous page"
+        title="Previous page"
+      >
+        <RouterLink :to="location(adjacent.previous.value)"
+          ><ChevronLeft aria-hidden="true"
+        /></RouterLink>
+      </Button>
+      <Button v-else variant="ghost" size="icon-sm" disabled aria-label="Previous page"
+        ><ChevronLeft aria-hidden="true"
+      /></Button>
+      <Button
+        v-if="adjacent.next.value"
+        variant="ghost"
+        size="icon-sm"
+        as-child
+        aria-label="Next page"
+        title="Next page"
+      >
+        <RouterLink :to="location(adjacent.next.value)"
+          ><ChevronRight aria-hidden="true"
+        /></RouterLink>
+      </Button>
+      <Button v-else variant="ghost" size="icon-sm" disabled aria-label="Next page"
+        ><ChevronRight aria-hidden="true"
+      /></Button>
+    </div>
     <template v-if="allowed">
       <DropdownMenu v-if="verified">
         <DropdownMenuTrigger as-child>
@@ -87,8 +112,8 @@ const verifiedClasses =
             data-page-verify
           >
             <BadgeCheck aria-hidden="true" />
-            <span class="hidden sm:inline">Verified</span>
-            <ChevronDown class="hidden sm:block" aria-hidden="true" />
+            <span class="hidden @xs:inline">Verified</span>
+            <ChevronDown class="hidden @lg:block" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -110,11 +135,12 @@ const verifiedClasses =
         class="text-emerald-700 dark:text-emerald-300"
         :disabled="mutation.isPending.value"
         aria-label="Verify page"
+        title="Verify page"
         data-page-verify
         @click="save('verified')"
       >
-        <CircleDashed aria-hidden="true" />
-        <span class="hidden sm:inline">Verify</span>
+        <Check aria-hidden="true" />
+        <span class="hidden @xs:inline">Verify</span>
       </Button>
     </template>
     <span
@@ -128,44 +154,5 @@ const verifiedClasses =
     <span v-if="mutation.isError.value" role="alert" class="sr-only"
       >Could not save verification.</span
     >
-    <div class="flex items-center">
-      <Button
-        v-if="adjacent.previous.value"
-        variant="ghost"
-        size="icon-sm"
-        class="hidden sm:inline-flex"
-        as-child
-        aria-label="Previous page"
-        title="Previous page"
-      >
-        <RouterLink :to="location(adjacent.previous.value)"
-          ><ChevronLeft aria-hidden="true"
-        /></RouterLink>
-      </Button>
-      <Button
-        v-else
-        variant="ghost"
-        size="icon-sm"
-        class="hidden sm:inline-flex"
-        disabled
-        aria-label="Previous page"
-        ><ChevronLeft aria-hidden="true"
-      /></Button>
-      <Button
-        v-if="adjacent.next.value"
-        variant="ghost"
-        size="icon-sm"
-        as-child
-        aria-label="Next page"
-        title="Next page"
-      >
-        <RouterLink :to="location(adjacent.next.value)"
-          ><ChevronRight aria-hidden="true"
-        /></RouterLink>
-      </Button>
-      <Button v-else variant="ghost" size="icon-sm" disabled aria-label="Next page"
-        ><ChevronRight aria-hidden="true"
-      /></Button>
-    </div>
   </div>
 </template>

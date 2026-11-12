@@ -188,6 +188,7 @@ async function mountView(renderActions = false) {
               AlertDialogCancel: true,
               DocumentControls: true,
               DocumentPageGallery: true,
+              PageReviewControls: true,
               // Like the real overlay: one card, for the selected face only.
               DocumentPageOverlay: {
                 name: 'DocumentPageOverlay',
@@ -342,6 +343,9 @@ describe('document page gallery navigation', () => {
     const gallery = wrapper.findComponent({ name: 'DocumentPageGallery' })
     const viewer = wrapper.get('.workspace-viewer').element
     expect(gallery.props('expanded')).toBe(true)
+    const review = wrapper.findComponent({ name: 'PageReviewControls' })
+    expect(review.element.closest('header.viewer-tools')).not.toBeNull()
+    expect(review.isVisible()).toBe(true)
     expect((viewer as HTMLElement).style.display).toBe('none')
     gallery.vm.$emit('update:expanded', false)
     await flushPromises()

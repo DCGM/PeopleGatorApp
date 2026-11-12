@@ -667,7 +667,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 )
             edit.complete = True
             await checkpoint_upgrades()
-    verification_document = next(item for item in DOCUMENTS if item.key == "verification-partial")
+    verification_page = next(item for item in PAGES if item.key == "verification-partial-2")
+    verification_document = next(item for item in DOCUMENTS if item.key == verification_page.document)
+    verification_path = (
+        f"/libraries/{verification_document.library}/documents/{verification_document.document_id}"
+        f"/pages/{verification_page.page_id}"
+    )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
@@ -1060,11 +1065,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-verification-not-verified": "/documents?" + urlencode({
                 "library": "preview-verification", "verification": "not_verified",
             }),
-            "page-verification": (
-                f"/libraries/{verification_document.library}/documents/{verification_document.document_id}"
-                f"/pages/{next(item.page_id for item in PAGES if item.key == 'verification-partial-2')}?"
-                + urlencode({"panel": "info", "gallery_not_verified": "on"})
-            ),
+            "page-verification": verification_path + "?" + urlencode({"panel": "info"}),
+            "page-verification-expanded": verification_path + "?" + urlencode({
+                "panel": "info", "pages_view": "expanded",
+            }),
             "document-table-widths": "/documents?" + urlencode({
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",

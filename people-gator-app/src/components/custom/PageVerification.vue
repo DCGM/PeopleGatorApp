@@ -6,7 +6,6 @@ import { annotationChangeTime } from '@/lib/annotation-change-time'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import VerificationBadge from './VerificationBadge.vue'
 
-// Page review state (#149); the Verify action lives in the top bar.
 const props = defineProps<{ page: PageResponse }>()
 const verified = computed(() => props.page.verification_state === 'verified')
 const users = usePeopleFilterOptions(

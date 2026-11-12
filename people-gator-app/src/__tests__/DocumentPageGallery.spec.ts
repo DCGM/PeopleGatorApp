@@ -165,7 +165,7 @@ describe('DocumentPageGallery', () => {
     expect(wrapper.get('[role=alert]').text()).toContain('Could not load document pages.')
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
       'Person only',
-      '',
+      'Not verified only',
       '',
       'Retry pages',
     ])
@@ -252,17 +252,34 @@ describe('DocumentPageGallery', () => {
     wrapper.unmount()
   })
 
-  it('marks verified pages and toggles the not-verified scope (#149)', async () => {
-    const { wrapper } = await mountGallery()
-    const links = wrapper.findAll('ol a')
-    expect(links[2]!.attributes('aria-label')).toContain(', verified')
-    expect(links[0]!.attributes('aria-label')).not.toContain('verified')
-    expect(wrapper.findAll('[data-page-verified]')).toHaveLength(1)
-    expect(links[2]!.find('[data-page-verified]').exists()).toBe(true)
-    const toggle = wrapper.get('button[aria-label="Not verified pages only"]')
-    expect(toggle.attributes('aria-pressed')).toBe('false')
-    await toggle.trigger('click')
-    expect(wrapper.emitted('update:notVerifiedOnly')).toEqual([[true]])
-    wrapper.unmount()
-  })
+  it.each([false, true])(
+    'shows progress and verified badges with expanded=%s',
+    async (expanded) => {
+      const { wrapper } = await mountGallery({
+        documentName: 'Verification in progress',
+        documentPageCount: 3,
+        verifiedPageCount: 1,
+        expanded,
+      })
+      const title = wrapper.get('#document-pages-title')
+      const ring = wrapper.get('[data-verification-progress]')
+      expect(ring.element.nextElementSibling).toBe(title.element)
+      expect(ring.text()).toBe('')
+      expect(ring.attributes('aria-label')).toBe('1 of 3 pages verified')
+      const links = wrapper.findAll('ol a')
+      expect(links[2]!.attributes('aria-label')).toContain(', verified')
+      expect(links[0]!.attributes('aria-label')).not.toContain('verified')
+      expect(wrapper.findAll('[data-verification-badge]')).toHaveLength(1)
+      const badge = links[2]!.get('[data-verification-badge]')
+      expect(badge.text()).toBe('Verified')
+      expect(badge.find('svg').exists()).toBe(true)
+      const toggle = wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Not verified only')!
+      expect(toggle.attributes('aria-pressed')).toBe('false')
+      await toggle.trigger('click')
+      expect(wrapper.emitted('update:notVerifiedOnly')).toEqual([[true]])
+      wrapper.unmount()
+    },
+  )
 })

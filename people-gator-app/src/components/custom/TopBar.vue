@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import ArchiveLink from './ArchiveLink.vue'
-import PageReviewControls from './PageReviewControls.vue'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
 import { FileText, User } from '@lucide/vue'
@@ -169,11 +168,6 @@ const isPeopleRoute = computed(
       :url="pageQuery.data.value?.url"
       compact
       class="self-center"
-    />
-    <PageReviewControls
-      v-if="route.name === 'document-page' && pageQuery.data.value"
-      :page="pageQuery.data.value"
-      :document="documentQuery.data.value"
     />
 
     <div class="flex shrink-0 items-center gap-3 sm:gap-6">

@@ -6,7 +6,7 @@ import PageVerification from '@/components/custom/PageVerification.vue'
 import PageReviewControls from '@/components/custom/PageReviewControls.vue'
 import VerificationProgress from '@/components/custom/VerificationProgress.vue'
 import { verificationProgress } from '@/lib/verification'
-import type { DocumentResponse, PageResponse } from '@/client'
+import type { PageResponse } from '@/client'
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -46,7 +46,6 @@ const page = (id: string, extra: Partial<PageResponse> = {}) =>
     verification_state: 'not_verified',
     ...extra,
   }) as PageResponse
-const document = { verified_page_count: 1, registered_page_count: 3 } as DocumentResponse
 
 async function mountControls(current: PageResponse) {
   const router = createRouter({
@@ -62,10 +61,10 @@ async function mountControls(current: PageResponse) {
   await router.push({
     name: 'document-page',
     params: { libraryId: 'lib', documentId: 'doc', pageId: current.page_id },
-    query: { panel: 'info', gallery_not_verified: 'on', person: 'face' },
+    query: { panel: 'info', gallery_not_verified: 'on', person: 'face', pages_view: 'expanded' },
   })
   const wrapper = mount(PageReviewControls, {
-    props: { page: current, document },
+    props: { page: current },
     attachTo: window.document.body,
     global: { plugins: [router] },
   })
@@ -107,20 +106,19 @@ describe('page verification (#149)', () => {
     expect(mount(VerificationProgress).text()).toBe('–/–')
   })
 
-  it('verifies from the top bar and links the neighbouring pages', async () => {
+  it('verifies from the viewer controls and preserves the expanded gallery across page navigation', async () => {
     mocks.pages = [page('a'), page('b'), page('c')]
     const wrapper = await mountControls(page('b'))
-    expect(wrapper.get('[data-verification-progress]').text()).toBe('1/3')
     await wrapper.get('button[aria-label="Verify page"]').trigger('click')
     expect(mocks.mutate).toHaveBeenLastCalledWith({
       sourceId: 'source-b',
       payload: { verification_state: 'verified' },
     })
     expect(wrapper.get('a[aria-label="Previous page"]').attributes('href')).toBe(
-      '/libraries/lib/documents/doc/pages/a?gallery_not_verified=on&panel=info',
+      '/libraries/lib/documents/doc/pages/a?gallery_not_verified=on&pages_view=expanded&panel=info',
     )
     expect(wrapper.get('a[aria-label="Next page"]').attributes('href')).toBe(
-      '/libraries/lib/documents/doc/pages/c?gallery_not_verified=on&panel=info',
+      '/libraries/lib/documents/doc/pages/c?gallery_not_verified=on&pages_view=expanded&panel=info',
     )
     wrapper.unmount()
   })

@@ -44,6 +44,7 @@ import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import PanelBar from '@/components/custom/PanelBar.vue'
+import PageReviewControls from '@/components/custom/PageReviewControls.vue'
 import {
   GALLERY_NOT_VERIFIED_KEY,
   GALLERY_PERSON_KEY,
@@ -1027,8 +1028,10 @@ onBeforeUnmount(() => {
                   @reset-view="resetView"
                   @toggle-badge-names="showBadgeNames = !showBadgeNames"
                 />
-                <template v-if="isWideWorkspace && !sidebarVisible" #end>
+                <template v-if="page || (isWideWorkspace && !sidebarVisible)" #end>
+                  <PageReviewControls v-if="page" :page="page" />
                   <Button
+                    v-if="isWideWorkspace && !sidebarVisible"
                     type="button"
                     variant="ghost"
                     size="icon-sm"
@@ -1136,7 +1139,10 @@ onBeforeUnmount(() => {
                 v-model:expanded="galleryExpanded"
                 :document-name="documentQuery.data.value?.name || documentId"
                 :page-number="page?.page_number"
-                :document-page-count="page?.registered_page_count"
+                :document-page-count="
+                  documentQuery.data.value?.registered_page_count ?? page?.registered_page_count
+                "
+                :verified-page-count="documentQuery.data.value?.verified_page_count"
                 :selected-person-id="selectedPersonId"
                 :selected-person-name="gallerySelectedPerson.data.value?.name"
                 v-model:person-only="galleryPersonOnly"

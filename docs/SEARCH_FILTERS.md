@@ -229,9 +229,11 @@ their stored state. Documents match their derived state: verified when they have
 registered pages and all are verified, so documents without pages are not
 verified. Documents also sort by `verified_page_count`. The Documents panel
 offers **Verification** (URL `verification=verified|not_verified`), and the page
-strip's **Not verified** toggle sets `gallery_not_verified=on`. In the page
-viewer, the top bar holds Verify, the document's progress ring and
-previous/next page in page-number order; the latter keep strip settings.
+strip's **Not verified only** toggle sets `gallery_not_verified=on`. The viewer
+toolbar keeps verification and previous/next page available with the page list
+expanded. Previous and next follow page-number order and preserve gallery
+settings. The page list shows a verification progress ring before the document
+title and a **Verified** badge on each verified page.
 
 `has_unassigned_faces=false` includes documents without faces; text-mention
 assignment never satisfies this face-specific condition. Link statistics describe

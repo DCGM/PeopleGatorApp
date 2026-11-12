@@ -1574,12 +1574,13 @@ the document state derived from it. The reviewer verifies three pages once:
   Verified / grey Not verified label) and **Verified pages** (progress ring and
   count) columns. `document-verification-not-verified` applies the
   **Verification: Not verified** filter.
-- Open `page-verification`: page 2 of the in-progress document with the info
-  panel open and the page strip set to **Not verified**. The top bar shows the
-  document's progress ring (1/3), **Verify** and previous/next page. Verify,
-  press next, verify page 3: the ring reaches 3/3 and the document becomes
-  Verified. The green **Verified** button's menu shows who verified the page
-  and offers **Remove verification**.
+- Open `page-verification` for page 2 of the in-progress document, or
+  `page-verification-expanded` for the same page with the page list expanded.
+  Both show the progress ring before the document name and a **Verified** badge
+  for page 1. Use **Verify** in the viewer toolbar, go to the next page, and
+  verify page 3 to fill the ring. The **Verified** menu shows the reviewer and
+  offers **Remove verification**. Turn on **Not verified only** to see the pages
+  still awaiting review.
 - Page 1 of the first document is verified while its face stays unassigned:
   page verification never changes evidence link states.
 
