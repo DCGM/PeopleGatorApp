@@ -994,7 +994,16 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             ),
             # Issue #33: every list sorts its complete result set before paging.
             # Existing portraits demonstrate the lightweight plus tile in either theme.
-            "person-review-found-faces": f"/people/{manifest.entities['review']}?discovery_model={DISCOVERY_MODEL}&people_annotations=all#similar-faces-heading",
+            # #163: use similarity ordering with Lina's large reference set.
+            "person-review-found-faces": (
+                f"/people/{manifest.entities['review']}?"
+                + urlencode({
+                    "discovery_model": DISCOVERY_MODEL,
+                    "people_annotations": "all",
+                    "similar_sort": "relevance",
+                })
+                + "#similar-faces-heading"
+            ),
             "person-review-overflow-card": f"/people/{manifest.entities['review']}",
             "person-review-faces": f"/people/{manifest.entities['review']}",
             "person-review-loading": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=document",

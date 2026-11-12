@@ -946,9 +946,11 @@ reference documents. Assignment filtering applies before pagination, so the
 match count and loaded pages agree. Change the model or assignment to restart
 the overview; previously loaded choices are not left selected out of view.
 
-The seed integration regression walks assigned and unassigned cursor pages,
-checks disjoint complete coverage and confirms the reference person's own faces
-stay excluded. It reuses existing local media, models and checkpoint identities.
+The link opens Found faces sorted by **Similarity**. For #163, use **Show more**
+and reload the link to compare the result order while the data stays the same.
+Lina's 42 reference faces exercise the clustering path. The integration test
+compares scores and order before and after paging, checks complete coverage
+across both assignment filters and confirms Lina's own faces stay excluded.
 
 ### Expanded and compact mentions (#80)
 

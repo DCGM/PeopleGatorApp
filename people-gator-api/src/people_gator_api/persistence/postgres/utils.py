@@ -171,6 +171,8 @@ async def representative_face_vectors(
             FaceQueryRepresentative(query_id, vector, 1) for query_id, vector in items
         ]
 
+    # Sort by face ID so k-means sees the same input order across query plans.
+    items.sort(key=lambda item: item[0].int)
     points = type_cast(
         FloatArray,
         normalize(

@@ -3639,14 +3639,33 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
 
 @pytest.mark.asyncio
 async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(seed_target):
-    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+    from people_gator_api.persistence.postgres.utils import (
+        FACE_SEARCH_REPRESENTATIVE_LIMIT,
+    )
     from people_gator_api.schemas.search import EntitySearchQuery
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
-    assert 'people_annotations=all' in seed.filter_examples['person-review-found-faces']
-    query = EntitySearchQuery(entity_id=person, entity_annotations=['faces'], face_embedding_model=DISCOVERY_MODEL)
-    whole = await db.faces.search(SearchFacesRequest(limit=100, query=query, return_total_count=True))
+    example = urlsplit(seed.filter_examples['person-review-found-faces'])
+    assert example.path == f'/people/{person}'
+    assert example.fragment == 'similar-faces-heading'
+    assert parse_qs(example.query) == {
+        'discovery_model': [DISCOVERY_MODEL],
+        'people_annotations': ['all'],
+        'similar_sort': ['relevance'],
+    }
+    reference_faces = await db.faces.list(
+        FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person]))
+    )
+    reference_count = sum(DISCOVERY_MODEL in face.embeddings for face in reference_faces.items)
+    assert reference_count > FACE_SEARCH_REPRESENTATIVE_LIMIT
+    query = EntitySearchQuery(
+        entity_id=person, entity_annotations=['faces'], face_embedding_model=DISCOVERY_MODEL,
+    )
+    whole_request = SearchFacesRequest(limit=100, query=query, return_total_count=True)
+    whole = await db.faces.search(whole_request)
     assert whole.total_count > 14
     assert all(face.entity_id != person for face in whole.items)
     partitions = []
@@ -3663,12 +3682,18 @@ async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(s
         assert len(totals) == 1 and totals.pop() == len(records)
         assert len({face.detection_id for face in records}) == len(records)
         assert all((face.entity_id is not None) is assigned for face in records)
+        # Assignment filtering recalculates RRF ranks. Compare raw similarity and order.
+        assert [(face.detection_id, face.face_score) for face in records] == [
+            (face.detection_id, face.face_score)
+            for face in whole.items
+            if (face.entity_id is not None) is assigned
+        ]
         partitions.append({face.detection_id for face in records})
     assert not (partitions[0] & partitions[1])
     assert partitions[0] | partitions[1] == {face.detection_id for face in whole.items}
     assert seed.faces['review-unassigned'] in partitions[1]
     assert seed.faces['review-candidate'] in partitions[0]
-    assert 'person-review-found-faces' in seed.filter_examples
+    assert await db.faces.search(whole_request) == whole
 
 
 @pytest.mark.asyncio
