@@ -3,9 +3,7 @@ import PersonNameTitle from './PersonNameTitle.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import type { ActiveFilter } from './ActiveFilters.vue'
-import SharedFilterControls from './SharedFilterControls.vue'
-import SharedFilterTags from './SharedFilterTags.vue'
+import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import ListPagination from './ListPagination.vue'
 import ScanFaceThumbnail from './ScanFaceThumbnail.vue'
@@ -24,25 +22,20 @@ import {
   type FaceView,
 } from '@/viewmodels/scan-sidebar'
 
-const props = withDefaults(
-  defineProps<{
-    items: ScanFaceItem[]
-    groups: ScanFaceGroup[]
-    loading: boolean
-    hasNextPage: boolean
-    isFetching: boolean
-    error?: unknown
-    totalCount?: number
-    selectedFaceId: string | null
-    /** Evidence link-state filters narrow these faces too. */
-    filtered?: boolean
-    loadMore: () => Promise<unknown>
-    retry: () => unknown
-    /** False while the URL carries an invalid filter; results stay hidden. */
-    enabled?: boolean
-  }>(),
-  { enabled: true },
-)
+const props = defineProps<{
+  items: ScanFaceItem[]
+  groups: ScanFaceGroup[]
+  loading: boolean
+  hasNextPage: boolean
+  isFetching: boolean
+  error?: unknown
+  totalCount?: number
+  selectedFaceId: string | null
+  /** Evidence link-state filters narrow these faces too. */
+  filtered?: boolean
+  loadMore: () => Promise<unknown>
+  retry: () => unknown
+}>()
 const scope = defineModel<EvidenceScope>('scope', { required: true })
 const view = defineModel<FaceView>('view', { required: true })
 const sort = defineModel<SortState<FaceSortField>>('sort', { required: true })
@@ -90,17 +83,16 @@ function location(item: ScanFaceItem) {
           :options="WORKSPACE_FACE_SORTS"
           label="Sort faces"
         />
-        <SharedFilterControls :controls="['creators', 'creationDates']" />
       </SearchFilterPanel>
-      <SharedFilterTags
-        creation-only
-        :specific-filters="tags"
-        :specific-keys="['face_scope', 'page_link_state']"
-        @remove-specific="scope = 'page'"
+      <ActiveFilters
+        :filters="tags"
+        clear-label="Clear filters"
+        @remove="scope = 'page'"
+        @clear="scope = 'page'"
       />
     </div>
     <ScrollArea class="min-h-0 flex-1" :aria-busy="loading || isFetching">
-      <div v-if="enabled" class="px-3 pb-3 pt-3">
+      <div class="px-3 pb-3 pt-3">
         <p v-if="!loading" class="mb-2 text-xs text-muted-foreground" role="status">
           {{ totalCount ?? items.length }}
           {{ (totalCount ?? items.length) === 1 ? 'face' : 'faces' }}

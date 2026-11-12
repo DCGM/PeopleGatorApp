@@ -17,7 +17,6 @@ const links = Object.fromEntries(
 )
 const append = (url, params) => url + (url.includes('?') ? '&' : '?') + new URLSearchParams(params)
 const reviewer = new URL(links['documents-created-by'], origin).searchParams.get('created_by')
-const importerKey = new URL(links['documents-created-key'], origin).searchParams.get('created_key')
 const scenarios = [
   ['documents', links['documents-created-by'], 'documents', '/api/v1/documents'],
   ['people', links['people-created-by'], 'Search people panel', '/api/v1/search-entities'],
@@ -34,18 +33,6 @@ const scenarios = [
     append(links['scan-sidebar-people'], { created_by: reviewer }),
     'sidebar-people',
     '/api/v1/entities',
-  ],
-  [
-    'sidebar-faces',
-    append(links['scan-sidebar-faces'], { created_key: importerKey }),
-    'Faces panel',
-    '/api/v1/faces',
-  ],
-  [
-    'sidebar-mentions',
-    append(links['scan-sidebar-mentions'], { created_key: importerKey }),
-    'Mentions panel',
-    '/api/v1/text-mention-groups',
   ],
 ]
 await mkdir(output, { recursive: true })
@@ -157,20 +144,6 @@ try {
         `${viewport} ${name}: controls, URL restoration, backend parameters and no horizontal overflow passed`,
       )
     }
-    // Reset both kinds of criterion in one URL update.
-    await page.goto(
-      origin +
-        append(links['scan-sidebar-faces'], {
-          created_from: '2100-01-01T00:00:00Z',
-          page_link_state: 'verified',
-        }),
-    )
-    await page.getByRole('button', { name: 'Reset filters', exact: true }).click()
-    await page.waitForFunction(
-      () =>
-        !new URL(location.href).searchParams.has('created_from') &&
-        !new URL(location.href).searchParams.has('page_link_state'),
-    )
     assert.deepEqual(errors, [], 'No browser errors')
     await context.close()
   }

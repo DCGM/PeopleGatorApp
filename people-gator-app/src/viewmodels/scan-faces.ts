@@ -1,4 +1,3 @@
-import type { CreationQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -72,22 +71,18 @@ export function useScanFaces(options: {
   view: MaybeRefOrGetter<FaceView>
   sort: MaybeRefOrGetter<SortState<FaceSortField>>
   linkStates: MaybeRefOrGetter<EntityLinkState[]>
-  filters?: MaybeRefOrGetter<CreationQuery>
   enabled?: MaybeRefOrGetter<boolean>
 }) {
   const params = computed(() => {
     const sources = toValue(options.sources)
     return sources
-      ? {
-          ...toValue(options.filters ?? {}),
-          ...scanFaceParams(
-            toValue(options.scope),
-            toValue(options.view),
-            toValue(options.sort),
-            sources,
-            toValue(options.linkStates),
-          ),
-        }
+      ? scanFaceParams(
+          toValue(options.scope),
+          toValue(options.view),
+          toValue(options.sort),
+          sources,
+          toValue(options.linkStates),
+        )
       : undefined
   })
   const query = useFaceListQuery(

@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
-import type { CreationQuery } from '@/viewmodels/shared-filters'
-import type { ActiveFilter } from './ActiveFilters.vue'
-import SharedFilterControls from './SharedFilterControls.vue'
-import SharedFilterTags from './SharedFilterTags.vue'
+import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import PersonMentionGroups from './PersonMentionGroups.vue'
 import ScanMentionsByPerson from './ScanMentionsByPerson.vue'
@@ -23,15 +20,10 @@ import {
   type MentionView,
 } from '@/viewmodels/scan-sidebar'
 
-const props = withDefaults(
-  defineProps<{
-    creationFilters?: CreationQuery
-    enabled?: boolean
-    sources: { page: string; document: string } | null
-    linkStates: EntityLinkState[]
-  }>(),
-  { enabled: true },
-)
+const props = defineProps<{
+  sources: { page: string; document: string } | null
+  linkStates: EntityLinkState[]
+}>()
 const scope = defineModel<EvidenceScope>('scope', { required: true })
 const view = defineModel<MentionView>('view', { required: true })
 const sort = defineModel<SortState<TextMentionSortField>>('sort', { required: true })
@@ -42,7 +34,6 @@ const emit = defineEmits<{ resetFilters: [] }>()
 
 // Linked and unlinked occurrences alike, unless link states narrow the evidence.
 const filters = computed<TextMentionListParams>(() => ({
-  ...props.creationFilters,
   ...(props.sources &&
     (scope.value === 'page'
       ? { 'filter.page_source_id': [props.sources.page] }
@@ -74,18 +65,17 @@ const tags = computed<ActiveFilter[]>(() =>
           :options="SCAN_MENTION_SORTS"
           label="Sort mentions"
         />
-        <SharedFilterControls :controls="['creators', 'creationDates']" />
       </SearchFilterPanel>
-      <SharedFilterTags
-        creation-only
-        :specific-filters="tags"
-        :specific-keys="['mention_scope', 'page_link_state']"
-        @remove-specific="scope = 'page'"
+      <ActiveFilters
+        :filters="tags"
+        clear-label="Clear filters"
+        @remove="scope = 'page'"
+        @clear="scope = 'page'"
       />
     </div>
     <ScrollArea class="min-h-0 flex-1">
       <div class="px-3 pb-3">
-        <template v-if="sources && enabled">
+        <template v-if="sources">
           <PersonMentionGroups
             v-if="view === 'group'"
             mode="mention"

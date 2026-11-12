@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CREATION_KEYS, useCreationFilters } from '@/viewmodels/shared-filters'
+import { useCreationFilters } from '@/viewmodels/shared-filters'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
@@ -12,7 +12,7 @@ import {
 } from '@/composables/workspace-split'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
@@ -82,7 +82,6 @@ import {
 const minimumZoomPercent = MINIMUM_ZOOM * 100
 const maximumZoomPercent = MAXIMUM_ZOOM * 100
 const route = useRoute()
-const router = useRouter()
 // The transcription panel is always left of the scan on wide screens and above
 // it on narrow ones; each layout remembers its own user-resized split.
 const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
@@ -98,12 +97,6 @@ const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter('page_link_state')
 const creation = useCreationFilters()
-function resetEvidenceFilters() {
-  const cleared = new Set<string>([...CREATION_KEYS, 'page_link_state', 'cursor', 'page_cursor'])
-  void router.push({
-    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => !cleared.has(key))),
-  })
-}
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -381,8 +374,7 @@ const scanFaces = reactive(
     view: faceView,
     sort: faceSort,
     linkStates,
-    filters: creation.params,
-    enabled: () => sidebarState.value.tab === 'faces' && !creation.error.value,
+    enabled: () => sidebarState.value.tab === 'faces',
   }),
 )
 function removeSearchFace() {
@@ -1070,14 +1062,13 @@ onBeforeUnmount(() => {
               :has-next-page="scanFaces.hasNextPage"
               :is-fetching="scanFaces.isFetching"
               :error="scanFaces.error"
-              :enabled="!creation.error.value"
               :total-count="scanFaces.totalCount"
               :selected-face-id="selectedFace?.id ?? null"
-              :filtered="linkStates.length > 0 || Object.keys(creation.params.value).length > 0"
+              :filtered="linkStates.length > 0"
               :load-more="scanFaces.loadMore"
               :retry="scanFaces.retry"
               @select="selectFace"
-              @reset-filters="resetEvidenceFilters"
+              @reset-filters="linkStates = []"
             />
           </TabsContent>
           <TabsContent value="mentions" class="mt-0 flex min-h-0 flex-1 flex-col">
@@ -1088,9 +1079,7 @@ onBeforeUnmount(() => {
               v-model:group-sort="mentionGroupSort"
               :sources="sources"
               :link-states="linkStates"
-              :creation-filters="creation.params.value"
-              :enabled="!creation.error.value"
-              @reset-filters="resetEvidenceFilters"
+              @reset-filters="linkStates = []"
             />
           </TabsContent>
           <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">

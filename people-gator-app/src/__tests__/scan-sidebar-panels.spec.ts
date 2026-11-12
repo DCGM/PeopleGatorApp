@@ -1,10 +1,8 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { h, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import ScanFacesPanel from '@/components/custom/ScanFacesPanel.vue'
 import ScanPeoplePanel from '@/components/custom/ScanPeoplePanel.vue'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
-import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 
@@ -330,33 +328,5 @@ describe('People panel (#103)', () => {
     expect(wrapper.emitted('assign')).toBeUndefined()
     await wrapper.get('button[aria-label="Assign to Ada"]').trigger('click')
     expect(wrapper.emitted('assign')).toHaveLength(1)
-  })
-})
-
-describe('Faces panel (#128)', () => {
-  it('hides cached faces and the empty state while the link has an invalid filter', () => {
-    const props = {
-      items: [],
-      groups: [],
-      loading: false,
-      hasNextPage: false,
-      isFetching: false,
-      totalCount: 3,
-      selectedFaceId: null,
-      filtered: true,
-      scope: 'page' as const,
-      view: 'flat' as const,
-      sort: FACE_DEFAULT,
-      loadMore: vi.fn(() => Promise.resolve()),
-      retry: vi.fn(),
-    }
-    const global = {
-      stubs: { ...stubs, SharedFilterControls: true, SharedFilterTags: true, ListPagination: true },
-    }
-    const shown = mount(ScanFacesPanel, { props, global })
-    expect(shown.text()).toContain('3 faces')
-    const hidden = mount(ScanFacesPanel, { props: { ...props, enabled: false }, global })
-    expect(hidden.text()).not.toContain('3 faces')
-    expect(hidden.text()).not.toContain('No faces')
   })
 })

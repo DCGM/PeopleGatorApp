@@ -507,7 +507,7 @@ modification filters retain their separate meanings.
 
 These controls use the shared panel and active tags, including mobile collapse,
 individual removal, clear-all that preserves search, Back/Forward restoration
-and pagination reset. The scan sidebar applies them to the resource in its active
-People, Faces or Mentions tab. The legacy Weaviate adapter explicitly rejects
+and pagination reset. The scan sidebar offers them in its People tab only; its
+Faces and Mentions tabs have no creation filters. The legacy Weaviate adapter explicitly rejects
 creation filters with an unsupported-operation response rather than ignoring them.
 Creation sorting is unchanged.
