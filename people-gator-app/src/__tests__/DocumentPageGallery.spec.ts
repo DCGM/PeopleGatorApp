@@ -181,6 +181,8 @@ describe('DocumentPageGallery', () => {
       selectedPersonName: 'Nora Page',
       items: [item(1, true), { ...item(2), matchesSelectedPerson: true }, item(3)],
     })
+    const strip = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    expect(strip.style.overflowX).toBe('scroll')
     const expand = wrapper.get('button[aria-label="Expand pages"]')
     expect(expand.attributes('aria-expanded')).toBe('false')
     expect(expand.attributes('aria-controls')).toBe('document-pages-list')
@@ -199,11 +201,15 @@ describe('DocumentPageGallery', () => {
       'border-2',
     )
     expect(wrapper.get('[data-person-match="true"]').classes()).toContain('border-0')
-    expect(wrapper.get('[aria-label="Document pages grid"]').attributes('tabindex')).toBe('0')
+    const grid = wrapper.get('[aria-label="Document pages grid"]')
+    expect(grid.attributes('tabindex')).toBe('0')
+    expect((grid.element as HTMLElement).style.overflowY).toBe('scroll')
     await wrapper.get('button[aria-label="Collapse pages"]').trigger('click')
     expect(wrapper.emitted('update:expanded')).toEqual([[true], [false]])
     await wrapper.setProps({ expanded: false })
     expect(wrapper.get('ol').classes()).toContain('w-max')
+    const collapsed = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    expect(collapsed.style.overflowX).toBe('scroll')
     wrapper.unmount()
   })
 
