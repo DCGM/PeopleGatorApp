@@ -8,12 +8,15 @@ import {
   defaultDocumentColumnOrder,
   defaultDocumentColumns,
   documentColumnSizing,
+  DOCUMENT_COLUMN_SIZING_STORAGE_KEY,
 } from '@/viewmodels/document-table'
 import type { DocumentResponse } from '@/client'
 
 const media = vi.hoisted(() => ({ image: vi.fn() }))
 vi.mock('@/client', () => ({ getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: media.image }))
 beforeEach(() => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
   media.image.mockReset()
   media.image.mockResolvedValue({ data: new Blob(['page'], { type: 'image/jpeg' }) })
   vi.stubGlobal('URL', { createObjectURL: () => 'blob:first-page', revokeObjectURL: vi.fn() })
@@ -49,7 +52,7 @@ async function render() {
     routes: [
       { path: '/pages/:pageSourceId', name: 'page-source', component: { template: '<div />' } },
       { path: '/documents', name: 'document-list', component: { template: '<div />' } },
-      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
     ],
   })
   await router.push('/documents?view=table&library=Archive&link_state=verified')
@@ -242,6 +245,12 @@ describe('document table', () => {
   })
   it('adds one hidden column from the grouped header menu, also opened from any column cell', async () => {
     const { wrapper, visibility, order } = await render()
+    await wrapper
+      .get('[role="separator"][aria-label="Resize Document name column"]')
+      .trigger('keydown', { key: 'End' })
+    expect((wrapper.get('col[data-column="name"]').element as HTMLElement).style.width).toBe(
+      '720px',
+    )
     const trigger = wrapper.get('th[data-add-column] button')
     expect(trigger.text()).toBe('Add column')
     await wrapper.get('tbody td[data-add-column]').trigger('click')
@@ -279,6 +288,10 @@ describe('document table', () => {
     await flushPromises()
     expect(visibility.value).toEqual(defaultDocumentColumns())
     expect(order.value).toEqual(defaultDocumentColumnOrder())
+    expect((wrapper.get('col[data-column="name"]').element as HTMLElement).style.width).toBe(
+      '320px',
+    )
+    expect(JSON.parse(window.localStorage.getItem(DOCUMENT_COLUMN_SIZING_STORAGE_KEY)!)).toEqual({})
   })
   it('opens each column menu from its chevron-marked name to move or remove the column', async () => {
     const { wrapper, visibility } = await render()

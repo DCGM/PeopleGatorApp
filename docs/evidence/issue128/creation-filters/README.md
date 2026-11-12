@@ -9,7 +9,6 @@ Each pair shows the same shared creation controls and an applied criterion:
 
 - `documents`: document sidebar/mobile drawer.
 - `people`: person search.
-- `scans`: registered-page search with an inclusive date interval.
 - `person-faces` and `person-mentions`: person evidence tabs.
 - `creator-picker`: open creator multi-select.
 - `date-picker`: open creation calendar/time control.

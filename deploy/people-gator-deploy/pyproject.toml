@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "people-gator-deploy"
-version = "1.0.1"
-description = "Trusted PeopleGator deployment lifecycles"
+version = "2.0.0"
+description = "PeopleGator deployment lifecycles for PR previews, staging and releases"
 requires-python = ">=3.11"
 # Pin the complete small S3 client dependency set, matching the backend lock.
 dependencies = [
@@ -18,4 +18,4 @@ dependencies = [
 people-gator-deploy = "people_gator_deploy.cli:main"
 
 [tool.setuptools.package-data]
-people_gator_deploy = ["assets/*", "build.json"]
+people_gator_deploy = ["assets/*"]

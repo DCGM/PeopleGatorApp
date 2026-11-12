@@ -162,56 +162,69 @@ server only. Development Compose uses root `.env` values `POSTGRES_*`,
 `HTTP_HOST`, `HTTP_PORT`, `PUBLIC_ORIGIN`, `HTTP_API_BASE_URL`, `DOCKER_SOCKET` and
 optional `OPENROUTER_API_KEY`; it maps them to container settings.
 
-## CI and preview lifecycle
+## CI and deployment lifecycle
 
-[`pr-ci.yml`](../.github/workflows/pr-ci.yml) runs on pull requests using the exact
-head commit on ephemeral GitHub-hosted `ubuntu-24.04` runners. PR code never runs
-on self-hosted deployment runners:
+One workflow, [`ci.yml`](../.github/workflows/ci.yml), runs tests, publishes
+images and deploys, with the deploy jobs gated by the event. Tests and image
+builds run on ephemeral GitHub-hosted `ubuntu-24.04` runners using the exact PR
+head commit:
 
 1. Frontend: Node 24, `npm ci`, type-check and Vitest.
 2. Backend: Python 3.14/uv locked sync, isolated PostgreSQL test databases,
-   migration → seed → seed → check CLI smoke test, then pytest.
-3. Trusted deployment-utility tests checked out from the workflow commit in a
-   separate location, including DB isolation checks, a wheel built and run
-   outside the checkout, and the database-only snapshot suite with the backend
-   environment. CI uses no secrets or external services; the S3 backup and
-   snapshot-restore suites run locally only.
-4. After checks pass, same-repository PRs build both production Dockerfiles and
-   publish run/attempt-specific tags to GHCR, reusing layers from the Actions cache. Fork PRs receive tests but no image
-   publication/deployment. Images carry the tested revision label.
+   migration → seed → seed → check CLI smoke test, pytest, the database-only
+   snapshot suite, and the deployment utility tests (lifecycles, workflow steps,
+   runner guard, DB isolation) from the same checkout, plus an install of the
+   utility exactly as the deploy jobs perform it. CI uses no secrets or external
+   services; the S3 backup and snapshot-restore suites run locally only.
+3. `images`: both production Dockerfiles are built with the Actions layer cache
+   and labeled with the tested commit; same-repository events publish them to
+   GHCR as `sha-<commit>`. Fork PRs receive tests and a build but no publication
+   or deployment.
+4. Deploy jobs (`needs: images`) run on the self-hosted runners in the same run:
+   `deploy-preview` for same-repository PRs, `deploy-staging` for pushes to
+   `main` (and manual runs on `main` with an `operation` input),
+   `deploy-release` for `v*` tags on `main`. `remove-preview` runs when a PR
+   closes; `prune-previews` runs after a staging deploy, daily and on manual
+   runs. The whole pipeline is visible in one run; nothing is chained through
+   `workflow_run`.
 
-[`pr-preview.yml`](../.github/workflows/pr-preview.yml),
-[`staging.yml`](../.github/workflows/staging.yml) and
-[`release.yml`](../.github/workflows/release.yml) only select the trusted utility
-and invoke it. Each job checks out its own reviewed workflow commit (never a PR
-head), installs or reuses that exact `people-gator-deploy` revision through
-`deploy/install.py --user` without sudo, runs `<environment> preflight` and then
-one lifecycle operation with the pinned versioned executable. The installer
-rejects non-default workflow sources (release tags must point at commits on
-`main`). The self-hosted runners' [job-started guard](../deploy/runner/job-started.sh)
-refuses every other workflow before its first step; protect and review `main`
-(see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners-and-tokens)). The utility verifies repository/open-PR/current-head identity, pulls
-candidate images with temporary registry credentials, verifies their revisions
-and deploys by immutable digest. Preview order is selected PR container removal → storage initialization →
-migration → seed → backend/frontend health → routed readiness. A failed seed
-blocks success. Existing database, media and JWT keys survive successful preview
-updates. Container removal retains volumes and the database; it also replaces a
-previous per-PR stack when local instance state is unavailable. Expect downtime
-during preparation, including until a successful retry after a failed migration
-or seed. Each PR uses a restricted database role.
+Each deploy job checks out its own commit, installs
+[`people-gator-deploy`](../deploy/people-gator-deploy/README.md) into the job's
+temporary directory, runs `<environment> preflight`, then one operation with
+`--sha <tested commit>`, then sets superseded GitHub Deployments inactive. A PR
+therefore deploys with the deploy code of its own branch; staging uses `main`
+and releases the tagged commit. Each environment is configured by a short list
+of repository variables and secrets (`PREVIEW_*`, `STAGING_*`, `PRODUCTION_*`:
+host, database URL, storage, OTel, RUM, users), listed in
+[GitHub setup](../deploy/GITHUB-SETUP.md); everything else is a convention. Hosts keep only state directories and the self-hosted runners' [job-started
+guard](../deploy/runner/job-started.sh), which admits only this repository's
+events for the runner's environment and refuses fork pull requests
+(see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners)).
 
-Close events clean up that PR's containers, storage, database and role; hourly and
-manual reconciliation retry missed cleanup. Shared PostgreSQL, pgAdmin and logging
-remain running. A failed migration has no automatic schema rollback.
+The utility verifies repository/open-PR/current-head identity, pulls the
+tested commit's images with temporary registry credentials, verifies their
+revision labels and deploys by immutable digest. Preview order is selected PR
+container removal → storage initialization → migration → seed → backend/frontend
+health → routed readiness. A failed seed blocks success and fails the job.
+The backend exports logs, traces and metrics directly to the operator's OTLP
+collector; container output stays in local rotating `json-file` logs
+([Observability](OBSERVABILITY.md)).
+Existing database, media and JWT keys survive successful preview updates.
+Container removal retains volumes and the database; it also replaces a previous
+per-PR stack when local instance state is unavailable. Expect downtime during
+preparation, including until a successful retry after a failed migration or
+seed. Each PR uses a restricted database role.
 
-Install the utility and configure each environment's descriptor once using the
-[utility guide](../deploy/people-gator-deploy/README.md); installation is fresh
-only and never takes over existing state. Shared-infrastructure
-initialization/upgrades remain explicit operator actions; routine installs do not
-recreate services or reset credentials/state. PR code must never become the host
-controller. In each descriptor, set `repository` to `DCGM/PeopleGatorApp`. GHCR
-image names are derived from the configured repository. Provision the documented
-DNS, Traefik, logging network, runner isolation and token permissions before
-enabling deployment (see the [host prerequisites](../deploy/people-gator-deploy/HOSTS.md)).
-Utility versions referenced by running jobs or container mounts are retained; no
-automatic version pruning or database rollback is performed.
+Every deploy job declares its GitHub Environment with the application URL, so
+each deploy appears under the repository's **Deployments**; after success only
+the current deployment per environment (per PR for previews) stays active.
+Closing a PR removes that PR's containers, storage, database and role and sets
+its deployments inactive; the daily and post-staging prune repeats both for any
+preview whose PR is no longer open. Shared PostgreSQL and Traefik remain running. A failed migration has no automatic schema rollback.
+
+The shared PostgreSQL and Traefik are an operator-run Compose stack, [`deploy/infrastructure`](../deploy/infrastructure/compose.yaml)
+([hosts](../deploy/GITHUB-SETUP.md#hosts)); the utility installs nothing and every operation first checks that the stack,
+networks and Docker are up, failing with the remedy otherwise. GHCR image
+names are derived from the repository. Provision the documented DNS, Traefik,
+logging network, runner isolation, GitHub Environments and token permissions
+before enabling deployment. No database rollback is performed automatically.

@@ -1,7 +1,8 @@
 # Local development and test stores
 
-Run commands from the directories shown. Use an existing checkout; in Codex cloud
-each task is already isolated, so do not create a worktree unless requested.
+Run commands from the directories shown, inside your task's worktree under
+`../PeopleGatorApp-worktrees/` (see [AGENTS.md](../AGENTS.md#worktrees)), never
+in the main checkout, which stays on the latest `main`.
 Keep credentials, `.env` files, media and disposable databases out of Git.
 
 ## Prerequisites and installation
@@ -162,7 +163,8 @@ uv run --locked pytest tests
 ```
 
 For a faster full PostgreSQL run, use
-`uv run --locked pytest tests -n 4 --dist=worksteal` with both URLs above. Each
+`uv run --locked pytest tests -n 4 --dist=worksteal --basetemp=/dev/shm/people-gator-pytest`
+with both URLs above (on Linux; omit `--basetemp` elsewhere). Each
 worker receives private databases; the disposable user must have `CREATEDB`.
 Use `-n 2` on smaller machines or `-n 0` for debugging. See
 [test performance guidance](TEST.md#faster-backend-feedback) for isolation,
@@ -178,7 +180,8 @@ twice in a third isolated database and runs the deployment utility tests:
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
 ```
 
-Run it from the repository root. The [utility guide](../deploy/people-gator-deploy/README.md#development)
+Run it from the repository root with PyYAML available (or through `uv run` from
+`people-gator-api`, as CI does). The [utility guide](../deploy/people-gator-deploy/README.md#development)
 explains the opt-in database-isolation, snapshot, runtime-image and log-delivery checks.
 
 For the disposable media-upload concurrency investigation, see

@@ -1,0 +1,108 @@
+# Shared infrastructure of a deploy host (previews and staging, or production):
+# PostgreSQL on the `db` network and an HTTPS-only Traefik on the `web` network.
+# Start it once as the deployment account and leave it running; the deploy jobs
+# only check it.
+#
+# As the deployment account, from anywhere (safe to rerun: it refreshes
+# compose.yaml and the examples in ~/peoplegator-infra from the repository, and
+# creates infra.env with a generated password and traefik.yaml only once; edit
+# those two there and rerun to apply changes):
+#
+#   ref=main; d=~/peoplegator-infra; t=$(mktemp -d) && git clone -q --depth 1 --branch $ref https://github.com/DCGM/PeopleGatorApp.git $t && install -d -m 700 $d && cp $t/deploy/infrastructure/compose.yaml $t/deploy/infrastructure/example.env $t/deploy/infrastructure/traefik.example.yaml $d/ && rm -rf $t && { [ -f $d/infra.env ] || { sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" -e "s|^PGADMIN_PASSWORD=.*|PGADMIN_PASSWORD=$(openssl rand -hex 16)|" -e "s|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=$d/traefik.yaml|" -e "s|^DOCKER_SOCKET=.*|DOCKER_SOCKET=$(docker context inspect -f "{{.Endpoints.docker.Host}}" | sed "s|^unix://||")|" $d/example.env > $d/infra.env && for k in HTTPS_PORT TRAEFIK_DASHBOARD_HOST PGADMIN_HOST COMPOSE_PROFILES; do v=$(printenv $k) && sed -i "s|^#* *$k=.*|$k=$v|" $d/infra.env || true; done; }; } && chmod 600 $d/infra.env && { [ -f $d/traefik.yaml ] || cp $d/traefik.example.yaml $d/traefik.yaml; } && { [ -f $d/dashboard.users ] || { p=$(openssl rand -hex 12); printf "admin:%s\n" "$(openssl passwd -apr1 $p)" > $d/dashboard.users && chmod 600 $d/dashboard.users && echo "Traefik dashboard login: admin / $p"; }; } && docker compose -f $d/compose.yaml --env-file $d/infra.env up -d --wait --remove-orphans
+#
+# The admin URL for PREVIEW_DATABASE_URL / STAGING_DATABASE_URL is then
+# postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/postgres
+name: peoplegator-infra
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql.
+      - postgres18-data:/var/lib/postgresql
+    networks: [db]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    # No published port: only containers on the db network reach PostgreSQL.
+
+  traefik:
+    # 3.6+ negotiates the Docker API; 3.5 and older fail on Docker Engine 29
+    # ("client version 1.24 is too old"). v3.7 follows the latest 3.7 release.
+    image: traefik:v3.7
+    restart: unless-stopped
+    # All settings live in traefik.yaml (copy traefik.example.yaml): HTTPS-only
+    # `websecure` entry point, Docker provider and the ACME resolver.
+    command: [--configfile=/etc/traefik/traefik.yaml]
+    ports:
+      - '${HTTPS_PORT:-443}:443'
+    volumes:
+      # Rootless Docker: DOCKER_SOCKET=$XDG_RUNTIME_DIR/docker.sock in the env file.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      - ${TRAEFIK_CONFIG:?set TRAEFIK_CONFIG to your traefik.yaml}:/etc/traefik/traefik.yaml:ro
+      # htpasswd-style users for the dashboard (the bootstrap command creates it).
+      - ${TRAEFIK_DASHBOARD_USERS:-./dashboard.users}:/etc/traefik/dashboard.users:ro
+      - traefik-acme:/acme
+    networks: [web]
+    labels:
+      # The dashboard (api@internal, enabled in traefik.yaml) behind basic auth.
+      - traefik.enable=true
+      - traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DASHBOARD_HOST:-traefik-preview.peoplegator.dev}`)
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard-auth
+      - traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile=/etc/traefik/dashboard.users
+
+  pgadmin:
+    # Optional web UI for this PostgreSQL: set COMPOSE_PROFILES=pgadmin in the env
+    # file. It sits behind the dashboard's basic auth and then pgAdmin's own login
+    # (PGADMIN_EMAIL / PGADMIN_PASSWORD); the server `postgres` is preconfigured.
+    image: dpage/pgadmin4:9
+    profiles: [pgadmin]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@peoplegator.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-}
+      PGADMIN_DISABLE_POSTFIX: 'True'
+    configs:
+      - source: pgadmin-servers
+        target: /pgadmin4/servers.json
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks: [db, web]
+    labels:
+      # Like every router here: no `tls` label, so it gets the entry point's certificate.
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)
+      - traefik.http.routers.pgadmin.entrypoints=websecure
+      - traefik.http.routers.pgadmin.middlewares=traefik-dashboard-auth@docker
+      - traefik.http.services.pgadmin.loadbalancer.server.port=80
+
+configs:
+  pgadmin-servers:
+    content: |
+      {"Servers": {"1": {"Name": "postgres", "Group": "Servers", "Host": "postgres", "Port": 5432,
+                         "MaintenanceDB": "postgres", "Username": "${POSTGRES_USER:-postgres}", "SSLMode": "disable"}}}
+
+volumes:
+  postgres18-data:
+  traefik-acme:
+  pgadmin-data:
+
+networks:
+  db:
+    name: db
+    internal: true
+  web:
+    name: web

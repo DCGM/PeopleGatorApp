@@ -1,4 +1,5 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { AxiosError, type AxiosResponse } from 'axios'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -108,7 +109,12 @@ describe('useScanPeople (#103)', () => {
         return Promise.resolve({
           data: {
             items: (query['filter.entity_id'] as string[])
-              .filter((id) => ['ada', 'bea', 'cyril', 'eve'].includes(id))
+              .filter((id) =>
+                (query['filter.page_source_id']
+                  ? ['ada']
+                  : ['ada', 'bea', 'cyril', 'eve']
+                ).includes(id),
+              )
               .map((id) => person(id)),
             cursor: null,
           },
@@ -136,7 +142,7 @@ describe('useScanPeople (#103)', () => {
     })
     const { model, wrapper, client } = mountPeople({})
     await flushPromises()
-    for (const call of api.entities.mock.calls)
+    for (const call of api.entities.mock.calls.filter(([call]) => !call.query['filter.entity_id']))
       expect(call[0].query).toMatchObject({
         'filter.entity_type': ['person'],
         sort: 'name',
@@ -157,7 +163,15 @@ describe('useScanPeople (#103)', () => {
     expect(['ada', 'bea', 'cyril', 'dora'].map(inDocument)).toEqual([true, true, true, false])
     // Linked face totals come from each record's link statistics.
     expect(model().people.value.map((item) => item.linkedFaces)).toEqual([0, 0, 0, 3])
-    const lookups = api.entities.mock.calls.filter(([call]) => call.query['filter.entity_id'])
+    expect(model().people.value.map((person) => person.source)).toEqual([
+      'page',
+      'document',
+      'document',
+      'database',
+    ])
+    const lookups = api.entities.mock.calls.filter(
+      ([call]) => call.query['filter.entity_id'] && call.query['filter.document_source_id'],
+    )
     expect(lookups).toHaveLength(1)
     expect(lookups[0]![0].query).toMatchObject({
       'filter.document_source_id': ['document-source'],
@@ -170,7 +184,72 @@ describe('useScanPeople (#103)', () => {
     client.clear()
   })
 
+  it('keeps default document browsing local across tier cursor batches', async () => {
+    api.entities.mockImplementation(({ query }) => {
+      expect(query['filter.page_source_id'] || query['filter.document_source_id']).toBeTruthy()
+      const page = query['filter.page_source_id']
+      return Promise.resolve({
+        data: page
+          ? { items: [person('page-person')], cursor: null, total_count: 1 }
+          : query.cursor
+            ? { items: [person('document-only')], cursor: null, total_count: 3 }
+            : {
+                items: [person('mention-only'), person('page-person')],
+                cursor: 'next',
+                total_count: 3,
+              },
+      })
+    })
+    const { model, wrapper, client } = mountPeople({ scope: 'document' })
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual(['page-person', 'mention-only'])
+    expect(model().totalCount.value).toBe(3)
+    await model().loadMore()
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual([
+      'page-person',
+      'mention-only',
+      'document-only',
+    ])
+    expect(model().hasNextPage.value).toBe(false)
+    expect(api.search).not.toHaveBeenCalled()
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('uses one global relevance cursor rather than prioritizing local tiers during search', async () => {
+    api.search.mockImplementation(({ query }) => {
+      expect(query).toMatchObject({
+        sort: 'relevance',
+        sort_direction: 'desc',
+        'query.text': ['Hana'],
+      })
+      expect(query).not.toHaveProperty('filter.page_source_id')
+      expect(query).not.toHaveProperty('filter.document_source_id')
+      return Promise.resolve({
+        data: query.cursor
+          ? { items: [person('page-match', { score: 0.7 })], cursor: null, total_count: 2 }
+          : { items: [person('outside-match', { score: 0.9 })], cursor: 'next', total_count: 2 },
+      })
+    })
+    api.entities.mockResolvedValue({ data: { items: [], cursor: null } })
+    const { model, wrapper, client } = mountPeople({
+      scope: 'all',
+      order: 'relevance',
+      search: { text: 'Hana' },
+    })
+    await flushPromises()
+    await model().loadMore()
+    await flushPromises()
+    expect(model().people.value.map((item) => item.id)).toEqual(['outside-match', 'page-match'])
+    expect(model().totalCount.value).toBe(2)
+    expect(api.search).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+    client.clear()
+  })
+
   it('combines name text and the attached face in one ranked search per scope', async () => {
+    api.entities.mockResolvedValue({ data: { items: [], cursor: null } })
     api.search.mockResolvedValue({
       data: {
         items: [
@@ -209,8 +288,89 @@ describe('useScanPeople (#103)', () => {
       'face-match',
       'in-document',
     ])
-    expect(api.entities).not.toHaveBeenCalled()
+    expect(api.entities).toHaveBeenCalledTimes(1)
+    expect(api.entities.mock.calls[0]![0].query).toMatchObject({
+      'filter.page_source_id': ['page-source'],
+      'filter.entity_id': ['ada'],
+    })
+    expect(ada?.source).toBe('document')
     wrapper.unmount()
     client.clear()
+  })
+
+  it('keeps source context unknown until both bounded membership lookups resolve', async () => {
+    api.search.mockResolvedValue({
+      data: {
+        items: [person('mention-only'), person('other-document'), person('outside')],
+        cursor: null,
+        total_count: 3,
+      },
+    })
+    let resolvePage!: (value: unknown) => void
+    let resolveDocument!: (value: unknown) => void
+    api.entities.mockImplementation(
+      ({ query }) =>
+        new Promise((resolve) => {
+          if (query['filter.page_source_id']) resolvePage = resolve
+          else resolveDocument = resolve
+        }),
+    )
+    const { model, wrapper, client } = mountPeople({ order: 'relevance', search: { text: 'Name' } })
+    await flushPromises()
+    expect(model().people.value.map((item) => item.source)).toEqual([
+      'unknown',
+      'unknown',
+      'unknown',
+    ])
+    resolveDocument({
+      data: { items: [person('mention-only'), person('other-document')], cursor: null },
+    })
+    await flushPromises()
+    expect(model().people.value.map((item) => item.source)).toEqual([
+      'unknown',
+      'unknown',
+      'unknown',
+    ])
+    resolvePage({ data: { items: [person('mention-only')], cursor: null } })
+    await flushPromises()
+    expect(model().people.value.map((item) => item.source)).toEqual([
+      'page',
+      'document',
+      'database',
+    ])
+    expect(model().people.value[0]?.sourceId).toBe('page-source')
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('reports a face the API cannot search with, not other failures (#134)', async () => {
+    const rejected = (status: number, code?: string) =>
+      new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status,
+        data: code ? { detail: { code, message: 'x' } } : {},
+      } as AxiosResponse)
+    const face = { id: 'zero', embeddingModel: 'model' }
+    api.search.mockRejectedValue(rejected(422, 'invalid_search'))
+    const unusable = mountPeople({ order: 'relevance', search: { text: '', face } })
+    await flushPromises()
+    expect(unusable.model().faceRejected.value).toBe(true)
+    expect(unusable.model().error.value).toBeInstanceOf(AxiosError)
+    unusable.wrapper.unmount()
+    unusable.client.clear()
+
+    api.search.mockRejectedValue(rejected(500))
+    const outage = mountPeople({ order: 'relevance', search: { text: '', face } })
+    await flushPromises()
+    expect(outage.model().error.value).toBeInstanceOf(AxiosError)
+    expect(outage.model().faceRejected.value).toBe(false)
+    outage.wrapper.unmount()
+    outage.client.clear()
+
+    api.search.mockRejectedValue(rejected(422, 'invalid_search'))
+    const text = mountPeople({ order: 'relevance', search: { text: 'Ada' } })
+    await flushPromises()
+    expect(text.model().faceRejected.value).toBe(false)
+    text.wrapper.unmount()
+    text.client.clear()
   })
 })

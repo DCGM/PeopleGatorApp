@@ -1,4 +1,4 @@
-"""Lifecycle API semantics: ownership, idempotence, preservation and actionable failures."""
+"""Lifecycle API semantics: prerequisite checks, settings, preservation and actionable failures."""
 from contextlib import contextmanager, redirect_stderr
 from concurrent.futures import ThreadPoolExecutor
 import io
@@ -11,26 +11,48 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from people_gator_deploy import cli, config
+from actions_isolation import isolate
+from people_gator_deploy import cli, environments
 from people_gator_deploy.core import DeployError, write_json
 from people_gator_deploy.environments import Environment
+
+SHA = "a" * 40
+DOCUMENTS = {
+    "pr": {"HOST": "preview.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@postgres:5432/postgres",
+           "OTEL_ENDPOINT": "http://lgtm:4318"},
+    "staging": {"HOST": "staging.example.invalid", "DATABASE_URL": "postgresql://preview_admin:admin-pw@postgres:5432/postgres",
+                "S3_REGION": "r", "S3_BUCKET": "staging", "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s",
+                "BACKUP_S3_ENDPOINT_URL": "https://s3.example.invalid", "BACKUP_S3_REGION": "r", "BACKUP_S3_BUCKET": "backups",
+                "BACKUP_S3_PREFIX": "p/", "BACKUP_S3_ACCESS_KEY_ID": "reader", "BACKUP_S3_SECRET_ACCESS_KEY": "reader-secret"},
+    "release": {"HOST": "people.example.invalid", "DATABASE_URL": "postgresql://app:app-pw@db.internal:5432/people",
+                "MIGRATION_DATABASE_URL": "postgresql://migrator:mig-pw@db.internal:5432/people",
+                "S3_REGION": "r", "S3_BUCKET": "release", "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s"},
+}
 
 
 class FakeDocker:
     """Records argument lists; answers only the read-only prerequisite probes."""
 
-    def __init__(self):
+    def __init__(self, context=None):
         self.context = "rootless"
         self.calls = []
+        self.environments = []
         self.projects = set()
+        self.psql_error = None
 
-    def run(self, args, **kwargs):
+    def run(self, args, extra_env=None, **kwargs):
         args = [str(value) for value in args]
         self.calls.append(args)
+        self.environments.append(extra_env or {})
+        self.options = getattr(self, "options", []) + [kwargs]
         if args[:2] == ["docker", "info"]:
             return "synthetic-host"
         if args[:3] == ["docker", "compose", "version"]:
             return "2.40.0\n"
+        if args[:2] == ["docker", "run"] and "psql" in args:
+            if self.psql_error:
+                raise DeployError(self.psql_error)
+            return "1\n"
         if args[:2] == ["docker", "ps"] and args[-1].rpartition("=")[2] in self.projects:
             return "existing-container\n"
         return ""
@@ -43,221 +65,204 @@ class FakeDocker:
         return [call for call in self.calls if word in call]
 
 
-def snapshot(root):
-    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*"))
-            if p.is_file() and not p.name.endswith(".lock")}
-
-
 class EnvironmentTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         temporary = tempfile.TemporaryDirectory(prefix="environment test ")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        environment = patch.dict(os.environ, {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp"})
-        environment.start()
-        self.addCleanup(environment.stop)
-        self.users = self.root / "private/users.json"
-        self.users.parent.mkdir()
-        self.users.write_text("{}")
-        self.users.chmod(0o644)
-        self.infra = self.root / "state/preview"
+        docker = patch.object(environments, "Docker", FakeDocker)
+        docker.start()
+        self.addCleanup(docker.stop)
+        self.environment_patch = None
+        self.stderr = io.StringIO()
 
-    def descriptor(self, name="pr", **changes):
-        path = self.root / f"environments/{name}/config.json"
-        value = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.infra), "docker_context": "rootless",
-                 "web_network": "web", "database_network": "people-gator-preview-db",
-                 "infrastructure": {"mode": "managed", "project": "people-gator-preview-infra",
-                                    "state_dir": str(self.infra)}}
-        if name == "pr":
-            value.update(domain="preview.example.invalid", users_file=str(self.users))
-        else:
-            runtime = self.root / "private/staging.env"
-            runtime.write_text("# External application storage and auth settings\n")
-            runtime.chmod(0o600)
-            value.update(host="staging.example.invalid", state_dir=str(self.root / "state/staging"),
-                         runtime_file=str(runtime))
-        config.configure(name, path, {**value, **changes})
-        return path
+    def configure(self, name="pr", **changes):
+        """Export one environment's variables as the deploy job would (DEPLOY_*; None removes one)."""
+        document = {**DOCUMENTS[name], **changes}
+        values = {"GITHUB_REPOSITORY": "DCGM/PeopleGatorApp", "DEPLOY_STATE_DIR": str(self.root / "state" / name),
+                  **{f"DEPLOY_{key}": value for key, value in document.items() if value is not None}}
+        for key, value in document.items():
+            if value is None:
+                os.environ.pop(f"DEPLOY_{key}", None)
+        if self.environment_patch:
+            self.environment_patch.stop()
+        self.environment_patch = patch.dict(os.environ, values, clear=False)
+        self.environment_patch.start()
+        self.addCleanup(self.environment_patch.stop)
 
-    def environment(self, path, name="pr"):
-        environment = Environment(name, path)
-        environment.docker = FakeDocker()
-        return environment
+    def environment(self, name="pr"):
+        return Environment(name)
 
-    def test_missing_descriptor_fails_with_path_field_and_command_without_side_effects(self):
-        path = self.root / "environments/staging/config.json"
-        for operation in ("status", "install", "update", "uninstall"):
+    def preflight(self, environment):
+        with redirect_stderr(self.stderr):
+            return environment.preflight()
+
+    def test_missing_setting_fails_with_secret_name_and_field_without_side_effects(self):
+        self.configure("staging", HOST=None)
+        for operation in ("status", "preflight", "update", "stop"):
             stderr = io.StringIO()
             with self.subTest(operation=operation), redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
-                cli.main(["staging", operation, "--config", str(path)])
+                cli.main(["staging", operation])
             self.assertEqual(raised.exception.code, 1)
-            self.assertIn(str(path), stderr.getvalue())
-            self.assertIn("people-gator-deploy staging configure", stderr.getvalue())
+            self.assertIn("STAGING_HOST: is required", stderr.getvalue())
+            self.assertIn("deploy/GITHUB-SETUP.md", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
+            self.assertNotIn("admin-pw", stderr.getvalue())
         self.assertFalse((self.root / "state").exists())
-        self.assertFalse(path.parent.exists())
+        for removed in ("install", "uninstall", "infra-upgrade", "configure"):
+            with self.subTest(operation=removed), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                cli.main(["pr", removed])
+            self.assertEqual(raised.exception.code, 2)
 
-    def test_incomplete_private_inputs_fail_before_docker_or_writes(self):
-        path = self.descriptor()
-        self.users.chmod(0o666)
-        environment = self.environment(path)
-        with self.assertRaisesRegex(DeployError, "users_file"):
-            environment.install()
-        self.assertEqual(environment.docker.calls, [])
-        self.assertFalse(self.infra.exists())
+    def test_preflight_checks_the_database_through_the_url_and_renders_the_files(self):
+        self.configure()
+        environment = self.environment()
+        result = environment.preflight()
+        self.assertEqual(result["host"], "preview.example.invalid")
+        self.assertEqual(result["database"], {"database": "postgres:5432/postgres as preview_admin", "network": "db"})
+        docker = environment.docker
+        for network in ("web", "db", "logging"):
+            self.assertIn(["docker", "network", "inspect", network], docker.calls)
+        psql = docker.commands("psql")[0]
+        self.assertEqual(psql[:8], ["docker", "run", "--rm", "-i", "--network", "db", "-e", "PGPASSWORD"])
+        self.assertEqual(psql[8], "pgvector/pgvector:pg18")
+        self.assertEqual(psql[psql.index("-h") + 1], "postgres")
+        self.assertEqual(psql[psql.index("-U") + 1], "preview_admin")
+        self.assertNotIn("admin-pw", " ".join(psql))  # the password only travels through the environment
+        check = docker.options[docker.calls.index(psql)]
+        self.assertTrue(check["echo"])  # psql's reason reaches the job log on failure
+        self.assertNotIn("input", check)  # fixed statement in argv, nothing private on stdin
+        self.assertEqual(docker.environments[docker.calls.index(psql)], {"PGPASSWORD": "admin-pw"})
+        self.assertEqual(docker.commands("compose"), [["docker", "compose", "version", "--short"]])
+        root = environment.root
+        self.assertEqual(json.loads((root / "users.json").read_text())["test"]["scopes"][0], "people-gator:browse")
+        self.assertEqual((root / "users.json").stat().st_mode & 0o777, 0o644)
+        self.assertEqual((root / "runtime.env").read_text(), 'PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\n')
+        self.assertIn("PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT=http://lgtm:4318/v1/logs", (root / "telemetry.env").read_text())
+        self.assertFalse((root / "owned.json").exists())
+        # Without otel no telemetry file is rendered (a stale one is removed) and
+        # the collector network is not required.
+        self.configure(OTEL_ENDPOINT=None)
+        environment = self.environment()
+        environment.preflight()
+        self.assertNotIn(["docker", "network", "inspect", "logging"], environment.docker.calls)
+        self.assertFalse((environment.root / "telemetry.env").exists())
 
-    def test_install_is_idempotent_and_preserves_generated_credentials(self):
-        environment = self.environment(self.descriptor())
-        self.assertTrue(environment.install()["changed"])
-        owner = json.loads((self.infra / "infrastructure-owned.json").read_text())
-        self.assertEqual(owner["owner"], environment.identity)
-        credentials = (self.infra / "infrastructure.env").read_bytes()
-        self.assertEqual(len(environment.docker.commands("up")), 1)
-        environment.docker.calls.clear()
-        self.assertFalse(environment.install()["changed"])
-        self.assertEqual(environment.docker.commands("up"), [])
-        self.assertEqual((self.infra / "infrastructure.env").read_bytes(), credentials)
-        # Every Docker command selects the descriptor's explicit context.
-        self.assertTrue(all(isinstance(call, list) for call in environment.docker.calls))
+    def test_unreachable_database_fails_before_any_compose_command(self):
+        self.configure()
+        environment = self.environment()
+        environment.docker.psql_error = "FATAL"
+        with self.assertRaisesRegex(DeployError, "Cannot connect to postgres:5432/postgres as preview_admin") as raised:
+            environment.update(sha=SHA, pr=7)
+        self.assertNotIn("admin-pw", str(raised.exception))
+        self.assertEqual([call for call in environment.docker.commands("compose") if "version" not in call], [])
+        self.assertFalse((environment.root / "operation.json").exists())
+        environment = self.environment()
+        environment.docker.psql_error = "FATAL"
+        with self.assertRaisesRegex(DeployError, "Cannot connect"):
+            environment.cleanup(7)
+        self.assertEqual(environment.docker.commands("down"), [])
 
-    def test_installation_is_fresh_only_and_never_takes_over_unowned_state(self):
-        self.infra.mkdir(parents=True)
-        (self.infra / "infrastructure.env").write_text("POSTGRES_ADMIN_PASSWORD='unowned'\n")
-        (self.infra / "pr-7").mkdir()
-        before = snapshot(self.infra)
-        environment = self.environment(self.descriptor())
-        with self.assertRaisesRegex(DeployError, "not empty and not owned"):
-            environment.install()
-        self.assertEqual(snapshot(self.infra), before)
-        self.assertEqual(environment.docker.commands("up"), [])
-
-    def test_second_environment_cannot_claim_or_change_shared_infrastructure(self):
-        self.environment(self.descriptor()).install()
-        credentials = (self.infra / "infrastructure.env").read_bytes()
-        claimed = self.environment(self.descriptor("staging"), "staging")
-        with self.assertRaisesRegex(DeployError, "belongs to another environment"):
-            claimed.install()
-        self.assertEqual(claimed.docker.commands("up"), [])
-        external = self.environment(self.descriptor("staging", infrastructure={"mode": "external"}), "staging")
-        self.assertTrue(external.install()["changed"])
-        with self.assertRaisesRegex(DeployError, "managed infrastructure owner"):
-            external.infra_upgrade()
-        self.assertEqual((self.infra / "infrastructure.env").read_bytes(), credentials)
-        self.assertEqual(external.docker.commands("up"), [])
-
-    def test_uninstall_stops_only_owned_instances_and_preserves_data(self):
-        environment = self.environment(self.descriptor())
-        environment.install()
-        preview = self.infra / "pr-12"
-        preview.mkdir()
-        (preview / "state.json").write_text('{"password":"' + "c" * 64 + '"}')
-        (preview / "compose.env").write_text("retained")
-        before = snapshot(preview)
-        result = environment.uninstall()
-        self.assertTrue(result["data_preserved"])
-        downs = environment.docker.commands("down")
-        self.assertEqual(len(downs), 1)
-        self.assertIn("people-gator-pr-12", downs[0])
-        self.assertNotIn("--volumes", downs[0])
-        self.assertFalse(any("people-gator-preview-infra" in call for call in downs))
-        self.assertEqual(snapshot(preview), before)
-        self.assertTrue((self.infra / "infrastructure.env").exists())
-        with self.assertRaisesRegex(DeployError, "not installed.*pr install"):
-            environment.update(run_id=5)
-        self.assertTrue(environment.install()["changed"])
-
-    def test_operations_require_installation_and_identity(self):
-        environment = self.environment(self.descriptor())
-        for operation in (lambda: environment.stop(1), lambda: environment.cleanup(1), environment.reconcile,
-                          lambda: environment.logs(1)):
-            with self.subTest(operation=operation), self.assertRaisesRegex(DeployError, "install"):
-                operation()
-        with self.assertRaisesRegex(DeployError, "--run-id"):
-            environment.update()
-        status = environment.status()
-        self.assertEqual((status["configured"], status["provisioned"]), (True, False))
-        self.assertFalse(self.infra.exists())
-
-    def release_descriptor(self):
-        private = self.root / "private/release"
-        private.mkdir(mode=0o700)
-        files = {}
-        for name, line in (("runtime_file", "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=runtime\n"
-                                            "PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME=release\n"),
-                           ("migration_file", "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n")):
-            files[name] = private / f"{name}.env"
-            files[name].write_text(line)
-            files[name].chmod(0o600)
-        path = self.root / "environments/release/config.json"
-        value = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root / "state/release"),
-                 "docker_context": "rootless", "host": "people.example.invalid", "web_network": "web",
-                 "database_network": "production-db", **{k: str(v) for k, v in files.items()}}
-        with self.assertRaisesRegex(DeployError, "access_reviewed"):
-            config.configure("release", path, value)
-        config.configure("release", path, {**value, "access_reviewed": True})
-        return path, files
-
-    def test_release_descriptor_requires_reviewed_access_and_private_role_files(self):
-        path, files = self.release_descriptor()
-        environment = self.environment(path, "release")
-        with self.assertRaisesRegex(DeployError, "--tag"):
-            environment.update()
-        self.assertTrue(environment.install()["changed"])
-        self.assertIn(["docker", "network", "inspect", "production-db"], environment.docker.calls)
-        self.assertEqual(environment.preflight()["provisioned"], True)
-        self.assertFalse(environment.install()["changed"])
-        files["runtime_file"].chmod(0o644)
-        with self.assertRaisesRegex(DeployError, "runtime_file"):
+    def test_missing_network_names_the_convention(self):
+        self.configure()
+        environment = self.environment()
+        original = environment.docker.run
+        def run(args, **kwargs):
+            if args[:3] == ["docker", "network", "inspect"] and args[3] == "logging":
+                raise DeployError("no such network")
+            return original(args, **kwargs)
+        environment.docker.run = run
+        with self.assertRaisesRegex(DeployError, "'logging' does not exist in context 'rootless'"):
             environment.preflight()
 
-    def test_release_refuses_an_existing_application_project_without_claiming_it(self):
-        path, _ = self.release_descriptor()
-        environment = self.environment(path, "release")
-        environment.docker.projects.add("people-gator-release")
-        with self.assertRaisesRegex(DeployError, "Compose project people-gator-release already exist"):
-            environment.install()
-        self.assertFalse((environment.root / "owned.json").exists())
+    def test_staging_renders_storage_backup_source_and_requires_a_commit(self):
+        self.configure("staging")
+        environment = self.environment("staging")
+        result = environment.preflight()
+        self.assertEqual(result["database"]["database"], "postgres:5432/postgres as preview_admin")
+        root = environment.root
+        self.assertIn('"bucket_name": "staging"', (root / "runtime.env").read_text())
+        self.assertIn("PEOPLE_GATOR_API__JWK__ISSUER=https://staging.example.invalid", (root / "runtime.env").read_text())
+        self.assertEqual(json.loads((root / "snapshot-source.json").read_text())["bucket"], "backups")
+        self.assertEqual((root / "snapshot-source.json").stat().st_mode & 0o777, 0o600)
+        self.assertFalse((root / "users.json").exists())
+        for operation in (environment.update, environment.snapshot_init,
+                          lambda: environment.refresh(backup_record="/private/record")):
+            with self.subTest(operation=operation), self.assertRaisesRegex(DeployError, "--sha"):
+                operation()
+
+    def test_operations_require_build_identity_and_an_active_application(self):
+        self.configure()
+        environment = self.environment()
+        with self.assertRaisesRegex(DeployError, "--pr .* --sha"):
+            environment.update(sha=SHA)
+        with self.assertRaisesRegex(DeployError, "--pr .* --sha"):
+            environment.update(pr=5)
+        for operation in (lambda: environment.stop(1), lambda: environment.logs(1), lambda: environment.start(1)):
+            with self.subTest(operation=operation), self.assertRaisesRegex(DeployError, "no active application.*pr update"):
+                with redirect_stderr(self.stderr):
+                    operation()
+        status = environment.status()
+        self.assertEqual((status["configured"], status["instances"]), (True, []))
         self.assertEqual(environment.docker.commands("up"), [])
-        # A project that appears between installation and first deployment is
-        # refused too, before login, image pulls, migrations or activation.
-        environment.docker.projects.clear()
-        environment.install()
+
+    def test_release_checks_both_roles_and_renders_their_files(self):
+        self.configure("release")
+        environment = self.environment("release")
+        with self.assertRaisesRegex(DeployError, "--tag"):
+            environment.update()
+        result = environment.preflight()
+        self.assertEqual(result["database"]["database"], "db.internal:5432/people as app")
+        self.assertEqual(result["migration_database"]["database"], "db.internal:5432/people as migrator")
+        self.assertIn(["docker", "network", "inspect", "db"], environment.docker.calls)
+        passwords = [env.get("PGPASSWORD") for env in environment.docker.environments if env]
+        self.assertEqual(passwords, ["app-pw", "mig-pw"])
+        root = environment.root
+        self.assertIn("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=app\n", (root / "runtime.env").read_text())
+        self.assertIn("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n", (root / "migration.env").read_text())
+        self.assertNotIn("mig-pw", (root / "runtime.env").read_text())
+        self.assertEqual((root / "migration.env").stat().st_mode & 0o777, 0o600)
+        # A changed secret is republished on the next operation; a loosened mode is restored.
+        (root / "runtime.env").chmod(0o644)
+        self.configure("release", S3_BUCKET="release-2")
+        self.environment("release").preflight()
+        self.assertEqual((root / "runtime.env").stat().st_mode & 0o777, 0o600)
+        self.assertIn("release-2", (root / "runtime.env").read_text())
+        # One role: no second check, no separate password.
+        self.configure("release", MIGRATION_DATABASE_URL=None)
+        environment = self.environment("release")
+        self.assertNotIn("migration_database", environment.preflight())
+
+    def test_release_refuses_an_existing_application_project_without_claiming_it(self):
+        self.configure("release")
+        environment = self.environment("release")
         environment.docker.projects.add("people-gator-release")
-        environment.docker.calls.clear()
         with self.assertRaisesRegex(DeployError, "without owned application state"):
             environment.update(tag="v1.0.0")
         self.assertEqual(environment.docker.commands("pull"), [])
         self.assertFalse((environment.root / "operation.json").exists())
-
-    def test_installed_release_cannot_switch_project_or_docker_context(self):
-        path, _ = self.release_descriptor()
-        environment = self.environment(path, "release")
-        environment.install()
-        for field, value in (("project", "unowned-release"), ("docker_context", "other-daemon")):
-            with self.subTest(field=field), self.assertRaisesRegex(DeployError, "explicit migration"):
-                config.configure("release", path, {field: value})
+        self.assertFalse((environment.root / "compose.env").exists())
 
     def test_simultaneous_snapshot_initializations_cannot_replace_committed_data(self):
-        preview = self.environment(self.descriptor())
-        preview.install()
-        path = self.descriptor("staging", infrastructure={**preview.settings["infrastructure"], "mode": "external"})
-        environment = self.environment(path, "staging")
-        environment.install()
+        self.configure("staging")
+        environment = self.environment("staging")
         calls = []
-        def deploy(run_id, *, refresh):
-            calls.append(refresh)
+        def deploy(sha, *, refresh):
+            calls.append((sha, refresh))
             write_json(environment.root / "state.json", {"generation": "first", "reviewed_edit": "keep"})
-        controller = SimpleNamespace(deploy=deploy)
+        controller = SimpleNamespace(deploy=deploy, check_database=lambda role="postgres": {})
         barrier = threading.Barrier(2)
         original_lock = Environment.environment_lock
         @contextmanager
-        def synchronized_lock(instance, **kwargs):
+        def synchronized_lock(instance):
             barrier.wait(timeout=10)
-            with original_lock(instance, **kwargs):
+            with original_lock(instance):
                 yield
         def initialize():
             try:
-                environment.snapshot_init()
+                with redirect_stderr(io.StringIO()):
+                    environment.snapshot_init(sha=SHA)
             except DeployError as error:
                 return str(error)
             return "initialized"
@@ -267,8 +272,18 @@ class EnvironmentTests(unittest.TestCase):
             outcomes = [future.result(timeout=15) for future in futures]
         self.assertEqual(outcomes.count("initialized"), 1)
         self.assertTrue(any("refresh" in result and "backup-record" in result for result in outcomes))
-        self.assertEqual(calls, [True])
+        self.assertEqual(calls, [(SHA, True)])
         self.assertEqual(json.loads((environment.root / "state.json").read_text())["reviewed_edit"], "keep")
+        journal = json.loads((environment.root / "operation.json").read_text())
+        self.assertEqual((journal["operation"], journal["phase"]), ("snapshot-init", "complete"))
+
+    def test_configuration_secrets_never_reach_docker_subprocess_environments(self):
+        from people_gator_deploy.docker import Docker
+        with patch.dict(os.environ, {"DEPLOY_DATABASE_URL": "postgresql://a:b@c/d", "PGPASSWORD": "ambient", "DEPLOY_STATE_DIR": "/x"}):
+            environment = Docker("rootless").environment({"PGPASSWORD": "explicit"})
+        self.assertFalse(any(key.startswith("DEPLOY_") for key in environment))
+        self.assertEqual(environment["PGPASSWORD"], "explicit")
+        self.assertNotIn("PGPASSWORD", Docker("rootless").environment())
 
 
 if __name__ == "__main__":

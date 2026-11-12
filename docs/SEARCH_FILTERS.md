@@ -1,5 +1,10 @@
 # Search and configurable filters
 
+The standalone Scans search UI is retired (#141). Browse pages through Documents,
+the viewer's Document pages strip or its expanded grid. Older scan-search examples
+below describe retained backend filter contracts and compatibility URLs; global
+`/scans` URLs return to Documents and document-scoped URLs open that browser.
+
 The API exposes GET `/api/v1/search-entities`, `/search-faces`, `/search-pages`
 and `/search-documents`. Ordinary resource lists use the same resource filter
 schemas without requiring a search modality. Filter configuration is typed in
@@ -341,8 +346,18 @@ tags and query keys. Test actual AND/OR results, same-link restrictions, own-rec
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
 
-The scan editor's right panel shows entities on the current page, or text/face
-search results across all accessible data. It does not inherit workspace source,
+The scan editor's People panel defaults to this document's people, with current-page
+people first and the rest of the document next (names A–Z within each tier).
+Membership comes from either a linked face or text mention, including direct
+document evidence; unrelated database people are excluded. Starting text search
+or explicit face Search switches to **All people / Similarity** across accessible
+data, ranked before pagination. Clearing the final text/reference restores
+**This document / Page, document, others** (the context order ends at the document).
+Whitespace-only text is not a search. A copied active-search URL defaults to
+all/relevance; explicit `people_scope` and `candidate_sort` values still restore.
+Manual scope/sort changes remain usable while refining a search; starting a new
+explicit face Search resets to global similarity. Ordinary face selection leaves
+the search attachment alone. It does not inherit workspace source,
 assignment, actor/date or API key predicates, and shows no workspace tags or
 validation messages. Copied workspace URL values are not forwarded to other views. Invalid workspace values cannot block page entities or
 search. Text lookup works without selecting a face. The explicit page annotation
@@ -510,3 +525,43 @@ individual removal, clear-all that preserves search, Back/Forward restoration
 and pagination reset. The scan editor sidebar has no creation filters. The legacy Weaviate adapter explicitly rejects
 creation filters with an unsupported-operation response rather than ignoring them.
 Creation sorting is unchanged.
+
+
+### Viewer bottom page strip (#131)
+
+The **Document pages** strip gives noncurrent pages containing the person
+selected in the right panel a single orange outer border, with no inner UI
+border. The current page keeps its double orange border, including when it also
+contains that person. The strip shows no per-page face or mention counters.
+
+Select a person in the viewer's right panel, then enable **[Person name] only**
+in the strip header to show pages with an assigned face **or** a linked text
+mention for that person. The sidebar owns the identity; the strip has no person
+selector or active-filter tags. While enabled, the toggle follows changes to the
+selected person. Turn it off to restore all pages. Without a selected person it
+is disabled.
+
+The header stays on one line: document name · NDK · current/total page position,
+then the person-only toggle and Sort. It scrolls horizontally in narrow panes
+instead of wrapping or adding mobile filter rows. The position uses the stored
+page number and complete registered-page count, even while filtering.
+
+The filter stays within the current library/document and runs before pagination
+and counting. `selectedPerson` identifies the sidebar selection and
+`gallery_person_only=on` enables the strip scope; both survive page-strip
+navigation, reload and history alongside `gallery_sort` / `gallery_dir`.
+Earlier `gallery_person=<id>` links restore that person in the sidebar with the
+scope enabled. A filtered-out current scan stays open; the strip does not fetch
+every batch trying to find it.
+
+
+### Expanded document pages (#140)
+
+The bottom strip's **Expand pages** action switches the central viewer to a
+row-first thumbnail grid with vertical scrolling; **Collapse pages** restores
+the scan. Expansion is URL state (`pages_view=expanded`) and works through
+canonical page URLs and page-source redirects. Selecting a thumbnail returns
+to the viewer while preserving selected-person, person-only and gallery sort
+settings. Compact and expanded modes use the same document-scoped query,
+face-or-mention predicate, page totals, orange highlights and automatic
+pagination described above; expansion adds no new filters or counters.

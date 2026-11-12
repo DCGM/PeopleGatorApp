@@ -26,6 +26,8 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("strip-other-person", "Otto Page", (), "Synthetic other-person contrast confined to the bottom-strip scenario.", "reviewer"),
+    Person("strip-person", "Nora Page", (), "Synthetic bottom-strip face and mention filtering example.", "reviewer"),
     *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
              "Synthetic duplicate for first/last-selected merge practice.", "importer")
       for i in range(1, 4)),
@@ -120,6 +122,9 @@ PEOPLE = (
     # Issue #66: evidence written by a reviewer who was deactivated afterwards.
     Person("deactivated-olga", "Olga Expiry", (),
            "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
+    # Issue #137: direct document evidence is a member without matching any page.
+    Person("sidebar-direct", "Dora Document", (),
+           "Synthetic person linked only to the scan-sidebar document.", "reviewer"),
     # Issue #103: page, document and other people for the scan sidebar.
     Person("sidebar-hana", "Hana Sidebar", (),
            "Synthetic scan-sidebar person with faces and repeated mentions on one page.", "importer"),
@@ -150,6 +155,8 @@ DOCUMENTS = (
     Document("creation-user", "preview-creation", "Creation: reviewer registration"),
     Document("creation-key", "preview-creation", "Creation: API key registration"),
     Document("creation-legacy", "preview-creation", "Creation: legacy unknown"),
+    Document("page-strip", "preview-page-strip", "Page strip review practice"),
+    Document("page-strip-mirror", "preview-page-strip-mirror", "Page strip isolation mirror", "page-strip"),
     Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
@@ -192,6 +199,7 @@ DOCUMENTS = (
     ),
     Document("issue10-media", "preview-mzk", "Media upload sandbox"),
     Document("page-gallery", "preview-mzk", "Page gallery navigation"),
+    Document("page-scroll", "preview-page-scroll", "Page scrolling practice"),
     # Accent/case name variants and uneven page counts across two libraries (#33).
     Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
     Document("sorting-notes", "preview-mzk", "radkova notes"),
@@ -221,7 +229,6 @@ class Face:
     box: tuple[int, int, int, int] | None = None
     confidence: float = 0.97
     models: tuple[str, ...] = (MODEL, SECOND_MODEL)
-    zero_vector: bool = False
     coincident_keypoints: bool = False
 
 
@@ -328,6 +335,24 @@ def _sidebar_crowd_face(page: int, index: int) -> Face:
                 box=(50 + index % 6 * 120, 190 + index // 6 * 160, 110, 140))
 
 
+PAGE_STRIP_PAGES = (
+    # #131: independent unassigned-face highlights and person matches by either
+    # face or mention; >12 matches exercise filtered cursor pagination.
+    Page("page-strip-1", "page-strip", 1, (Face("strip-unassigned", None, 0, 0, embedded=False),)),
+    Page("page-strip-2", "page-strip", 2, (Face("strip-assigned", "strip-person", 0, 0, embedded=False),)),
+    Page("page-strip-3", "page-strip", 3, mentions=(Mention("strip-mentioned", "strip-person", "Nora Page signed the register."),)),
+    Page("page-strip-4", "page-strip", 4,
+         (Face("strip-mixed-assigned", "strip-person", 0, 0, embedded=False),
+          Face("strip-mixed-unassigned", None, 1, 0, embedded=False))),
+    Page("page-strip-5", "page-strip", 5, (Face("strip-other", "strip-other-person", 0, 0, embedded=False),)),
+    Page("page-strip-6", "page-strip", 6),
+    *(Page(f"page-strip-{i}", "page-strip", i, mentions=(
+        Mention(f"strip-more-{i}", "strip-person", f"Nora Page reviewed entry {i}."),)) for i in range(7, 19)),
+    Page("page-strip-mirror-1", "page-strip-mirror", 1,
+         (Face("strip-mirror", "strip-person", 0, 0, embedded=False),)),
+)
+
+
 # Issue #103: one page with face and text-only people, two of Hana's faces, an
 # unassigned face and a repeated phrase that includes an unlinked occurrence,
 # beside further pages whose faces and occurrences exceed one sidebar batch.
@@ -354,6 +379,7 @@ SIDEBAR_PAGES = (
 )
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
+PAGE_SCROLL_PAGES = 30
 
 PAGES = (
     *(Page(f"search-merge-{i}", "search-merge", i,
@@ -561,6 +587,9 @@ PAGES = (
            has_layout=i != PAGE_GALLERY_MISSING_MEDIA,
            has_image=i != PAGE_GALLERY_MISSING_MEDIA)
       for i in range(1, PAGE_GALLERY_PAGES + 1)),
+    # Overflow the expanded grid with the desktop panels open.
+    *(Page(f"page-scroll-{i}", "page-scroll", i, has_layout=False)
+      for i in range(1, PAGE_SCROLL_PAGES + 1)),
     # Sorting scenario (#33): three ledger pages (one evidence-free) and one note.
     Page("sorting-ledger-1", "sorting-ledger", 1,
          (Face("sorting-manual", "sorting", 0, 4, "manual", confidence=0.62),
@@ -584,11 +613,12 @@ PAGES = (
         Face("discovery-other-model", "discovery", 1, 0, models=(DISCOVERY_OTHER_MODEL,)),
     )),
     Page("discovery-8", "discovery", 8, (
-        Face("discovery-zero-reference", "discovery", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        # #134: formerly zero vectors; the API and database now refuse them.
+        Face("discovery-zero-reference", "discovery", 0, 0, embedded=False),
         Face("discovery-face-match", "discovery-face", 1, 0, models=(DISCOVERY_MODEL,)),
     )),
     Page("discovery-9", "discovery", 9, (
-        Face("discovery-zero-candidate", "discovery-face", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        Face("discovery-zero-candidate", "discovery-face", 0, 0, embedded=False),
         Face("discovery-name-match", "discovery-name", 1, 1, models=(DISCOVERY_MODEL,)),
     )),
     Page("discovery-10", "discovery", 10, (
@@ -637,6 +667,7 @@ PAGES = (
     Page("teleprompter-wrap-2", "teleprompter", 2, (),
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
          lines=TELEPROMPTER_WRAPPED_LINES),
+    *PAGE_STRIP_PAGES,
     *SIDEBAR_PAGES,
     Page("creation-user-1", "creation-user", 1),
     Page("creation-key-1", "creation-key", 1),

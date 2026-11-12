@@ -2,7 +2,7 @@
 
 import json
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, asynccontextmanager
 
 import pytest
 import pytest_asyncio
@@ -78,6 +78,48 @@ def pytest_configure_node(node) -> None:
     )
 
 
+# Each preview-seed case takes seconds; the rest of the suite takes milliseconds.
+# Collected last, they left the progress counter at 85-95% for most of the run.
+SLOW_MODULES = ("test_preview_seed.py",)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--shard", metavar="I/N", type=parse_shard,
+        help="run the Ith of N equal shares of the suite (1-based); CI runs N jobs",
+    )
+
+
+def parse_shard(value: str) -> tuple[int, int]:
+    try:
+        index, count = map(int, value.split("/"))
+    except ValueError:
+        index = count = 0
+    if not 1 <= index <= count:
+        raise pytest.UsageError(f"--shard must be I/N with 1 <= I <= N, not {value!r}")
+    return index, count
+
+
+def case_tier(item: pytest.Item) -> int:
+    """2: real fresh preview seed; 1: seed from the worker's copy; 0: fast."""
+    if item.path.name not in SLOW_MODULES:
+        return 0
+    from preview_seed_snapshot import starts_with_seed
+
+    fresh = "seed_target" in getattr(item, "fixturenames", ()) and not starts_with_seed(item.function)
+    return 2 if fresh else 1
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    from case_schedule import schedule
+
+    selected = schedule(items, case_tier, config.getoption("shard"))
+    if len(selected) < len(items):
+        kept = set(selected)
+        config.hook.pytest_deselected(items=[item for item in items if item not in kept])
+    items[:] = selected
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     if WORKER_STORES in config.stash:
         config.stash[WORKER_STORES].close()
@@ -107,6 +149,15 @@ def isolated_model_indexes():
 @pytest_asyncio.fixture
 async def migrated_postgres():
     """A unique migrated schema on the explicitly disposable schema-test store."""
+    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
+    if not url:
+        pytest.skip("requires a disposable schema test database")
+    async with migrated_schema(url) as engine:
+        yield engine
+
+
+@asynccontextmanager
+async def migrated_schema(url: str):
     import uuid
 
     from alembic import command
@@ -115,9 +166,6 @@ async def migrated_postgres():
 
     from people_gator_api.persistence.postgres.schema import migration_config
 
-    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
-    if not url:
-        pytest.skip("requires a disposable schema test database")
     admin = create_async_engine(url)
     schema = "isolated_test_" + uuid.uuid4().hex
     async with admin.begin() as connection:

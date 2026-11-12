@@ -9,6 +9,7 @@ const props = withDefaults(
     label?: string
     prefix?: string
     size?: 'sm' | 'default'
+    compactOnMobile?: boolean
   }>(),
   { label: 'Sort by', size: 'default' },
 )
@@ -34,5 +35,6 @@ const value = computed({
     :label="label"
     :prefix="prefix"
     :size="size"
+    :compact-on-mobile="compactOnMobile"
   />
 </template>

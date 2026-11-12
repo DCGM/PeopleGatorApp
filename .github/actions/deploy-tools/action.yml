@@ -1,0 +1,14 @@
+name: Deployment tools
+description: >-
+  Install deploy/people-gator-deploy from this checkout into a job-local virtual
+  environment and put its people-gator-deploy command on PATH. Nothing is
+  installed on the host outside the job's temporary directory.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        venv="$RUNNER_TEMP/people-gator-deploy"
+        python3 -m venv "$venv"
+        "$venv/bin/pip" install --quiet --disable-pip-version-check "$GITHUB_WORKSPACE/deploy/people-gator-deploy"
+        echo "$venv/bin" >> "$GITHUB_PATH"

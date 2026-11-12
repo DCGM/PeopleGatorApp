@@ -982,9 +982,9 @@ export type FaceCreateRequest = {
     /**
      * Embeddings
      *
-     * The embeddings of the face detection.
+     * The embeddings of the face detection. Omit it or send null when no model produced a usable vector; all-zero vectors are rejected.
      */
-    embeddings?: Array<ModelEmbeddingFaceModelStub>;
+    embeddings?: Array<ModelEmbeddingFaceModelStub> | null;
     /**
      * Source Id
      *
@@ -1071,9 +1071,9 @@ export type FacePatchBatchItem = {
     /**
      * Embeddings
      *
-     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.
+     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list or null is a no-op. All-zero vectors are rejected.
      */
-    embeddings?: Array<ModelEmbeddingFaceModelStub>;
+    embeddings?: Array<ModelEmbeddingFaceModelStub> | null;
     /**
      * Detection Id
      *
@@ -1101,9 +1101,9 @@ export type FacePatchRequest = {
     /**
      * Embeddings
      *
-     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.
+     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list or null is a no-op. All-zero vectors are rejected.
      */
-    embeddings?: Array<ModelEmbeddingFaceModelStub>;
+    embeddings?: Array<ModelEmbeddingFaceModelStub> | null;
 };
 
 /**
@@ -2261,7 +2261,7 @@ export type ModelEmbeddingFaceModelStub = {
     /**
      * Vector
      *
-     * A non-empty, finite vector whose dimension must match model_identifier.
+     * A non-empty, finite, nonzero vector whose dimension must match model_identifier. Omit the embedding when the model produced no usable vector.
      */
     vector: Array<number>;
 };

@@ -17,6 +17,7 @@ const props = withDefaults(
     prefix?: string
     label?: string
     size?: 'sm' | 'default'
+    compactOnMobile?: boolean
   }>(),
   { label: 'Sort by', prefix: 'Sort', size: 'default' },
 )
@@ -41,7 +42,12 @@ function select(next: unknown) {
 <template>
   <Select :model-value="selected?.value" @update:model-value="select">
     <SelectTrigger :aria-label="label" :size="size" class="min-w-0 max-w-full flex-none">
-      <span class="min-w-0 truncate">{{ prefix }}: {{ selected?.label }}</span>
+      <span class="min-w-0 truncate"
+        >{{ prefix
+        }}<span :class="compactOnMobile ? 'hidden sm:inline' : undefined"
+          >: {{ selected?.label }}</span
+        ></span
+      >
     </SelectTrigger>
     <SelectContent>
       <SelectGroup v-for="group in groups" :key="group.label ?? 'general'">

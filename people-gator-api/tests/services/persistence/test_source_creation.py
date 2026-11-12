@@ -148,7 +148,7 @@ async def test_populated_migration_preserves_unknown_creation(migrated_postgres)
             config = migration_config()
             config.attributes['connection'] = sync
             (command.downgrade if downgrade else command.upgrade)(config, target)
-        await connection.run_sync(lambda sync: migrate(sync, 'd34a021b0014', True))
+        await connection.run_sync(lambda sync: migrate(sync, 'd34a021b0015', True))
         await connection.execute(text('INSERT INTO pg_demo_sources (id, source_type, url) VALUES (:id, :kind, :url)'),
                                  {'id': source_id, 'kind': 'document', 'url': f'https://www.digitalniknihovna.cz/legacy/view/uuid:{archive_id}'})
         await connection.execute(text('INSERT INTO pg_demo_documents (id, library, document_id, name) VALUES (:id, :library, :archive, :name)'),

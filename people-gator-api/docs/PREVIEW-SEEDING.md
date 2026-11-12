@@ -78,7 +78,7 @@ This does not automatically seed the actual staging environment.
 | Mentions only | Nora Svoboda across Research notes and Correspondence |
 | No evidence | Lenka Vesela, ready for manual linking |
 | Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
-| Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, one missing, one other-model and one zero vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a zero-vector candidate exercise finite scoring and assignment recovery. All ten practice scans have local media. |
+| Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, two without embeddings, and one other-model vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a candidate without an embedding exercise finite scoring and assignment recovery. All ten practice scans have local media. |
 | Identity discovery and merging | Open Ada Novak's Faces tab; A. Novak appears under Similar people |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
@@ -138,30 +138,38 @@ to keep seed compatibility and add representative examples in the same change.
 
 ## CI and deployment
 
-PR CI migrates a separate `ci_seed` database, executes the actual seed CLI twice,
-and validates the result before the ordinary backend test suite. It uses
-throwaway local storage. Seed integration tests also run in isolated schemas on
+The CI workflow migrates a separate `ci_seed` database, executes the actual seed
+CLI twice, and validates the result, alongside the ordinary backend test suite. It
+uses throwaway local storage. Seed integration tests also run on
 `PEOPLE_GATOR_SCHEMA_TEST_URL`, checking filters, vector discovery, OCR highlights,
 face crops, reruns, review edits, merges/deletions and checkpoint recovery.
 
-The trusted deployment utility removes the selected PR's old containers while
-retaining its database and media volume, then runs `storage-init`, `migrate`, and
-`seed` from the candidate backend image before starting backend/frontend. A
-failing seed command stops startup and leaves the previous deployment
+Each test run seeds the preview once into a template database and storage
+directory. A test whose body starts with `database, filesystem, ... = seed_target`
+and then `await preview.seed_preview(database, filesystem)` receives a copy of
+that template, and its first seed call returns the template's result; later
+calls run the real seed. Any other test, or one decorated with `@fresh_seed`,
+starts from an empty migrated schema and seeds for real, so upgrade and
+recovery tests that prepare state or patch the seed first keep a real first
+seed automatically. Use `@fresh_seed` when a test must check the fresh seed
+itself or changes seed inputs through a fixture; a copy fails if module-level
+seed inputs such as `preview.PEOPLE` have changed.
+`test_worker_seed_copy_matches_a_fresh_seed` checks that a copy equals a real
+fresh seed. See [test performance](../../docs/TEST-PERFORMANCE.md#ci-runner-speed-up-156).
+
+The same run's `deploy-preview` job runs the deployment utility from the PR's
+checkout. It removes the selected PR's old containers while retaining its
+database and media volume, then runs `storage-init`, `migrate`, and `seed` from
+the candidate backend image before starting backend/frontend. A failing seed
+command fails the deploy job and leaves the previous deployment
 configuration/version intact for retry, but the preview stays stopped until a
 successful retry. Repository writes may already have committed, so checkpoints are
 used to resume; the seed is not one atomic database/filesystem transaction.
 
-After one-time operator installation, the lifecycle workflow installs or reuses
-the `people-gator-deploy` utility from its exact reviewed `main` revision, without
-sudo, and runs that pinned version; see the
-[utility guide](../../deploy/people-gator-deploy/README.md). No workflow checks out
-and executes PR deployment scripts on that host. Installed versions are verified
-against their recorded file digests, so a stale or modified installation cannot
-bypass candidate seeding. PR code never supplies the host controller; the
-candidate image supplies the fixture code.
-Successful preview state includes a `seeded_version` marker; after a host upgrade,
-rerunning the same deployment can seed previews created by older controllers.
+The candidate image supplies the fixture code and the PR branch supplies the
+deploy code; see the [utility guide](../../deploy/people-gator-deploy/README.md).
+Successful preview state includes a `seeded_version` marker, so rerunning the
+workflow seeds a preview whose earlier deployment did not complete seeding.
 
 ## Documents and scans
 
@@ -614,11 +622,12 @@ reviewed aliases, assignments and checkpoints are retained on reruns. No retaine
 vectors or user edits are rewritten. Open the printed `entity-discovery` link,
 choose individual **Modalities** or combinations in Similar people, and compare
 its results on desktop and mobile. Found faces always uses faces and also finds `discovery-unassigned` for
-manual linking. Zero embeddings remain stored as realistic degenerate fixtures;
-search excludes undefined cosine contributions rather than assigning fake scores.
+manual linking. `discovery-zero-reference` and `discovery-zero-candidate` have no
+embedding: since #134 the API and database refuse all-zero vectors, migration
+`d34a021b0015` deletes stored ones, and that case is covered only by tests.
 
 The seed integration regression queries each source through both repositories,
-checks meaningful matches and finite scores, excludes zero-vector witnesses,
+checks meaningful matches and finite scores, excludes faces without vectors as witnesses,
 reads a real aligned crop, and preserves edited aliases/assignments on rerun.
 Existing interrupted-checkpoint and edit-preservation checks cover the added keys.
 
@@ -821,7 +830,7 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
-filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields and order. Document
+filters and server sorting retain their existing behavior. Each data field, including Document name, can be moved or removed from its header (click the chevron-marked name, then **Move left**/**Move right** or **Remove column**), added back from the last **Add column** column and reordered by dragging its header's top handle or pressing ←/→ on it. **Restore default columns** in the Add column menu resets fields, order and widths. Document
 name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
@@ -949,9 +958,11 @@ reference documents. Assignment filtering applies before pagination, so the
 match count and loaded pages agree. Change the model or assignment to restart
 the overview; previously loaded choices are not left selected out of view.
 
-The seed integration regression walks assigned and unassigned cursor pages,
-checks disjoint complete coverage and confirms the reference person's own faces
-stay excluded. It reuses existing local media, models and checkpoint identities.
+The link opens Found faces sorted by **Similarity**. For #163, use **Show more**
+and reload the link to compare the result order while the data stays the same.
+Lina's 42 reference faces exercise the clustering path. The integration test
+compares scores and order before and after paging, checks complete coverage
+across both assignment filters and confirms Lina's own faces stay excluded.
 
 ### Expanded and compact mentions (#80)
 
@@ -1151,7 +1162,7 @@ touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
 Home/End (bounds), or Enter (that column's default); double-click also restores
 one column. Titles can range from 200 to 720px. Other columns retain readable
 header minima and purpose-specific maxima. There is no bulk width-reset action; use each header grip to restore its width. Width choices survive row changes
-and hidden/restored columns within the mounted Documents view; reloads use default widths. Visible column selections persist in sessionStorage for the browser tab.
+and hidden/restored columns. Column visibility, order and resized widths persist in localStorage across reloads and browser sessions on the same origin. Existing tab settings migrate once when no durable setting exists; malformed or unavailable storage falls back safely without disabling controls.
 
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; keyboard scrolling of the focused
@@ -1281,8 +1292,8 @@ fields, Annotations, Faces and Mentions. Choosing a field appends that one colum
 and closes the menu. Drag a header's centered top handle to reorder columns (touch works on mobile); ←/→
 on the focused handle moves one position. Clicking a header's chevron-marked name opens a menu
 with **Move left**, **Move right** and **Remove column**; Escape closes it without removing. The document-link fallback that
-replaces a removed name cannot be removed. Visible fields and order persist in sessionStorage,
-including reload/navigation back. **Restore default columns** restores the nine fields and order; unavailable/invalid storage recovers
+replaces a removed name cannot be removed. Visible fields, order and widths persist in localStorage,
+including reload/navigation back and new browser sessions. **Restore default columns** restores the nine fields, order and widths; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 120px, Linked entities 144px, All annotations columns 168px, Mentions columns 144px, Faces columns 128px and
 optional NDK 80px. Each header has a full-height sort strip on its left with a centered
@@ -1358,7 +1369,7 @@ test resolves every link through repositories, checks metadata and local media,
 checks the intentional missing-scan response, then reruns the seed and verifies preservation of an edited number and timestamp
 and a renamed person.
 
-## Scan sidebar practice (#103)
+## Scan sidebar practice (#103, #137)
 
 The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
 has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
@@ -1367,15 +1378,20 @@ occurrence), a four-line mention of Hana with long context (#121) and a
 text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
 faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 21 further Hana occurrences, so document scope exceeds the 30-face and
-20-occurrence sidebar batches.
+20-occurrence sidebar batches. Dora Document has one direct document mention
+(`sidebar-direct-mention`) and no page evidence.
 
-- Open `scan-sidebar-people`. People lists Hana and Tomas (this page), then
-  Karel and Rosa (this document), then everyone else. Change the scope in the
-  search group to **This page** or **This document**; type a name and press
-  Enter or the Search button to refine.
+- Open `scan-sidebar-people`. Empty People search defaults to **This document**:
+  Hana and Tomas (this page), then Dora, Karel and Rosa (the rest of this document).
+  Dora demonstrates direct document membership; Tomas is mention-only.
+- Type **Hana** (or open `scan-sidebar-global-text`) to switch automatically to
+  **All people / Similarity**, including Hana Ledger outside this document.
+  Clear the final text/face input to restore document-only contextual browsing.
+  An explicit scope/sort choice remains in effect while refining an active search;
+  `scan-sidebar-document-only` demonstrates a copied, explicitly document-scoped search.
 - Open `scan-sidebar-card` to see Hana's tag expanded into the details card.
   Choose **Search** (magnifier): the face is attached to People search, Similarity
-  sorting is selected and the scope is kept. Remove the face with its ×.
+  sorting and **All people** are selected, even from a locally scoped search. Remove the face with its ×.
   `scan-sidebar-face-search` opens that state directly.
 - Open `scan-sidebar-faces` for document faces grouped by person, with
   **Unassigned** last. Scroll to load the next batch; faces on other pages open
@@ -1389,11 +1405,12 @@ faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
 - Open `scan-sidebar-info` for this page's statistics, last change and the
   latest recorded change of each face and mention.
 
-New stable keys add the four people, document, pages, faces and mentions to
+New stable keys add the sidebar people, document, pages, faces and mentions to
 retained previews. Reruns keep reviewer reassignments and timestamps.
 Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
-combined name/face search within the document, local media and aligned crops,
+combined name/face search, global relevance pagination, direct-document-only
+membership and unlink preservation, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
 
 ## Resizable scan sidebar and wrapping mention context (#121)
@@ -1423,7 +1440,7 @@ replaced media and rerun stability.
 
 Open the seed manifest's `document-creation` link (`/documents?library=preview-creation`).
 Use **Add column** to show **Created** and **Created by**. Both are hidden by
-default, retain the table's add/move/remove and tab-session preferences, and
+default, retain the table's add/move/remove and saved layout preferences, and
 provide no creation sorting. Created displays local date/time; Created by
 shows the user name and the API-key name in parentheses when used.
 
@@ -1435,8 +1452,8 @@ uses the preview reviewer. The historical pair uses the repository's internal
 actor to historical creation. This operation only inserts missing records; it
 never clears creation on existing sources and is not an HTTP registration route.
 
-Migration `d34a021b0015` leaves existing source creation fields NULL;
-`d34a021b0016` indexes creation time, user and API key on sources, entities,
+Migration `d34a021b0016` leaves existing source creation fields NULL;
+`d34a021b0017` indexes creation time, user and API key on sources, entities,
 image occurrences and mentions, like the modification fields. Registration
 never backfills them or changes known creation on a retry. Seed reruns retain
 source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
@@ -1448,8 +1465,8 @@ read their actual media before repeating the seed and checking preservation.
 
 Every shared panel offers **Created by**, **Created via key**, **Created from**
 and **Created to**, independently of its modification filters. This includes
-Documents, Scan search, People and person evidence (Faces/Mentions); the scan
-editor sidebar has none. Each list/search matches the returned
+Documents, People and person evidence (Faces/Mentions); the scan editor
+sidebar has none. Each list/search matches the returned
 record's own creation, rather than its containing document or latest editor.
 The API accepts `filter.created_from`, `filter.created_to`,
 `filter.created_by_user_id` and `filter.created_by_api_key_id`.
@@ -1458,7 +1475,162 @@ Use `documents-created-by`, `documents-created-key` and `documents-created-range
 for the three synthetic creation documents. The date example uses a fixed inclusive 2000–2100 interval, showing both known
 creations without inventing historical dates. Unknown legacy
 creation does not match an active date or creator criterion. `scans-created-range`
-uses pages' own creation times in the same interval. `people-created-by`,
+is kept as a stable key: since the Scans screen was retired (#141) it opens
+Documents, while page creation filters remain available through `/api/v1/pages`
+and the seed test checks pages' own creation times in the same interval. `people-created-by`,
 `faces-created-by` and `mentions-created-by` open populated people/annotation
 examples, including creation attributed to an importer despite later review edits.
 These example links and the underlying records survive reruns unchanged.
+
+
+### Page panel layout (#139)
+
+Open **page-panel-layout** to review the existing synthetic scan-sidebar page,
+Hana's linked face and text, local media, selected-person transcription mode and
+document-scoped Mentions. On desktop, hide buttons sit on the edges facing the
+viewer: transcription on the right of its header, People on the left. Reopen
+from the corresponding viewer-header control. Panels retain settings and saved
+expanded sizes; Link/Reassign and face Search reveal People when needed.
+
+Below 1024px, People remains visible below the viewer. Transcription collapses
+upward into a single **Transcription** bar, which also reopens it. Try a desktop
+→ mobile → desktop round trip with People hidden: the mobile section remains
+available and returning to desktop retains its previous visibility and width.
+Open **page-panel-layout-expanded** to repeat the same checks beside the
+expanded page browser, then collapse the browser to restore the live viewer.
+
+Hidden/open state is local to the mounted workspace. Both links reuse stable
+existing evidence and local media; the seed test checks those relationships,
+media access, exploration URLs and preservation of a reviewed face edit on rerun.
+
+### Bottom page-strip review (#131)
+
+Open `page-strip-review`, or **Page strip review practice** in
+`preview-page-strip`. Its 18 pages include Nora Page's assigned face (2), her
+mention alone (3), mixed assigned/unassigned faces (4), Otto Page's face (5), an
+empty page (6), and more Nora mentions (7–18). Pages 1 and 4 contain unassigned
+faces for review practice. Every page has deterministic local scan/layout media.
+
+Select **Nora Page** in the right panel, or open `page-strip-selected-person`.
+Her pages get a single orange outer border while all pages remain visible.
+Enable **Nora Page only**, or open `page-strip-person`, for 15 matching pages
+across two batches. Turn it off to restore all 18 pages. The current scan stays
+open when excluded by the filter. The compact strip shows no annotation counts.
+
+Open `page-strip-current-assigned` (page 2) to compare the current page's double
+orange border with the single outer border on Nora's other pages. Page 3 matches
+through a linked mention alone. The same document UUID in
+`preview-page-strip-mirror` demonstrates library isolation.
+
+On disposable data, assign page 1's face, unlink page 3's mention, or delete page
+2's face and inspect highlight/filter membership. Seed tests exercise repository
+queries bounded by loaded source IDs, local thumbnails and rerun preservation of
+assignments, unlinked mentions, deleted faces, source timestamps and stable IDs.
+Existing interrupted-checkpoint recovery coverage remains in place. These are
+additive examples and retain older page-gallery media and records.
+
+
+## Expanded document-page browser (issue #140)
+
+Open `document-page-browser` from the seed report, or choose **Expand pages**
+in the bottom strip. The central viewer area becomes a vertically scrolling
+thumbnail grid, ordered left to right and then down. **Collapse pages** restores
+the viewer; opening a thumbnail also returns to that page's viewer. The side
+panels keep their state. `pages_view=expanded` restores this mode after reload
+and through Back/Forward, including links through `/pages/:pageSourceId`.
+
+The scenario reuses the stable 18-page **Page strip review practice** document
+from #131. `document-page-browser-person` starts with Nora Page's person-only
+filter: face-only and mention-only matches remain highlighted/filterable across
+two cursor batches while the excluded current page stays open. Sort, selected
+person and person-only state carry into the selected page. Source membership and
+current-page outlines retain the strip's single/double orange distinction;
+there are no annotation counters.
+
+`document-page-browser-missing-media` opens the existing registered page without
+media in expanded mode, to check the **No preview** fallback and navigation.
+The new links add no records or checkpoint identities. Seed integration tests
+resolve their source/page targets, inspect cross-batch membership and local
+thumbnail media, and preserve a reviewer's page-number edit on rerun.
+
+
+### Scrolling after expansion (#157)
+
+Open `document-page-browser-scroll` for **Page scrolling practice**, a synthetic
+document with 30 pages and local thumbnails. It opens in the compact strip.
+Choose **Expand pages**, then use the wheel, Page Down or a touch swipe over the
+grid. Scroll through the cursor batches to page 30. Choose **Collapse pages**
+and use the wheel over the strip to scroll horizontally again.
+
+The seed adds a separate document with stable page identities. Integration
+coverage resolves the entry route, reads all pages in order across cursor
+batches, checks the first and last thumbnails, and checks identity and
+processing timestamps on rerun.
+
+
+### Document-first entry and retired Scans search (#141)
+
+Use `document-browse` to open the expanded page browser for the existing 14-page
+navigation document. `document-browse-empty` opens a registered document with no
+pages, showing its actual title and a Documents link. `document-browse-unregistered`
+resolves a source archive containing a stored page even when no parent document
+record exists. Every example uses deterministic existing records and local media.
+No fake first page is created for an empty or unavailable document.
+The empty-document link is added only when its fixture is present, so upgrading
+an older preview without that example remains valid.
+
+The standalone Scans screen and cross-document scan-search UI are retired.
+Documents and People are the top-level destinations. Page breadcrumbs return to
+that document's expanded browser; person mention document groups retain the
+selected person. Direct page URLs remain valid. Existing `/scans` fixture links
+are retained as compatibility examples: a single document resolves to its browser,
+a single page resolves to the viewer, and global/ambiguous queries return to
+Documents without transferring retired search/filter criteria. They no longer
+load a Scans component. The backend search API remains unchanged.
+
+Repository/media tests verify document identity, all 14 registered pages, the
+empty count, orphan page media and stable entries/source metadata on rerun.
+
+### Page, document and database source tags (#138)
+
+Open `scan-source-tags`. Hana Sidebar has linked faces and mentions on the
+current page, while Tomas Lettered has only a linked text mention: both use the
+double-orange **Page** tag. Rosa Elsewhere and Karel Crowd belong to sibling
+pages and show a single-orange **Document** tag. People from other documents
+show the neutral gray **DB** tag. The tag sits directly below each portrait;
+selecting a person is still indicated separately by the card's selection outline.
+
+Open `scan-source-tags-text`, `scan-source-tags-face` and
+`scan-source-tags-combined` to compare text-only, face-only and combined scores
+below the source tag. Face scores are cosine similarity expressed as a
+percentage (not probability), converted from the existing cosine distance; text
+scores keep their existing scale and are labeled separately. A pending or
+unavailable membership lookup shows **Unknown**, never a premature DB label.
+Membership is checked in bounded page/document queries independently of loaded
+or filtered face/mention batches. Existing portrait browsing, preview, profile
+and assignment actions remain independent.
+
+The seed test checks face-or-mention membership through repositories, sibling
+versus outside-document context, local page/crop media and preservation of a
+reviewed unlink and page metadata on rerun. These links reuse stable existing
+fixtures without modifying their reviewed evidence.
+
+### Persistent document layout (#142)
+
+Open the `document-table-persistence` manifest link. It reuses the stable width
+fixtures: short/long document titles, a document with a registered page and local
+image/mention evidence, empty documents and enough rows for cursor loading. Add a
+column, remove another, reorder the headers and resize Document name with its
+right-edge grip (keyboard arrows also work). Reload, open another tab or restart
+the browser on the same origin: visibility, order and widths remain. Sorting,
+filters and pagination do not reset them. **Restore default columns** resets all
+three and the reset survives reload. Blocked/full storage keeps the controls
+usable for the current view. Existing sessionStorage choices migrate only when
+there is no corresponding localStorage preference; browser-local layout is not
+stored per account or shared between browsers/origins.
+
+The parametrized width/persistence integration scenario checks both manifest
+entries through repository queries, multi-batch traversal and actual page media,
+then confirms reviewed document/mention state survives reseeding. Browser
+layout storage is exercised separately by frontend tests and the maintained
+`check-document-persistence.mjs` browser check.

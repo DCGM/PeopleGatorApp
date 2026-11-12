@@ -25,12 +25,10 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    centered top handle (or use ←/→ on it) to reorder columns; click a header label
    (marked by a chevron) to move it left or right or choose **Remove column**. Defaults show First page, Document
    name, NDK, Library, Pages, Linked entities, Annotations, Faces and Mentions. Column
-   choices and order persist for the browser tab. Use a header’s full-height sort strip on its left to cycle ascending, descending
+   choices, order and resized widths persist in localStorage across reloads and browser sessions on the same browser/origin. **Restore default columns** resets all three. Use a header’s full-height sort strip on its left to cycle ascending, descending
    and default ordering. The bounded table scrolls in both directions with a sticky
    header; reaching its last row loads the next cursor batch. On desktop, the table fills the remaining viewport height (the page has no footer or title); on mobile, its section fills the viewport below the top bar. Open a document name or thumbnail to enter its first page in the viewer/editor. The PeopleGator logo
-   and first breadcrumb return here. Open **Scan search** for pages and evidence;
-   follow a result into its page workspace and inspect the OCR/face overlays. Use the
-   **Document pages** strip below the scan to open other pages of that document.
+   and first breadcrumb return here. Use the **Document pages** strip below the scan to open other pages; **Expand pages** opens the full-height grid. The document breadcrumb opens this browser directly. Scans search has been retired; old document-scoped links redirect to the document browser.
 5. On disposable data, change an identity field or assignment and inspect its
    last-processing metadata. Try link-state filters and the mobile filter toggle.
    Review fixture details in the
@@ -104,8 +102,7 @@ results and applicable desktop/mobile screenshot evidence. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.
 
-Scan search offers **Minimum annotations**: choose All annotations, Faces or
-Text mentions, then a state and inclusive minimum. Documents keeps only search
+Page browsing keeps the document strip and expanded grid, with sorting and selected-person filtering. Cross-document scan search is retired; the backend page-search/count APIs remain available. Documents keeps only search
 and sort above its table; its filter sidebar (a drawer from the sliders button
 below 1024px) holds Libraries, Modified by/via key/from/to and **All
 annotations**, **Faces**, **Text mentions** and **People** ranges (State, Min, Max).
@@ -140,7 +137,7 @@ Documents also offers optional **Created** and **Created by** columns through
 **Add column**. Created by shows the registering user and API key, when used.
 Sources registered before creation tracking show **Unknown**; registration retries
 preserve their recorded creation. These columns support the same add/move/remove
-and tab-session preferences, without creation sorting. Explore the
+and saved layout preferences, without creation sorting. Explore the
 seed's `document-creation` link for user, API-key and legacy examples.
 
 
@@ -148,5 +145,15 @@ Use **Created by**, **Created via key**, **Created from** and **Created to** in
 shared filter panels to select the creator and an inclusive
 creation interval. The criteria match the listed person, face, mention or source's
 own creation; modification filters remain independent. Start with the seed's
-`documents-created-by`, `scans-created-range`, `people-created-by`,
+`documents-created-by`, `people-created-by`,
 `faces-created-by` and `mentions-created-by` examples.
+
+
+The page workspace's desktop hide buttons sit beside the viewer: the right end
+of the transcription header and the left end of the People header. Reopen from
+the corresponding viewer-header control. On mobile, People remains visible;
+Transcription collapses upward into a labelled bar that also reopens it. Hiding
+preserves settings and expanded sizes; Link/Reassign and face Search reveal
+People when needed. Scan tools use a regular header above the image, scrolling
+horizontally on narrow screens. Explore `page-panel-layout` or
+`page-panel-layout-expanded` in the synthetic preview manifest.

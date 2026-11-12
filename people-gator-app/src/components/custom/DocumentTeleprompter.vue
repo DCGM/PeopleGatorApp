@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import PanelBar from './PanelBar.vue'
 import TeleprompterHighlightFilter from './TeleprompterHighlightFilter.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
 import { linkTooltip, mentionStateClasses } from '@/lib/entity-links'
@@ -644,8 +645,7 @@ defineExpose({ scrollPage, navigateTo })
 
 <template>
   <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
-    <div role="toolbar" aria-label="Teleprompter settings"
-      class="@container flex min-w-0 flex-row flex-wrap items-center gap-2 border-b py-1.5">
+    <PanelBar label="Teleprompter settings">
       <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
         :model-value="lineVisibility" @update:model-value="setLineVisibility">
         <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="gap-1 px-2"
@@ -662,10 +662,13 @@ defineExpose({ scrollPage, navigateTo })
         </ToggleGroupItem>
       </ToggleGroup>
       <TeleprompterHighlightFilter v-model="annotationHighlight" />
-    </div>
+      <template v-if="$slots['panel-actions']" #end>
+        <slot name="panel-actions" />
+      </template>
+    </PanelBar>
 
     <div ref="bodyElement"
-      class="relative grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_3.5rem]">
+      class="relative grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 px-3 sm:grid-cols-[minmax(0,1fr)_3.5rem] sm:px-6">
       <section ref="scrollElement" tabindex="0"
         class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); mentionBadge = null" @keydown="handleKeydown"
@@ -733,7 +736,7 @@ defineExpose({ scrollPage, navigateTo })
     </div>
 
     <section v-if="isTranslationOpen && !emptyMessage"
-      class="grid shrink-0 grid-cols-[2.5rem_minmax(0,1fr)_2rem] items-start border-t bg-background py-2 text-base"
+      class="grid shrink-0 grid-cols-[2.5rem_minmax(0,1fr)_2rem] items-start border-t bg-background px-3 py-2 text-base sm:px-6"
       aria-label="Translate teleprompter text">
       <small class="pr-2 text-right font-mono font-bold uppercase text-secondary">
         {{ selectedLanguage }}

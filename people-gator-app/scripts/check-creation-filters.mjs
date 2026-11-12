@@ -19,7 +19,6 @@ const append = (url, params) => url + (url.includes('?') ? '&' : '?') + new URLS
 const scenarios = [
   ['documents', links['documents-created-by'], 'documents', '/api/v1/documents'],
   ['people', links['people-created-by'], 'Search people panel', '/api/v1/search-entities'],
-  ['scans', links['scans-created-range'], 'Search scans panel', '/api/v1/pages'],
   ['person-faces', links['faces-created-by'], 'Person evidence panel', '/api/v1/faces'],
   [
     'person-mentions',
@@ -91,7 +90,7 @@ try {
         `${name}: no page overflow`,
       )
       await page.screenshot({ path: `${output}/${viewport}-${name}.png`, fullPage: false })
-      if (name === 'scans') {
+      if (name === 'people') {
         await panel.getByRole('button', { name: 'Created from', exact: true }).click()
         const time = page.getByLabel('Created from time', { exact: true })
         await time.waitFor({ state: 'visible' })

@@ -37,7 +37,7 @@ every endpoint, browser journey or deployment works.
 | Migrations and schema validation | Opt-in tests migrate disposable PostgreSQL stores, repeat migration, detect drift, preserve bootstrap data and exercise rollback. Schema validation is also tested with a restricted runtime role. | [Schema validation](../people-gator-api/tests/services/persistence/test_postgres_schema_validation.py), [bootstrap adoption](../people-gator-api/tests/services/persistence/test_bootstrap_adoption.py) |
 | Synthetic preview and media | Seed tests migrate isolated schemas, use real local files and query repositories/media services. They cover vectors, filters, OCR spans, crops, rerun/edit preservation and interrupted checkpoints. Selected HTTP tests use real PostgreSQL with an overridden authentication context. Media unit tests use generated image bytes and fake storage to exercise cache/error paths. | [Preview seed suite](../people-gator-api/tests/services/persistence/test_preview_seed.py), [page images](../people-gator-api/tests/services/media/test_page_image.py), [OCR spans](../people-gator-api/tests/services/media/test_text_mention_span_service.py), [seed guide](../people-gator-api/docs/PREVIEW-SEEDING.md) |
 | Storage and optional adapters | Local filesystem tests use temporary files; S3 tests use mocked clients. Weaviate repository/client tests use fakes, with a separate opt-in test against a disposable live Weaviate server. Passing mock tests does not establish live S3 or Weaviate compatibility. | [Local storage](../people-gator-api/tests/services/filesystem/test_local.py), [S3 adapter](../people-gator-api/tests/services/filesystem/test_s3.py), [live Weaviate](../people-gator-api/tests/services/persistence/test_weaviate_link_integration.py) |
-| Deployment utility and observability | unittest checks PR/staging/release lifecycles with scripted GitHub responses and recording Docker adapters, real files, locks and ordering. Installer tests build real isolated installs from disposable Git repositories (interrupted upgrades, pinning, integrity, CI source policy). Workflow tests execute lifecycle scripts against a stub executable and parse every emitted command with the real CLI; adapter tests use a fake Docker binary for context, credential and cancellation cleanup. Compose files are rendered by the real CLI. Database isolation and database-only snapshot preservation run in CI. S3 snapshot restore, the database runtime image gate and OTLP delivery are local opt-in Docker checks; CI uses no secrets or external services. No tests install code on a real host. | [Package tests](../deploy/people-gator-deploy/tests/), [utility guide](../deploy/people-gator-deploy/README.md#development) |
+| Deployment utility and observability | unittest checks PR/staging/release lifecycles with scripted GitHub responses and recording Docker adapters, real files, locks and ordering. Configuration tests cover the `DEPLOY_*` settings and the private files generated from secrets. Workflow tests parse `ci.yml`, execute every deploy step against a stub executable and parse the recorded commands with the real CLI; runner-guard tests run the job-started hook against a disposable Git origin; adapter tests use a fake Docker binary for context, credential and cancellation cleanup. Compose files, including the operator-run `deploy/infrastructure` stack, are rendered by the real CLI. Database isolation, the shared-PostgreSQL prerequisite check against a real daemon and database-only snapshot preservation run in CI. S3 snapshot restore and the database runtime image gate are local opt-in Docker checks; CI uses no secrets or external services. No tests deploy to a real host. | [Package tests](../deploy/people-gator-deploy/tests/), [utility guide](../deploy/people-gator-deploy/README.md#development) |
 
 Type checking and compilation catch contract/type/build errors; they are not
 behavioral test suites. The frontend currently has no configured real-browser
@@ -109,7 +109,7 @@ Live Weaviate coverage needs both `PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT` and
 The ordinary S3 adapter tests do not need a real bucket.
 
 ```sh
-# From the repository root
+# From the repository root (needs PyYAML; CI runs it through `uv run` from people-gator-api instead)
 PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
 ```
 
@@ -133,7 +133,11 @@ without live PostgreSQL. Use four workers for the full database-enabled suite:
 uv run --locked pytest --lf -q
 uv run --locked pytest tests/services/persistence/test_preview_seed.py -k reruns -q
 # With both disposable PostgreSQL URLs configured as in Development:
-uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30
+uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30 \
+  --basetemp=/dev/shm/people-gator-pytest
+# Reproduce one CI shard:
+uv run --locked pytest tests -n 4 --dist=worksteal --shard=2/6 \
+  --basetemp=/dev/shm/people-gator-pytest
 ```
 
 Use `-n 2` on smaller machines, or `-n 0` for sequential debugging. Work stealing
@@ -141,6 +145,24 @@ distributes individual cases, including parametrized cases, across workers; do
 not use `--dist=loadfile`, which leaves the expensive preview-seed module on one
 worker. Keep the worker count bounded instead of using `-n auto` on shared hosts.
 Parallel execution is optional; no workers are started by default.
+
+Nearly all of the full run is the ~100 preview-seed cases, which are CPU-bound.
+Their seed runs fsync about 2,000 small files each, so on Linux put pytest's
+temporary directory on tmpfs with `--basetemp` (about 1 GB for a full run;
+pytest empties it at the start of each run). That cut a local run from 651 s to 363 s;
+elsewhere, omit the option.
+
+A run seeds the preview once into a template database and storage copy; a
+preview-seed case that starts with a seed call gets a copy, and that first call
+returns the template's result (later calls seed for real). Other cases, and
+those decorated with `@fresh_seed`, seed an empty schema for real. See
+[preview seeding](../people-gator-api/docs/PREVIEW-SEEDING.md#ci-and-deployment).
+This needs `CREATEDB` even with `-n 0`.
+
+The suite's `conftest.py` spaces preview-seed cases evenly through the run, so
+the progress counter tracks elapsed time. `--shard=I/N` runs the Ith of N parts,
+each with an equal share of fresh-seed, copied-seed and fast cases; together the
+parts run every collected case exactly once.
 
 For each worker, the pytest controller creates a separate empty database for
 each configured `PEOPLE_GATOR_POSTGRES_TEST_URL` and
@@ -159,10 +181,13 @@ each case so bootstrap tests do not depend on collection order. Live Weaviate
 opt-ins are rejected with parallel execution because that service is not isolated
 per worker; use `-n 0` for those checks.
 
-The controller drops its allocated `pytest_worker_<uuid>` databases on shutdown,
-including after worker failure and partial provisioning failure. Killing the
-controller forcibly can leave those databases behind; remove only the names
-allocated by that invocation on the disposable test server. Never enable these
+The controller drops its allocated `pytest_worker_<uuid>` databases and the
+run's `pytest_worker_<uuid>_seed` template on shutdown, including after worker
+failure and partial provisioning failure; cases drop their copies
+(`<template database>_<8 hex>`) themselves. Killing the controller forcibly can
+leave those databases behind; remove only the names allocated by that invocation
+on the disposable test server. Without workers, the template is
+`<schema-test database>_seed` and the session drops it. Never enable these
 commands against project or production stores.
 
 Compare timings on one machine with the same URLs/services, running separately:
@@ -176,27 +201,37 @@ time uv run --locked pytest -q -n 4 --dist=worksteal --durations=0
 
 `--durations=0` includes setup, call and teardown timings. Repeat the chosen full
 run to check cleanup and ordering. The [issue #81 measurements](TEST-PERFORMANCE.md)
-record the baseline, profiling evidence and worker-count comparison.
+record the baseline, profiling evidence and worker-count comparison; the
+[issue #156 measurements](TEST-PERFORMANCE.md#ci-runner-speed-up-156) compare
+the CI options.
 
-### What PR CI runs
+### What CI runs
 
-The [PR CI workflow](../.github/workflows/pr-ci.yml) currently runs:
+The [CI workflow](../.github/workflows/ci.yml) currently runs on every push and
+pull request:
 
 1. Frontend dependency installation, type checking and the Vitest suite.
 2. Backend locked dependency installation and disposable PostgreSQL databases
    for repository tests (`ci`), schema tests (`ci_schema`) and CLI smoke (`ci_seed`).
-3. Real CLI migration → seed → seed → schema check using disposable local storage,
-   followed by the backend pytest suite with four isolated PostgreSQL workers.
-4. Preview-controller tests from the exact workflow commit in a separate
-   checkout. The workflow enables live PostgreSQL isolation; it does not enable
-   live Weaviate or OTLP log delivery.
-5. After frontend/backend checks pass, production image builds and GHCR
-   publication for same-repository PRs. Forks receive checks without publication.
+3. The backend pytest suite as six parallel shards (`--shard=1/6` … `6/6`),
+   each on its own runner and PostgreSQL service with four isolated workers,
+   tmpfs `--basetemp` and durability disabled on the throwaway server. Each
+   shard takes about 2–3 minutes; see [test performance](TEST-PERFORMANCE.md).
+4. In parallel, the `tools` part: real CLI migration → seed → seed → schema
+   check using disposable local storage, then the deployment utility tests from
+   the same checkout, including the workflow and runner-guard tests, with live
+   PostgreSQL isolation enabled; it does not enable live Weaviate or OTLP log
+   delivery. The utility is then installed exactly as the deploy jobs install it.
+5. After frontend/backend checks pass, production image builds; same-repository
+   events publish them to GHCR as `sha-<commit>`. Forks receive checks and a
+   build without publication.
+6. Deploy jobs for same-repository PRs, pushes to `main` and `v*` tags run on
+   the self-hosted runners in the same workflow run.
 
 There is no automated browser journey, performance threshold or coverage
-percentage gate in that workflow. Image publication and preview deployment have
-their own failure modes; passing behavioral tests alone does not mean a preview
-has deployed successfully. See [Deployment](DEPLOYMENT.md#ci-and-preview-lifecycle).
+percentage gate in that workflow. Image publication and deployment have their
+own failure modes; passing behavioral tests alone does not mean a preview has
+deployed successfully. See [Deployment](DEPLOYMENT.md#ci-and-deployment-lifecycle).
 
 ## When to write each kind of test
 

@@ -14,6 +14,8 @@ watch(
     void router.replace({
       name: 'document-page',
       params: { libraryId: value.library, documentId: value.document_id, pageId: value.page_id },
+      query: route.query,
+      hash: route.hash,
     })
   },
   { immediate: true },

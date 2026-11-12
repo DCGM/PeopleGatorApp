@@ -3,7 +3,8 @@ import { legacyFilterNotice, migrateLegacyFilters } from '@/viewmodels/shared-fi
 
 import PageSourceView from '@/views/PageSourceView.vue'
 import DocumentPageView from '@/views/DocumentPageView.vue'
-import DocumentSearchView from '@/views/DocumentSearchView.vue'
+import DocumentPagesView from '@/views/DocumentPagesView.vue'
+import { legacyScanLocation } from '@/viewmodels/document-navigation'
 import DocumentListView from '@/views/DocumentListView.vue'
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
 import PersonDetailView from '@/views/PersonDetailView.vue'
@@ -20,15 +21,25 @@ const router = createRouter({
     { path: '/', redirect: { name: 'document-list' } },
     {
       path: '/scans',
-      name: 'document-search',
-      component: DocumentSearchView,
-      meta: { title: 'Scan search' },
+      redirect: (to) => legacyScanLocation(to.query),
     },
     {
       path: '/documents',
       name: 'document-list',
       component: DocumentListView,
       meta: { title: 'Documents' },
+    },
+    {
+      path: '/documents/:documentSourceId',
+      name: 'document-source',
+      component: DocumentPagesView,
+      meta: { title: 'Document pages' },
+    },
+    {
+      path: '/libraries/:libraryId/documents/:documentId',
+      name: 'document-pages',
+      component: DocumentPagesView,
+      meta: { title: 'Document pages' },
     },
     {
       path: '/people',

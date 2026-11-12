@@ -3,8 +3,7 @@
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the `main`-based contribution workflow,
 [docs/START_HERE.md](docs/START_HERE.md) for code navigation and
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and test stores.
-Use the existing checkout in isolated cloud tasks; do not create an additional
-Git worktree unless the user requests one.
+Do all work in a dedicated Git worktree, as described in [Worktrees](#worktrees).
 
 All future implementation jobs must follow this GitHub workflow:
 
@@ -15,8 +14,9 @@ All future implementation jobs must follow this GitHub workflow:
    one describing the problem, intended behavior and scope, then work against it.
 2. Create or reuse a dedicated branch for that issue, with the issue number in
    its name (for example, `issue2` or `issue/2-description`). Base new branches on
-   the intended PR target. Keep implementation work off the default branch and
-   preserve unrelated user changes in the worktree.
+   the intended PR target. Check the branch out in its own new worktree before
+   making any change, and do all further work there. Keep implementation work
+   off the default branch.
 3. Commit as each coherent functional unit is complete and appropriately
    verified. Make partial implementation commits reviewable and working; do not
    wait until the entire issue is finished to commit everything together. Scope
@@ -32,6 +32,58 @@ All future implementation jobs must follow this GitHub workflow:
 5. Address review and CI findings with further focused commits on the same issue
    branch. Finish through the pull request workflow; merge only when the user has
    authorized merging. Do not include unrelated work in the commits or PR.
+6. After the PR merges, clean up its worktree and local branch as described in
+   [Worktrees](#worktrees).
+
+# Worktrees
+
+The original `PeopleGatorApp/` checkout is locked to `main`: it always has the
+`main` branch checked out at the latest `origin/main`. Agents only update it
+with `git pull --ff-only` and run `git worktree` commands from it. Never switch
+branches, edit, build, install, test, run servers or commit there. If it is not
+clean on `main`, or cannot fast-forward, stop and tell the user instead of
+fixing it.
+
+Agents work exclusively in `../PeopleGatorApp-worktrees/` (relative to the main
+checkout), with each worktree in its own folder there. Do not create worktrees
+anywhere else.
+
+- **Implementation:** one folder per issue, named `issue<N>-<slug>`.
+
+  ```bash
+  git fetch origin
+  # New branch from main:
+  git worktree add -b issue/<N>-<slug> ../PeopleGatorApp-worktrees/issue<N>-<slug> origin/main
+  # Existing branch:
+  git worktree add ../PeopleGatorApp-worktrees/issue<N>-<slug> issue/<N>-<slug>
+  ```
+
+- **Review:** reviewers also create a fresh worktree, named `review-pr<N>`.
+  Use a detached checkout for read-only review; check out the PR branch instead
+  when pushing review fixes.
+
+  ```bash
+  git fetch origin pull/<N>/head
+  git worktree add --detach ../PeopleGatorApp-worktrees/review-pr<N> FETCH_HEAD
+  ```
+
+- Run installs, tests, seeds and dev servers from inside the worktree. Never
+  touch another agent's worktree.
+- **Cleanup after merge:** confirm the PR is merged
+  (`gh pr view <N> --json state`) and that the worktree has no uncommitted or
+  unpushed work. Stop its dev servers and containers and drop disposable
+  databases created for it, then update the main checkout and remove the
+  worktree and local branch:
+
+  ```bash
+  git pull --ff-only   # in the main checkout, on main
+  git worktree remove ../PeopleGatorApp-worktrees/<folder>
+  git branch -d <branch>
+  git worktree prune
+  ```
+
+  Remove review worktrees once the review is finished or the PR is merged or
+  closed. If a worktree holds unpushed work, ask the user before removing it.
 
 # Keeping pull-request previews representative
 
@@ -68,18 +120,19 @@ relationships, vectors, media formats, authentication attribution, or filters:
    migration, seed, then backend/frontend startup. Seed failure must prevent the
    candidate deployment from being marked successful.
 
-The PR CI workflow smoke-tests the real migration/seed CLI twice in a separate
-`ci_seed` database and runs the seed integration tests with
-`PEOPLE_GATOR_SCHEMA_TEST_URL`. Deployment lifecycle tests live in
-`deploy/people-gator-deploy/tests/`. An operator installs the `people-gator-deploy`
-utility and configures each environment's descriptor once, as described in
-`deploy/people-gator-deploy/README.md`. Lifecycle jobs install (or reuse) the
-utility from their exact reviewed `main` workflow commit through
-`deploy/install.py`, without sudo, and invoke its operations. PR code and
-non-default-branch workflows must not become the host controller. Keep
-descriptors, users, credentials and environment state outside utility
-installations; shared-infrastructure initialization/upgrades remain explicit
-operator actions.
+The CI workflow (`.github/workflows/ci.yml`) smoke-tests the real
+migration/seed CLI twice in a separate `ci_seed` database and runs the seed
+integration tests with `PEOPLE_GATOR_SCHEMA_TEST_URL`. Its deploy jobs run
+`deploy/people-gator-deploy` from the checked-out commit (a PR deploys with its
+own branch's deploy code; staging uses `main`, releases the tag) configured by
+a short list of repository variables and secrets per environment (`PREVIEW_*`,
+`STAGING_*`, `PRODUCTION_*`), as described in `deploy/GITHUB-SETUP.md`. Keep that
+list to the database, storage, telemetry and users; prefer a convention over a
+new setting. The shared PostgreSQL/Traefik stack is operator-run (`deploy/infrastructure`); the utility only checks it. Deployment lifecycle,
+workflow and runner-guard tests live in `deploy/people-gator-deploy/tests/`;
+update them with any change to the workflow's deploy steps, the configuration
+schema or the runner guard. Keep credentials in GitHub Environment secrets
+and host state directories, never in Git.
 
 # Search and filter panels throughout the application
 

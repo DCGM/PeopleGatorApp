@@ -35,20 +35,33 @@ function respond(batches: Record<string, { items: unknown[]; cursor?: string | n
   })
 }
 
-function mountGallery(currentPageId: string, batchSize = 2) {
+function mountGallery(
+  currentPageId: string,
+  batchSize = 2,
+  personId = ref(''),
+  selectedPersonId = personId,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const current = ref(currentPageId)
   let gallery!: ReturnType<typeof useDocumentPageGallery>
   const wrapper = mount(
     defineComponent({
       setup() {
-        gallery = useDocumentPageGallery(LIBRARY, DOCUMENT, current, batchSize)
+        gallery = useDocumentPageGallery(
+          LIBRARY,
+          DOCUMENT,
+          current,
+          batchSize,
+          undefined,
+          personId,
+          selectedPersonId,
+        )
         return () => h('div')
       },
     }),
     { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
   )
-  return { wrapper, current, gallery: () => gallery }
+  return { wrapper, current, personId, client, gallery: () => gallery }
 }
 
 beforeEach(() => {
@@ -143,6 +156,94 @@ describe('document page gallery', () => {
     await flushPromises()
     expect(gallery().error.value).toBeNull()
     expect(gallery().items.value.map((item) => item.current)).toEqual([true])
+    wrapper.unmount()
+  })
+
+  it('filters by person on the server and never drains batches to find an excluded current page', async () => {
+    respond({
+      first: {
+        items: [{ ...page(2), entity_link_stats: { faces: { unassigned: 1 } } }],
+        cursor: 'next',
+      },
+      next: { items: [page(3)], cursor: null },
+    })
+    const { wrapper, gallery, personId, client } = mountGallery(page(99).page_id, 2, ref('nora'))
+    await flushPromises()
+    expect(mocks.listPages).toHaveBeenCalledTimes(1)
+    expect(mocks.listPages.mock.calls[0]![0].query['filter.entity_id']).toEqual(['nora'])
+    expect(gallery().items.value.every((item) => !item.current)).toBe(true)
+    gallery().loadMore()
+    await flushPromises()
+    expect(mocks.listPages).toHaveBeenCalledTimes(2)
+    // Existing mutation invalidation must refresh counts/membership in the strip.
+    respond({ first: { items: [], cursor: null } })
+    await client.invalidateQueries({ queryKey: ['pages'] })
+    await flushPromises()
+    expect(gallery().items.value).toEqual([])
+    personId.value = ''
+    await flushPromises()
+    expect(
+      mocks.listPages.mock.calls[mocks.listPages.mock.calls.length - 1]![0].query[
+        'filter.entity_id'
+      ],
+    ).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('highlights the selected person across the full strip with one scoped membership query per loaded batch', async () => {
+    let matches = [2, 3]
+    let fail = false
+    mocks.listPages.mockImplementation(async ({ query }) => {
+      if (query['filter.source_id']) {
+        if (fail) throw new Error('membership unavailable')
+        const ids = query['filter.source_id'] as string[]
+        return {
+          data: {
+            items: matches.map((index) => page(index)).filter((p) => ids.includes(p.source_id)),
+            cursor: null,
+          },
+        }
+      }
+      return { data: { items: [page(1), page(2), page(3)], total_count: 3, cursor: null } }
+    })
+    const selected = ref('nora')
+    const { wrapper, gallery, client } = mountGallery(page(1).page_id, 3, ref(''), selected)
+    await flushPromises()
+    expect(gallery().items.value.map((item) => item.matchesSelectedPerson)).toEqual([
+      false,
+      true,
+      true,
+    ])
+    expect(mocks.listPages).toHaveBeenCalledTimes(2)
+    expect(mocks.listPages.mock.calls[1]![0].query).toEqual({
+      'filter.library': [LIBRARY],
+      'filter.document_id': [DOCUMENT],
+      'filter.entity_id': ['nora'],
+      'filter.source_id': ['source-1', 'source-2', 'source-3'],
+      limit: 3,
+    })
+    expect(mocks.listPages.mock.calls[0]![0].query['filter.entity_id']).toBeUndefined()
+    matches = [2]
+    await client.invalidateQueries({ queryKey: ['pages'] })
+    await flushPromises()
+    expect(gallery().items.value.map((item) => item.matchesSelectedPerson)).toEqual([
+      false,
+      true,
+      false,
+    ])
+    fail = true
+    selected.value = 'otto'
+    await flushPromises()
+    expect(gallery().items.value).toHaveLength(3)
+    expect(gallery().items.value.every((item) => item.matchesSelectedPerson === null)).toBe(true)
+    expect(gallery().highlightError.value).toBe(true)
+    fail = false
+    await gallery().retryHighlights()
+    await flushPromises()
+    expect(gallery().highlightError.value).toBe(false)
+    selected.value = ''
+    await flushPromises()
+    expect(gallery().items.value.every((item) => !item.matchesSelectedPerson)).toBe(true)
     wrapper.unmount()
   })
 

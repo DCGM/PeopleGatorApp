@@ -1,0 +1,6 @@
+{
+  "test": {
+    "hash": "$argon2id$v=19$m=65536,t=3,p=4$iTpODf7wIneTlqalyjALZA$1U6pPAHY87UZFYdK0R6wm6B403c9l42nnTw5K9ThuQc",
+    "scopes": ["people-gator:browse", "people-gator:annotate", "people-gator:ingest", "people-gator:admin"]
+  }
+}

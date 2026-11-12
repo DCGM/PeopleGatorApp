@@ -26,9 +26,9 @@ limitations in the PR.
 1. Read the relevant GitHub issue's full description and acceptance criteria.
    Reuse it; create one first if the work has no issue.
 2. Start from current `main` and create/reuse a dedicated issue branch such as
-   `issue/2-repository-documentation`. Preserve unrelated local changes; do not
-   reset the checkout. Cloud tasks already have isolated checkouts and need no
-   extra worktree unless explicitly requested.
+   `issue/2-repository-documentation`, checked out in its own worktree under
+   `../PeopleGatorApp-worktrees/` (see [AGENTS.md](AGENTS.md#worktrees)). The
+   main checkout stays on the latest `main`; only `git pull --ff-only` it.
 3. Implement and verify coherent functional units, committing each as it is
    ready. Scope commits to the issue and explain resulting behavior.
 4. Push the branch and open a PR targeting `main`. Link the issue (for example
@@ -38,6 +38,8 @@ limitations in the PR.
    incomplete.
 5. Address review and CI failures with further commits. Keep the PR description
    current. Merge only with authorization; do not push implementation to `main`.
+6. After merge, pull `main` in the main checkout and remove the issue worktree
+   and local branch.
 
 ## Writing a pull request
 
@@ -108,7 +110,7 @@ executed results, skips and limitations in the PR.
 | Backend | Focused pytest tests plus `uv run --locked pytest tests` with disposable PostgreSQL URLs for integration coverage |
 | Schema/migrations | Migration tests against a separate empty schema store; migrate, repeat, validate and exercise restricted runtime access |
 | Seed or visible/data behavior | Extend seed fixtures/docs/tests; run seed twice on isolated migrated PostgreSQL and local storage |
-| Deployment utility/Compose/workflows | `python3 -B -m unittest discover -s deploy/people-gator-deploy/tests` with the package on `PYTHONPATH`; enable relevant documented database/image/OTLP checks |
+| Deployment utility/Compose/workflow | `python3 -B -m unittest discover -s deploy/people-gator-deploy/tests` with the package on `PYTHONPATH` (needs PyYAML, or run it through `uv run` from `people-gator-api`); enable relevant documented database/image/OTLP checks |
 | Documentation | Verify relative links, source contracts and executable examples; distinguish tested commands from operator-only steps |
 
 Run frontend commands in `people-gator-app`, backend commands in
@@ -131,13 +133,12 @@ accessible tags; do not restyle shared UI primitives for a screen-specific chang
 
 ## Review and operations
 
-Never commit credentials or private datasets. Keep application changes separate
-from trusted host tooling: after one-time operator installation and
-configuration, lifecycle workflows install the `people-gator-deploy` utility from
-their exact reviewed `main` revision without sudo and invoke it. Candidate PR code
-must not become the host controller. Keep descriptors, credentials and environment
-state outside utility installations; infrastructure upgrades remain explicit
-operator actions.
+Never commit credentials or private datasets. The CI workflow's deploy jobs run
+the `people-gator-deploy` utility from the checked-out commit with the settings
+of a GitHub Environment, so a deploy change is exercised by its own PR preview
+before it reaches staging (`main`) and releases (`v*` tags). Keep credentials in
+GitHub Environment secrets and host state directories; infrastructure upgrades
+remain explicit operator actions.
 Review migrations, backup/restore and retained-data repairs before applying them;
 follow [Data maintenance](docs/DATA_MAINTENANCE.md).
 

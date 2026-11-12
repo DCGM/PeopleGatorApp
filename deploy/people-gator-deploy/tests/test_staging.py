@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from actions_isolation import isolate
 from people_gator_deploy import staging
 from people_gator_deploy.core import DeployError
 
@@ -26,18 +27,15 @@ class FakeStaging(staging.Staging):
         archive = root / "snapshot.dump"
         archive.write_bytes(b"PGDMP synthetic original database")
         archive.chmod(0o600)
-        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
+        super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "staging"), "docker_context": "rootless",
+                          "host": "staging.peoplegator.dev", "database_network": "db",
+                          "postgres": {"host": "postgres", "port": 5432, "user": "preview_admin",
+                                       "password": "admin-pw", "database": "postgres"},
                           "runtime_file": str(runtime), "snapshot": {"path": str(archive),
-                              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA},
-                          "staging": {"state_dir": str(root / "staging")}})
-        self.root.mkdir()
-        (self.root / "infrastructure.env").write_text("synthetic infra")
+                              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "application_revision": SHA}})
         self.staging_root.mkdir()
-        self.run = {"id": 100, "run_attempt": 1, "workflow_id": 9, "head_sha": SHA,
-                    "event": "push", "conclusion": "success", "head_branch": "main",
-                    "head_repository": {"full_name": self.repository}}
+        self.run = {"id": 100, "run_attempt": 1, "head_sha": SHA}
         self.main_sha = SHA
-        self.workflow_path = ".github/workflows/pr-ci.yml"
         self.events = []
         self.inputs = []
         self.fail = None
@@ -51,19 +49,19 @@ class FakeStaging(staging.Staging):
     def api(self, endpoint):
         if endpoint == "git/ref/heads/main":
             return {"object": {"sha": self.main_sha}}
-        if endpoint.startswith("actions/runs/"):
-            return dict(self.run)
-        if endpoint.startswith("actions/workflows/pr-ci.yml/runs"):
-            return {"workflow_runs": [dict(self.run)]}
-        if endpoint.startswith("actions/workflows/"):
-            return {"path": self.workflow_path}
         raise AssertionError(endpoint)
+
+    def build(self, sha):
+        return {**super().build(sha), "id": self.run["id"], "run_attempt": self.run["run_attempt"]}
+
+    def deploy(self, sha=None, *, refresh=False):
+        return super().deploy(sha or self.run["head_sha"], refresh=refresh)
 
     def image(self, part, run):
         self.events.append("pull-" + part)
         return IMAGES[part]
 
-    def command(self, args, *, sql=None):
+    def command(self, args, *, sql=None, env=None):
         self.inputs.append(sql)
         operation = " ".join(args[args.index("-f") + 2:]) if "-f" in args else " ".join(args)
         self.events.append(operation)
@@ -71,7 +69,7 @@ class FakeStaging(staging.Staging):
             raise RuntimeError("Injected command failure")
         return ""
 
-    def private_command(self, args, *, input_text=None, input_file=None, progress=None):
+    def private_command(self, args, *, input_text=None, input_file=None, progress=None, env=None):
         return self.command(args, sql=input_text)
 
     def worker(self, action, values, directory, **kwargs):
@@ -100,26 +98,23 @@ class FakeStaging(staging.Staging):
 
 class StagingTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.controller = FakeStaging(self.root)
 
-    def test_successful_current_main_only_and_stale_builds_fail_before_mutation(self):
+    def test_only_the_current_main_commit_deploys_and_stale_builds_fail_before_mutation(self):
         controller = self.controller
-        for field, value in (("event", "pull_request"), ("head_branch", "issue/16"),
-                             ("conclusion", "failure"), ("head_sha", "f" * 40),
-                             ("head_repository", {"full_name": "attacker/fork"})):
-            old = controller.run[field]
-            with self.subTest(field=field):
-                controller.run[field] = value
-                with self.assertRaisesRegex(ValueError, "current main"):
-                    controller.deploy(refresh=True)
-                self.assertEqual(controller.events, [])
-                controller.run[field] = old
-        controller.workflow_path = ".github/workflows/untrusted.yml"
-        with self.assertRaises(ValueError):
+        controller.main_sha = "f" * 40
+        with self.assertRaisesRegex(ValueError, "current main"):
             controller.deploy(refresh=True)
+        self.assertEqual(controller.events, [])
+        controller.main_sha = SHA
+        for sha in ("", "main", SHA[:-1]):
+            with self.subTest(sha=sha), self.assertRaisesRegex(ValueError, "--sha"):
+                staging.Staging.deploy(controller, sha, refresh=True)
+        self.assertEqual(controller.events, [])
 
     def test_explicit_init_then_deploy_retains_database_and_never_reads_snapshot(self):
         controller = self.controller
@@ -234,7 +229,7 @@ class StagingTests(unittest.TestCase):
             controller.deploy()
         self.assertFalse(any(event.startswith("up ") for event in controller.events))
 
-    def test_older_attempt_cannot_overwrite_newer_and_changed_attempt_is_rejected(self):
+    def test_older_attempt_cannot_overwrite_newer_but_operator_runs_may(self):
         controller = self.controller
         controller.initial()
         controller.run["run_attempt"] = 2
@@ -244,10 +239,11 @@ class StagingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "newer staging"):
             controller.deploy()
         self.assertNotIn("run --rm --no-deps migrate", controller.events)
-        run = dict(controller.run)
-        controller.run["run_attempt"] = 3
-        with self.assertRaisesRegex(ValueError, "attempt changed"):
-            controller.fence(run)
+        # Outside Actions there is no run identity; the current main commit still deploys.
+        controller.run.update(id=0, run_attempt=0)
+        controller.deploy()
+        self.assertIn("run --rm --no-deps migrate", controller.events)
+        self.assertEqual(json.loads((controller.staging_root / "state.json").read_text())["version"], [0, 0])
 
     def test_interrupted_activation_recovers_pair_and_committed_state_recovers_env(self):
         controller = self.controller
@@ -275,9 +271,44 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         self.assertNotIn("prepare", controller.events)
         controller.events.clear()
-        with self.assertRaisesRegex(DeployError, "needs snapshot_source_file for snapshot-init/refresh"):
+        with self.assertRaisesRegex(DeployError, "STAGING_BACKUP_S3_"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
+
+    def test_without_a_backup_source_the_first_update_starts_an_empty_database(self):
+        controller = self.controller
+        del controller.config["snapshot"]  # no production backups exist yet
+        controller.deploy()
+        state = json.loads((controller.staging_root / "state.json").read_text())
+        self.assertRegex(state["generation"], r"^[a-f0-9]{16}$")
+        self.assertNotIn("provenance", state)
+        self.assertNotIn("prepare", controller.events)
+        name = "staging_" + state["generation"]
+        sql = "\n".join(text for text in controller.inputs if text)
+        self.assertIn(f"CREATE DATABASE {name} OWNER {name}", sql)
+        self.assertIn("CREATE EXTENSION IF NOT EXISTS vector", sql)
+        gates = ["run --rm --no-deps migrate", "worker-validate", "run --rm --no-deps check",
+                 "up -d --wait --wait-timeout 180 backend", "https-readiness"]
+        indices = [controller.events.index(gate) for gate in gates]
+        self.assertEqual(indices, sorted(indices))
+        self.assertFalse((controller.staging_root / "previous.json").exists())
+        # Later updates keep that database.
+        controller.events.clear(); controller.inputs.clear()
+        controller.run.update(id=101, head_sha="c" * 40)
+        controller.main_sha = controller.run["head_sha"]
+        controller.deploy()
+        self.assertEqual(json.loads((controller.staging_root / "state.json").read_text())["generation"], state["generation"])
+        self.assertFalse(any(text and "CREATE DATABASE" in text for text in controller.inputs))
+
+    def test_a_failed_empty_start_takes_the_candidate_down_and_leaves_no_state(self):
+        controller = self.controller
+        del controller.config["snapshot"]
+        controller.fail = "readiness"
+        with self.assertRaisesRegex(RuntimeError, "readiness"):
+            controller.deploy()
+        self.assertFalse((controller.staging_root / "state.json").exists())
+        self.assertFalse((controller.staging_root / "activation.json").exists())
+        self.assertIn("down --timeout 30", controller.events)
 
     def test_backend_consumes_external_storage_while_database_tools_do_not(self):
         controller = self.controller
@@ -317,13 +348,6 @@ class StagingTests(unittest.TestCase):
             with self.assertRaisesRegex(DeployError, "databases only"):
                 controller.worker(unsupported, values, controller.staging_root)
 
-    def test_external_runtime_file_cannot_override_database_ownership(self):
-        controller = self.controller
-        Path(controller.config["runtime_file"]).write_text("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE=external\n")
-        with self.assertRaisesRegex(DeployError, "persistence settings are managed"):
-            controller.deploy(refresh=True)
-        self.assertEqual(controller.events, [])
-
     def test_disposable_ci_workers_are_outside_live_staging_recovery_scope(self):
         controller = self.controller
         other_root = self.root / "ci-fixture"
@@ -344,11 +368,12 @@ class StagingTests(unittest.TestCase):
         self.assertEqual((controller.staging_root / "last-error.log").stat().st_mode & 0o777, 0o600)
 
     def test_missing_staging_settings_report_safe_guidance_before_github_or_docker(self):
+        controller = self.controller
+        del controller.config["snapshot"]
         with self.assertRaises(staging.StagingConfigurationError) as raised:
-            staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
-                             "private_operator_value": "private-sentinel"})
-        self.assertIn("staging configure", str(raised.exception))
-        self.assertNotIn("private-sentinel", str(raised.exception))
+            controller.deploy(refresh=True)
+        self.assertIn("STAGING_BACKUP_S3_", str(raised.exception))
+        self.assertNotIn("admin-pw", str(raised.exception))
 
 
 if __name__ == "__main__":

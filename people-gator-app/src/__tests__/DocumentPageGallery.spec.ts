@@ -71,9 +71,9 @@ describe('DocumentPageGallery', () => {
   it('names every page link and marks only the current page', async () => {
     const { wrapper } = await mountGallery()
     const nav = wrapper.get('nav')
-    expect(nav.attributes('aria-labelledby')).toBe('document-pages-title')
+    expect(nav.attributes('aria-label')).toBe('Document pages')
     expect(wrapper.get('#document-pages-title').text()).toContain('Document pages')
-    expect(wrapper.get('#document-pages-title').text()).toContain('3 pages')
+    expect(wrapper.text()).toContain('3 registered pages')
     const links = wrapper.findAll('a')
     expect(links.map((link) => link.attributes('aria-label'))).toEqual([
       'Page page-1, current page',
@@ -86,6 +86,49 @@ describe('DocumentPageGallery', () => {
       undefined,
     ])
     expect(links[1]!.text()).toContain('No preview')
+    wrapper.unmount()
+  })
+
+  it('announces selected-person membership without displaying annotation statistics', async () => {
+    const { wrapper } = await mountGallery({
+      items: [item(1, true), { ...item(2), matchesSelectedPerson: true }],
+    })
+    expect(wrapper.findAll('a')[0]!.attributes('aria-label')).not.toContain('unassigned')
+    expect(wrapper.findAll('a')[1]!.attributes('aria-label')).toBe(
+      'Page page-2, selected person appears on this page',
+    )
+    expect(wrapper.findAll('a')[1]!.find('[data-slot=badge]').exists()).toBe(false)
+    expect(wrapper.findAll('a')[1]!.attributes('aria-current')).toBeUndefined()
+    await wrapper.setProps({ items: [], totalCount: 0 })
+    expect(wrapper.get('[role=status]').text()).toBe('No matching pages.')
+    wrapper.unmount()
+  })
+
+  it('uses one compact header with the document title, position and sidebar-person toggle', async () => {
+    const { wrapper } = await mountGallery({
+      documentName: 'Page strip review practice',
+      pageNumber: 4,
+      documentPageCount: 18,
+      selectedPersonId: 'nora',
+      selectedPersonName: 'Nora Page',
+    })
+    expect(wrapper.get('#document-pages-title').text()).toBe('Page strip review practice')
+    expect(wrapper.text()).toContain('4/18')
+    const toggle = wrapper.get('[aria-label="Nora Page only"]')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('update:personOnly')).toEqual([[true]])
+    await wrapper.setProps({ personOnly: true, totalCount: 1 })
+    expect(wrapper.text()).toContain('4/18')
+    expect(wrapper.text()).not.toContain('This document has one registered page.')
+    expect(wrapper.find('.active-filters').exists()).toBe(false)
+    expect(wrapper.find('.search-filter-panel').exists()).toBe(false)
+    await wrapper.setProps({ selectedPersonId: null })
+    expect(
+      wrapper
+        .get('[aria-label="Select a person in the right panel to filter pages"]')
+        .attributes('disabled'),
+    ).toBeDefined()
     wrapper.unmount()
   })
 
@@ -110,14 +153,96 @@ describe('DocumentPageGallery', () => {
 
   it('offers more pages and a retry for a failed page list', async () => {
     const { wrapper } = await mountGallery({ hasNextPage: true })
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('button[aria-label="Expand pages"]').trigger('focus')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'More pages')!
+      .trigger('click')
     expect(wrapper.emitted('load-more')).toHaveLength(1)
 
     await wrapper.setProps({ error: true, hasNextPage: true })
     expect(wrapper.get('[role=alert]').text()).toContain('Could not load document pages.')
-    expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['Retry pages'])
-    await wrapper.get('button').trigger('click')
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
+      'Person only',
+      '',
+      'Retry pages',
+    ])
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Retry pages')!
+      .trigger('click')
     expect(wrapper.emitted('retry')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('expands into a row-first grid while retaining current and person-match states', async () => {
+    const { wrapper } = await mountGallery({
+      selectedPersonId: 'nora',
+      selectedPersonName: 'Nora Page',
+      items: [item(1, true), { ...item(2), matchesSelectedPerson: true }, item(3)],
+    })
+    const strip = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    expect(strip.style.overflowX).toBe('scroll')
+    const expand = wrapper.get('button[aria-label="Expand pages"]')
+    expect(expand.attributes('aria-expanded')).toBe('false')
+    expect(expand.attributes('aria-controls')).toBe('document-pages-list')
+    await expand.trigger('click')
+    expect(wrapper.emitted('update:expanded')).toEqual([[true]])
+    await wrapper.setProps({ expanded: true })
+    expect(wrapper.get('nav').attributes('data-expanded')).toBe('true')
+    expect(wrapper.get('ol').classes()).toContain('grid')
+    expect(wrapper.get('ol').classes()).not.toContain('w-max')
+    expect(wrapper.findAll('ol a').map((link) => link.attributes('href'))).toEqual([
+      '/libraries/preview-mzk/documents/doc/pages/page-1',
+      '/libraries/preview-mzk/documents/doc/pages/page-2',
+      '/libraries/preview-mzk/documents/doc/pages/page-3',
+    ])
+    expect(wrapper.get('a[aria-current="page"] [data-page-thumbnail]').classes()).toContain(
+      'border-2',
+    )
+    expect(wrapper.get('[data-person-match="true"]').classes()).toContain('border-0')
+    const grid = wrapper.get('[aria-label="Document pages grid"]')
+    expect(grid.attributes('tabindex')).toBe('0')
+    expect((grid.element as HTMLElement).style.overflowY).toBe('scroll')
+    await wrapper.get('button[aria-label="Collapse pages"]').trigger('click')
+    expect(wrapper.emitted('update:expanded')).toEqual([[true], [false]])
+    await wrapper.setProps({ expanded: false })
+    expect(wrapper.get('ol').classes()).toContain('w-max')
+    const collapsed = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    expect(collapsed.style.overflowX).toBe('scroll')
+    wrapper.unmount()
+  })
+
+  it('scrolls the collapsed strip sideways with a plain up/down wheel', async () => {
+    const { wrapper } = await mountGallery()
+    const viewport = wrapper.get('[aria-label="Document pages strip"]').element as HTMLElement
+    Object.defineProperty(viewport, 'clientWidth', { configurable: true, value: 200 })
+    Object.defineProperty(viewport, 'scrollWidth', { configurable: true, value: 600 })
+    const wheel = (init: WheelEventInit) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init })
+      viewport.dispatchEvent(event)
+      return event
+    }
+
+    expect(wheel({ deltaY: 120 }).defaultPrevented).toBe(true)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(wheel({ deltaY: -3, deltaMode: WheelEvent.DOM_DELTA_LINE }).defaultPrevented).toBe(true)
+    expect(viewport.scrollLeft).toBe(72)
+    // Native horizontal and pinch-zoom input are left alone.
+    expect(wheel({ deltaX: 50, deltaY: 10 }).defaultPrevented).toBe(false)
+    expect(wheel({ deltaY: 50, ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(viewport.scrollLeft).toBe(72)
+    // At the ends the wheel passes on to the page.
+    viewport.scrollLeft = 0
+    expect(wheel({ deltaY: -120 }).defaultPrevented).toBe(false)
+    viewport.scrollLeft = 400
+    expect(wheel({ deltaY: 120 }).defaultPrevented).toBe(false)
+
+    await wrapper.setProps({ expanded: true })
+    const grid = wrapper.get('[aria-label="Document pages grid"]').element
+    const vertical = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    grid.dispatchEvent(vertical)
+    expect(vertical.defaultPrevented).toBe(false)
     wrapper.unmount()
   })
 
@@ -126,7 +251,7 @@ describe('DocumentPageGallery', () => {
     expect(wrapper.text()).toContain('Loading document pages…')
     expect(wrapper.findAll('li[aria-hidden=true]')).toHaveLength(3)
     await wrapper.setProps({ items: [item(1, true)], totalCount: 1, loading: false })
-    expect(wrapper.text()).toContain('1 page')
+    expect(wrapper.text()).toContain('1 registered pages')
     expect(wrapper.text()).toContain('This document has one registered page.')
     wrapper.unmount()
   })

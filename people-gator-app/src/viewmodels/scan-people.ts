@@ -3,6 +3,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntitySortField, FoundEntity, EntityResponse } from '@/client'
 import { defaultDirection, listSortParams, sortParams, type SortState } from '@/lib/sorting'
+import { apiErrorCode } from '@/query/api'
 import { fetchEntities, useEntityListQuery, type EntityListParams } from '@/query/entities'
 import { queryKeys } from '@/query/keys'
 import { useEntitySearchQuery, type EntitySearchParams } from '@/query/search'
@@ -211,6 +212,55 @@ export function useScanPeople(options: {
     return ids
   })
 
+  // A globally ranked person can belong to this page even before its faces or
+  // OCR mentions have loaded. Check membership independently of those batches.
+  const knownPageMembers = computed(
+    () =>
+      new Set(
+        combined.value.items
+          .filter(({ tier }) => tiers.value[tier] === 'page')
+          .map(({ record }) => record.entity_id),
+      ),
+  )
+  const pageMembershipBatches = computed(() => {
+    const ids = combined.value.items
+      .map(({ record }) => record.entity_id)
+      .filter((id) => !knownPageMembers.value.has(id))
+      .sort()
+    const batches: string[][] = []
+    for (let index = 0; index < ids.length; index += MEMBERSHIP_BATCH_SIZE)
+      batches.push(ids.slice(index, index + MEMBERSHIP_BATCH_SIZE))
+    return batches
+  })
+  const pageMembership = useQueries({
+    queries: computed(() => {
+      const page = toValue(options.sources)?.page
+      return pageMembershipBatches.value.map((ids) => {
+        const params: EntityListParams = {
+          'filter.page_source_id': [page ?? ''],
+          'filter.entity_id': ids,
+          limit: ids.length,
+        }
+        return {
+          queryKey: queryKeys.entities.list(params),
+          queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntities(params, signal),
+          enabled: ready.value && Boolean(page),
+          staleTime: 60_000,
+        }
+      })
+    }),
+  })
+  const pageMembers = computed(() => {
+    const ids = new Set(knownPageMembers.value)
+    for (const query of pageMembership.value)
+      for (const entity of query.data?.items ?? []) ids.add(entity.entity_id)
+    return ids
+  })
+  function membershipResolved(id: string, batches: string[][], queries: typeof membership.value) {
+    const index = batches.findIndex((batch) => batch.includes(id))
+    return index >= 0 && Boolean(queries[index]?.data) && !queries[index]?.error
+  }
+
   const pageFaceCounts = computed(() => {
     const counts = new Map<string, number>()
     for (const face of toValue(options.pageFaces))
@@ -223,7 +273,7 @@ export function useScanPeople(options: {
     const faces = toValue(options.pageFaces)
     const text = input.value.text.trim()
     const faceReference = input.value.face?.id
-    return combined.value.items.map(({ record, tier }) => {
+    return combined.value.items.map(({ record }) => {
       const found = 'score' in record ? (record as FoundEntity) : undefined
       const textScore = found?.text_score ?? undefined
       const faceScore = found?.face_score ?? undefined
@@ -245,10 +295,17 @@ export function useScanPeople(options: {
       const faceId =
         found?.matched_detection_ids?.[0] ??
         faces.find((face) => face.personId === record.entity_id)?.id
-      const tierName = tiers.value[tier]
+      const onPage = pageMembers.value.has(record.entity_id) || mentionCount > 0 || detections > 0
+      const pageKnown =
+        knownPageMembers.value.has(record.entity_id) ||
+        membershipResolved(record.entity_id, pageMembershipBatches.value, pageMembership.value)
+      const inDocument = documentMembers.value.has(record.entity_id)
+      const documentKnown =
+        knownMembers.value.has(record.entity_id) ||
+        membershipResolved(record.entity_id, membershipBatches.value, membership.value)
       return {
         id: record.entity_id,
-        sourceId: tierName === 'page' ? toValue(options.pageSourceId) : undefined,
+        sourceId: onPage ? toValue(options.pageSourceId) : undefined,
         referenceFaceId: faceReference,
         candidateMode: faceReference ? 'face' : text ? 'text' : 'page',
         candidateText: text || undefined,
@@ -259,7 +316,15 @@ export function useScanPeople(options: {
         nerMentions: mentionCount,
         detections,
         linkedFaces: record.entity_link_stats?.faces?.total ?? 0,
-        source: tierName === 'page' || mentionCount || detections ? 'page' : 'database',
+        source: onPage
+          ? 'page'
+          : !pageKnown
+            ? 'unknown'
+            : inDocument
+              ? 'document'
+              : documentKnown
+                ? 'database'
+                : 'unknown',
         matchSources: [
           ...(textScore !== undefined
             ? ([{ type: 'text-search', score: percentage(textScore) }] as const)
@@ -299,6 +364,12 @@ export function useScanPeople(options: {
     hasNextPage: computed(() => combined.value.active < used.value.length),
     isFetching: computed(() => used.value.some((slot) => slot.state.value.isFetching)),
     error: computed(() => activeSlot.value?.state.value.error ?? null),
+    /** The API cannot score with the attached face, e.g. its stored vector is all zeros. */
+    faceRejected: computed(
+      () =>
+        Boolean(input.value.face) &&
+        used.value.some((slot) => apiErrorCode(slot.state.value.error) === 'invalid_search'),
+    ),
     async loadMore() {
       const slot = activeSlot.value
       if (!slot?.state.value.pages || !slot.state.value.hasNextPage) return

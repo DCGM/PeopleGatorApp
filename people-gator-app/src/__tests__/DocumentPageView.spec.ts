@@ -1,7 +1,8 @@
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
+import { AxiosError, type AxiosResponse } from 'axios'
 import { mount, shallowMount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DocumentPageView from '@/views/DocumentPageView.vue'
 import type { Face, TranscriptionLine } from '@/viewmodels/document-workspace.types'
 
@@ -23,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   assignFace: vi.fn(),
   unassignFace: vi.fn(),
   createAndAssign: vi.fn(),
+  documentLookup: vi.fn(),
+  getFace: vi.fn(),
+  listEntities: vi.fn(),
+  searchEntities: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: mocks.route,
@@ -33,14 +38,21 @@ vi.mock('@/client', async (original) => ({
   deleteFaceRouteApiV1FacesDetectionIdDelete: mocks.deleteFace,
   patchFaceRouteApiV1FacesDetectionIdPatch: mocks.patchFace,
   getTextMentionRouteApiV1TextMentionsMentionIdGet: mocks.mention,
+  getFaceRouteApiV1FacesDetectionIdGet: mocks.getFace,
+  listEntitiesRouteApiV1EntitiesGet: mocks.listEntities,
+  searchEntitiesGetApiV1SearchEntitiesGet: mocks.searchEntities,
 }))
 vi.mock('@/composables/can-annotate', () => ({
   useCanAnnotate: () => ref(true),
   useCanDeleteDetection: () => ref(true),
 }))
 vi.mock('@/composables/link-state-filter', () => ({ useLinkStateFilter: () => ref([]) }))
+vi.mock('@/query/entities', async (original) => ({
+  ...(await original<typeof import('@/query/entities')>()),
+  useEntityQuery: () => ({ data: ref(null) }),
+}))
 vi.mock('@/query/media', () => ({
-  useDocumentLookupQuery: () => ({ isPending: ref(false), error: ref(null), data: ref(null) }),
+  useDocumentLookupQuery: mocks.documentLookup,
 }))
 vi.mock('@/query/translation', () => ({
   useTranslationQuery: () => ({ data: ref(null), isFetching: ref(false) }),
@@ -93,11 +105,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   route = reactive({ params: { libraryId: 'lib', documentId: 'doc', pageId: 'one' }, query: {} })
   mocks.route.mockReturnValue(route)
+  mocks.documentLookup.mockReturnValue({ isPending: ref(false), error: ref(null), data: ref(null) })
   mocks.gallery.mockReturnValue({
     items: ref([]),
     totalCount: ref(null),
     isLoading: ref(false),
     error: ref(null),
+    highlightError: ref(false),
+    retryHighlights: vi.fn(),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
     loadMore: vi.fn(),
@@ -199,6 +214,11 @@ async function mountView(renderActions = false) {
         AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
         AlertDialogContent: { template: '<div><slot /></div>' },
         AlertDialogFooter: { template: '<div><slot /></div>' },
+        PanelBar: {
+          props: ['as'],
+          template:
+            '<component :is="as || \'div\'"><slot name="start" /><slot /><slot name="end" /></component>',
+        },
         Tabs: { name: 'Tabs', props: ['modelValue'], template: '<div><slot /></div>' },
         TabsList: { template: '<div><slot /></div>' },
         TabsTrigger: {
@@ -217,7 +237,7 @@ async function mountView(renderActions = false) {
   return wrapper
 }
 describe('evidence selection viewport focus', () => {
-  it('focuses gallery, overlay, toolbar and keyboard face selections, including reselection', async () => {
+  it('focuses gallery, overlay and keyboard face selections, including reselection', async () => {
     const wrapper = await mountView()
     for (const component of ['ScanFacesPanel', 'DocumentPageOverlay']) {
       wrapper
@@ -226,7 +246,7 @@ describe('evidence selection viewport focus', () => {
       await settleFocus()
     }
     expect(mocks.pan).toHaveBeenCalledTimes(2)
-    wrapper.findComponent({ name: 'DocumentControls' }).vm.$emit('next-face')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
     await settleFocus()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))
     await settleFocus()
@@ -281,14 +301,77 @@ describe('document page gallery navigation', () => {
     const [library, document, page] = mocks.gallery.mock.calls[0]!
     expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
     // Only the route document and the gallery's own order; no evidence filters.
-    const [, , , , order] = mocks.gallery.mock.calls[0]!
-    expect(mocks.gallery.mock.calls[0]).toHaveLength(5)
+    const [, , , , order, person] = mocks.gallery.mock.calls[0]!
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(7)
+    expect(person.value).toBe('')
     expect(order.value).toEqual({ field: 'page_number', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
-    route.query = { person: 'a', line: 'l2', link_state: 'manual', page_link_state: 'verified' }
+    route.query = {
+      person: 'a',
+      line: 'l2',
+      link_state: 'manual',
+      page_link_state: 'verified',
+      selectedPerson: 'nora',
+      gallery_person_only: 'on',
+      gallery_sort: 'faces_total_count',
+      gallery_dir: 'desc',
+      pages_view: 'expanded',
+    }
+    await settleFocus()
+    expect(person.value).toBe('nora')
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
+      query: {
+        gallery_person_only: 'on',
+        selectedPerson: 'nora',
+        gallery_sort: 'faces_total_count',
+        gallery_dir: 'desc',
+      },
+    })
+    wrapper.unmount()
+  })
+
+  it('restores expansion from the URL without replacing the mounted viewer', async () => {
+    route.query = { pages_view: 'expanded', selectedPerson: 'nora', gallery_person_only: 'on' }
+    const wrapper = await mountView()
+    const gallery = wrapper.findComponent({ name: 'DocumentPageGallery' })
+    const viewer = wrapper.get('.workspace-viewer').element
+    expect(gallery.props('expanded')).toBe(true)
+    expect((viewer as HTMLElement).style.display).toBe('none')
+    gallery.vm.$emit('update:expanded', false)
+    await flushPromises()
+    expect(mocks.push.mock.lastCall?.[0].query).toMatchObject({
+      pages_view: undefined,
+      selectedPerson: 'nora',
+      gallery_person_only: 'on',
+    })
+    route.query = { selectedPerson: 'nora', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    expect((viewer as HTMLElement).style.display).not.toBe('none')
+    expect(gallery.props('expanded')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('filters only by the sidebar selection while the compact toggle is enabled', async () => {
+    const wrapper = await mountView()
+    const strip = wrapper.findComponent({ name: 'DocumentPageGallery' })
+    const person = mocks.gallery.mock.calls[0]![5]
+    route.query = { selectedPerson: 'nora', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(person.value).toBe('nora')
+    route.query = { selectedPerson: 'ada', gallery_person_only: 'on' }
+    await settleFocus()
+    expect(person.value).toBe('ada')
+    route.query = { selectedPerson: 'ada' }
+    await settleFocus()
+    expect(person.value).toBe('')
+    strip.vm.$emit('update:personOnly', true)
+    await flushPromises()
+    expect(mocks.push.mock.lastCall?.[0].query).toMatchObject({
+      selectedPerson: 'ada',
+      gallery_person_only: 'on',
     })
     wrapper.unmount()
   })
@@ -610,10 +693,13 @@ describe('teleprompter focus modes (#36)', () => {
         query: expect.objectContaining({ line: 'l3', lines: 'person', highlight: ['verified'] }),
       }),
     )
-    // Toolbar navigation counts and boundaries follow the visible sequence.
-    const controls = wrapper.findComponent({ name: 'DocumentControls' })
-    expect(controls.props('lineCount')).toBe(2)
-    expect(controls.props('selectedLineIndex')).toBe(1)
+    // Keyboard navigation stops at the last visible line and skips hidden ones.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
+    await flushPromises()
+    expect(teleprompter.props('selectedLineIndex')).toBe(2)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
+    await flushPromises()
+    expect(teleprompter.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
   })
 
@@ -726,9 +812,7 @@ describe('resizable transcription panel (#36)', () => {
         expect(group.attributes('direction')).toBe(direction)
         const panels = group.element.children
         // Transcription first (left or top), then the handle, then the scan.
-        expect(
-          panels[0]!.querySelector('[aria-labelledby="page-transcription-title"]'),
-        ).not.toBeNull()
+        expect(panels[0]!.querySelector('[aria-label="Transcription"]')).not.toBeNull()
         expect(panels[2]!.querySelector('[aria-label="Pan and zoom document page"]')).not.toBeNull()
         wrapper.unmount()
       } finally {
@@ -828,7 +912,7 @@ describe('scan sidebar (#103)', () => {
     wrapper.unmount()
   })
 
-  it('searches by the selected face: one attachment, no name text, Similarity, same scope', async () => {
+  it('searches by the selected face: one attachment, no name text, global Similarity', async () => {
     route.query = {
       people_scope: 'document',
       candidate_text: 'Novak',
@@ -852,8 +936,8 @@ describe('scan sidebar (#103)', () => {
       panel: undefined,
       candidate_face: 'a',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
-      people_scope: 'document',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     // Unlike Link/Reassign, Search leaves focus where it is, even once People opens.
     route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
@@ -873,7 +957,8 @@ describe('scan sidebar (#103)', () => {
     expect(lastQuery(mocks.push)).toMatchObject({
       candidate_face: 'b',
       candidate_text: undefined,
-      candidate_sort: 'relevance',
+      candidate_sort: undefined,
+      people_scope: undefined,
     })
     wrapper.unmount()
   })
@@ -952,4 +1037,194 @@ it('selects the line of an unlinked mention requested from the Mentions tab (#10
     expect.objectContaining({ query: expect.objectContaining({ mention: undefined }) }),
   )
   wrapper.unmount()
+})
+
+describe('face search with an unusable reference (#134)', () => {
+  it('drops the face and lists people on this page, the document, then everyone', async () => {
+    mocks.documentLookup.mockReturnValue({
+      isPending: ref(false),
+      error: ref(null),
+      data: ref({ source_id: 'document-source' }),
+    })
+    // The face record lists its model, but the stored vector is all zeros.
+    mocks.getFace.mockResolvedValue({ data: { detection_id: 'zero', embeddings: ['model'] } })
+    mocks.searchEntities.mockRejectedValue(
+      new AxiosError('Unprocessable Content', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status: 422,
+        data: {
+          detail: {
+            code: 'invalid_search',
+            message: "reference face has an unusable cosine embedding 'model': zero",
+          },
+        },
+      } as AxiosResponse),
+    )
+    mocks.listEntities.mockResolvedValue({
+      data: { items: [], cursor: null, total_count: 0 },
+    })
+    // The router commits navigation into the route, like the real one.
+    const navigate = ({ query }: { query: Record<string, string | undefined> }) => {
+      route.query = Object.fromEntries(
+        Object.entries(query).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      )
+    }
+    mocks.push.mockImplementation(navigate)
+    mocks.replace.mockImplementation(navigate)
+    route.query = { candidate_face: 'zero', candidate_sort: 'relevance' }
+
+    const wrapper = await mountView()
+    await settleFocus()
+
+    expect(mocks.searchEntities).toHaveBeenCalledTimes(1)
+    // The fallback replaces the Search entry, so Back leaves the page.
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(mocks.replace).toHaveBeenCalled()
+    expect(route.query.candidate_face).toBeUndefined()
+    expect(route.query.candidate_sort).toBeUndefined()
+    const scopes = mocks.listEntities.mock.calls.map(([{ query }]) => query)
+    expect(scopes).toContainEqual(
+      expect.objectContaining({
+        'filter.entity_type': ['person'],
+        'filter.page_source_id': ['source'],
+        sort: 'name',
+        sort_direction: 'asc',
+      }),
+    )
+    wrapper.unmount()
+  })
+})
+
+describe('independent panel visibility (#139)', () => {
+  let wide: boolean
+  let listeners: ((event: { matches: boolean; media: string }) => void)[]
+  let restoreMedia: () => void
+  beforeEach(() => {
+    wide = true
+    listeners = []
+    const original = window.matchMedia
+    window.matchMedia = vi.fn((query: string) => ({
+      get matches() {
+        return query.includes('1024') && wide
+      },
+      media: query,
+      addEventListener: (_: string, callback: (typeof listeners)[number]) => {
+        if (query.includes('1024')) listeners.push(callback)
+      },
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    restoreMedia = () => {
+      window.matchMedia = original
+    }
+  })
+  afterEach(() => restoreMedia())
+
+  it('keeps both panels and the live scan mounted while hidden, with reopen actions in the viewer header', async () => {
+    const wrapper = await mountView()
+    const viewer = wrapper.get('.workspace-viewer').element
+    const transcription = wrapper.findComponent({ name: 'DocumentTeleprompter' }).element
+    const sidebar = wrapper.get('.workspace-sidebar').element
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    state.hidePanel('left')
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    // The splitter may expand internally as responsive constraints change; only
+    // an explicit reopen action should reveal the user's hidden content.
+    wrapper
+      .findAllComponents({ name: 'ResizablePanel' })
+      .forEach((panel) => panel.vm.$emit('expand'))
+    await nextTick()
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    const bar = wrapper.get('header.viewer-tools')
+    expect(bar.find('[aria-label="Open transcription panel"]').exists()).toBe(true)
+    expect(bar.find('[aria-label="Open people panel"]').exists()).toBe(true)
+    await bar.get('[aria-label="Open transcription panel"]').trigger('click')
+    await bar.get('[aria-label="Open people panel"]').trigger('click')
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    expect(wrapper.findComponent({ name: 'DocumentTeleprompter' }).element).toBe(transcription)
+    expect(wrapper.get('.workspace-sidebar').element).toBe(sidebar)
+    expect(wrapper.get('#transcription-panel').attributes('style') ?? '').not.toContain(
+      'display: none',
+    )
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(
+      wrapper.get('.workspace-viewer').findComponent({ name: 'DocumentControls' }).exists(),
+    ).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('collapses mobile transcription into its labelled bar while keeping People visible', async () => {
+    wide = false
+    const wrapper = await mountView(true)
+    const viewer = wrapper.get('.workspace-viewer').element
+    const bar = wrapper.get('header:has([aria-label="Hide transcription panel"])')
+    expect(bar.text()).toContain('Transcription')
+    expect(wrapper.find('[aria-label="Hide people panel"]').exists()).toBe(false)
+    await bar.get('[aria-label="Hide transcription panel"]').trigger('click')
+    expect(bar.get('[aria-label="Open transcription panel"]').attributes('aria-expanded')).toBe(
+      'false',
+    )
+    expect(bar.text()).toContain('Transcription')
+    expect(wrapper.get('#transcription-panel').attributes('style')).toContain('display: none')
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(
+      wrapper.get('header.viewer-tools').find('[aria-label="Open transcription panel"]').exists(),
+    ).toBe(false)
+    await bar.get('[aria-label="Open transcription panel"]').trigger('click')
+    expect(wrapper.get('#transcription-panel').attributes('style') ?? '').not.toContain(
+      'display: none',
+    )
+    expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+    wrapper.unmount()
+  })
+
+  it('shows the stacked People section even when its desktop panel was hidden', async () => {
+    const wrapper = await mountView()
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    wide = false
+    listeners.forEach((listener) => listener({ matches: false, media: '(min-width: 1024px)' }))
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.find('[aria-label="Hide people panel"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Open people panel"]').exists()).toBe(false)
+    state.hidePanel('right')
+    await nextTick()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    wide = true
+    listeners.forEach((listener) => listener({ matches: true, media: '(min-width: 1024px)' }))
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style')).toContain('display: none')
+    await wrapper.get('[aria-label="Open people panel"]').trigger('click')
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    wrapper.unmount()
+  })
+
+  it('reveals a hidden People panel for Link and explicit face Search', async () => {
+    faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))
+    const wrapper = await mountView(true)
+    const state = wrapper.vm as unknown as { hidePanel: (side: 'left' | 'right') => void }
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    state.hidePanel('right')
+    await nextTick()
+    wrapper.findComponent({ name: 'SelectedFaceItem' }).vm.$emit('findProfile')
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(1)
+    state.hidePanel('right')
+    await nextTick()
+    await wrapper
+      .findComponent({ name: 'SelectedFaceItem' })
+      .get('[aria-label="Search people by this face"]')
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
 })
