@@ -6,16 +6,9 @@ import DocumentControls from '@/components/custom/DocumentControls.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 
 const props = {
-  selectedLineIndex: 1,
-  lineCount: 3,
-  selectedFaceIndex: 1,
-  faceCount: 3,
   zoomPercent: 82,
   minimumZoomPercent: 55,
   maximumZoomPercent: 350,
-  translationOptions: ['off', 'cs', 'en', 'de'] as const,
-  isTranslationOpen: false,
-  selectedLanguage: 'en' as const,
   showBadgeNames: true,
 }
 
@@ -103,14 +96,10 @@ describe('scan toolbar', () => {
     }
   })
 
-  it('retains navigation, zoom, Names and translation actions alongside the toggles', async () => {
+  it('keeps only zoom, Names and link-state controls', async () => {
     const wrapper = mount(DocumentControls, { props })
     try {
       for (const [label, event, args] of [
-        ['Previous line', 'previous-line', []],
-        ['Next line', 'next-line', []],
-        ['Previous face', 'previous-face', []],
-        ['Next face', 'next-face', []],
         ['Zoom out', 'set-zoom', ['out']],
         ['Zoom in', 'set-zoom', ['in']],
         ['Center page', 'reset-view', []],
@@ -119,12 +108,11 @@ describe('scan toolbar', () => {
         await wrapper.get(`button[aria-label="${label}"]`).trigger('click')
         expect(wrapper.emitted(event)?.slice(-1)[0]).toEqual(args)
       }
-      const translation = wrapper.get('[aria-label="Translation"]')
-      await translation.findAll('button')[2]!.trigger('click')
-      expect(wrapper.emitted('select-translation')).toEqual([['en']])
-      await wrapper.setProps({ selectedLineIndex: 0, selectedFaceIndex: 0, zoomPercent: 55 })
-      for (const label of ['Previous line', 'Previous face', 'Zoom out'])
-        expect(wrapper.get(`button[aria-label="${label}"]`).attributes('disabled')).toBeDefined()
+      for (const label of ['Previous line', 'Next line', 'Previous face', 'Next face'])
+        expect(wrapper.find(`button[aria-label="${label}"]`).exists()).toBe(false)
+      expect(wrapper.find('[aria-label="Translation"]').exists()).toBe(false)
+      await wrapper.setProps({ zoomPercent: 55 })
+      expect(wrapper.get('button[aria-label="Zoom out"]').attributes('disabled')).toBeDefined()
     } finally {
       wrapper.unmount()
     }

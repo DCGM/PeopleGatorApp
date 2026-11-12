@@ -214,6 +214,11 @@ async function mountView(renderActions = false) {
         AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
         AlertDialogContent: { template: '<div><slot /></div>' },
         AlertDialogFooter: { template: '<div><slot /></div>' },
+        PanelBar: {
+          props: ['as'],
+          template:
+            '<component :is="as || \'div\'"><slot name="start" /><slot /><slot name="end" /></component>',
+        },
         Tabs: { name: 'Tabs', props: ['modelValue'], template: '<div><slot /></div>' },
         TabsList: { template: '<div><slot /></div>' },
         TabsTrigger: {
@@ -232,7 +237,7 @@ async function mountView(renderActions = false) {
   return wrapper
 }
 describe('evidence selection viewport focus', () => {
-  it('focuses gallery, overlay, toolbar and keyboard face selections, including reselection', async () => {
+  it('focuses gallery, overlay and keyboard face selections, including reselection', async () => {
     const wrapper = await mountView()
     for (const component of ['ScanFacesPanel', 'DocumentPageOverlay']) {
       wrapper
@@ -241,7 +246,7 @@ describe('evidence selection viewport focus', () => {
       await settleFocus()
     }
     expect(mocks.pan).toHaveBeenCalledTimes(2)
-    wrapper.findComponent({ name: 'DocumentControls' }).vm.$emit('next-face')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
     await settleFocus()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))
     await settleFocus()
@@ -688,10 +693,13 @@ describe('teleprompter focus modes (#36)', () => {
         query: expect.objectContaining({ line: 'l3', lines: 'person', highlight: ['verified'] }),
       }),
     )
-    // Toolbar navigation counts and boundaries follow the visible sequence.
-    const controls = wrapper.findComponent({ name: 'DocumentControls' })
-    expect(controls.props('lineCount')).toBe(2)
-    expect(controls.props('selectedLineIndex')).toBe(1)
+    // Keyboard navigation stops at the last visible line and skips hidden ones.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
+    await flushPromises()
+    expect(teleprompter.props('selectedLineIndex')).toBe(2)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
+    await flushPromises()
+    expect(teleprompter.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
   })
 
