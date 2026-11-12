@@ -206,7 +206,7 @@ describe('document table', () => {
       visibility: { ...defaultDocumentColumns(), verification: true, verified_page_count: true },
     })
     expect(wrapper.get('td[data-column="verification"]').text()).toBe('Not verified')
-    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('1 / 2')
+    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('1/2')
     expect(wrapper.find('button[aria-label^="Sort by Verification:"]').exists()).toBe(false)
     await wrapper
       .get('button[aria-label="Sort by Verified pages: sort ascending"]')
@@ -218,7 +218,7 @@ describe('document table', () => {
       documents: [{ ...documents[0]!, verification_state: 'verified', verified_page_count: 2 }],
     })
     expect(wrapper.get('td[data-column="verification"]').text()).toBe('Verified')
-    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('2 / 2')
+    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('2/2')
   })
   it('retains configurable annotation breakdowns, unknown/zero values and header associations', async () => {
     const { wrapper } = await render()

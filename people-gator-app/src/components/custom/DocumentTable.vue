@@ -29,6 +29,8 @@ import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
+import VerificationBadge from './VerificationBadge.vue'
+import VerificationProgress from './VerificationProgress.vue'
 import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import {
   documentColumnSizing,
@@ -189,6 +191,7 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     ...documentColumnSizing('verification'),
     header: 'Verification',
     accessorFn: (d) => (d.verification_state === 'verified' ? 'Verified' : 'Not verified'),
+    cell: ({ row }) => h(VerificationBadge, { state: row.original.verification_state }),
   },
   {
     id: 'verified_page_count',
@@ -196,9 +199,10 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'Verified pages',
     accessorFn: (d) => d.verified_page_count,
     cell: ({ row }) =>
-      row.original.verified_page_count == null || row.original.registered_page_count == null
-        ? 'Unknown'
-        : `${row.original.verified_page_count} / ${row.original.registered_page_count}`,
+      h(VerificationProgress, {
+        verified: row.original.verified_page_count,
+        total: row.original.registered_page_count,
+      }),
   },
   {
     accessorKey: 'linked_entity_count',

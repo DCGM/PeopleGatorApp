@@ -288,7 +288,9 @@ useAutomaticPagination({
                   data-page-verified
                   class="absolute right-0.5 bottom-0.5 rounded-full bg-background p-0.5"
                   title="Page verified"
-                  ><BadgeCheck class="size-3.5" aria-hidden="true"
+                  ><BadgeCheck
+                    class="size-3.5 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden="true"
                 /></span>
               </div>
               <span

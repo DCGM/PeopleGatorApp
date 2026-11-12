@@ -1575,12 +1575,16 @@ the document state derived from it. The reviewer verifies three pages once:
 | Verification: all pages verified | page 1 (with an unassigned face), page 2 | Verified, 2 / 2 |
 | Verification: in progress | page 1 verified; pages 2 and 3 not verified | Not verified, 1 / 3 |
 
-- Open `document-verification`, then show the **Verification** and **Verified
-  pages** columns. `document-verification-not-verified` applies the
+- Open `document-verification`, then show the **Verification** (green
+  Verified / grey Not verified label) and **Verified pages** (progress ring and
+  count) columns. `document-verification-not-verified` applies the
   **Verification: Not verified** filter.
 - Open `page-verification`: page 2 of the in-progress document with the info
-  panel open and the page strip set to **Not verified**. **Verify page** in the
-  info panel, then verify page 3; the document becomes Verified.
+  panel open and the page strip set to **Not verified**. The top bar shows the
+  document's progress ring (1/3), **Verify** and previous/next page. Verify,
+  press next, verify page 3: the ring reaches 3/3 and the document becomes
+  Verified. The green **Verified** button's menu shows who verified the page
+  and offers **Remove verification**.
 - Page 1 of the first document is verified while its face stays unassigned:
   page verification never changes evidence link states.
 
