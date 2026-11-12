@@ -100,10 +100,20 @@ def parse_shard(value: str) -> tuple[int, int]:
     return index, count
 
 
+def case_tier(item: pytest.Item) -> int:
+    """2: real fresh preview seed; 1: seed from the worker's copy; 0: fast."""
+    if item.path.name not in SLOW_MODULES:
+        return 0
+    from preview_seed_snapshot import starts_with_seed
+
+    fresh = "seed_target" in getattr(item, "fixturenames", ()) and not starts_with_seed(item.function)
+    return 2 if fresh else 1
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     from case_schedule import schedule
 
-    selected = schedule(items, lambda item: item.path.name in SLOW_MODULES, config.getoption("shard"))
+    selected = schedule(items, case_tier, config.getoption("shard"))
     if len(selected) < len(items):
         kept = set(selected)
         config.hook.pytest_deselected(items=[item for item in items if item not in kept])

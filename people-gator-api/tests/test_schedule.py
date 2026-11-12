@@ -5,29 +5,37 @@ import pytest
 from case_schedule import schedule
 
 
-def cases(slow: int, fast: int) -> list[str]:
+def cases(slow: int, fast: int, heavy: int = 0) -> list[str]:
     # Collection order: fast modules first, the slow module last (as in the suite).
-    return [f"fast{i}" for i in range(fast)] + [f"slow{i}" for i in range(slow)]
+    slow_cases = [f"slow{i}" for i in range(slow)]
+    for i in range(heavy):  # heavier cases are interleaved in the slow module
+        slow_cases.insert(i * 4, f"heavy{i}")
+    return [f"fast{i}" for i in range(fast)] + slow_cases
 
 
 def is_slow(case: str) -> bool:
-    return case.startswith("slow")
+    return not case.startswith("fast")
 
 
-@pytest.mark.parametrize("count", [1, 2, 3, 4, 5])
-def test_shards_partition_the_collection_with_even_slow_shares(count):
-    items = cases(slow=101, fast=770)
-    shards = [schedule(items, is_slow, (index, count)) for index in range(1, count + 1)]
+def tier(case: str) -> int:
+    return 2 if case.startswith("heavy") else int(is_slow(case))
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 4, 5, 6])
+def test_shards_partition_the_collection_with_even_tier_shares(count):
+    items = cases(slow=82, fast=770, heavy=20)
+    shards = [schedule(items, tier, (index, count)) for index in range(1, count + 1)]
 
     assert sorted(case for shard in shards for case in shard) == sorted(items)
-    slow_shares = [sum(map(is_slow, shard)) for shard in shards]
-    assert max(slow_shares) - min(slow_shares) <= 1
+    for level in (1, 2):
+        shares = [sum(tier(case) == level for case in shard) for shard in shards]
+        assert max(shares) - min(shares) <= 1, level
     assert max(map(len, shards)) - min(map(len, shards)) <= 1
 
 
 def test_slow_cases_are_spread_through_the_run_in_collection_order():
     items = cases(slow=10, fast=90)
-    ordered = schedule(items, is_slow, None)
+    ordered = schedule(items, tier, None)
 
     assert sorted(ordered) == sorted(items)
     assert [case for case in ordered if is_slow(case)] == [f"slow{i}" for i in range(10)]
