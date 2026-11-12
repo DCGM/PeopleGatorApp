@@ -19,7 +19,8 @@ TABLE = "pg_demo_pages"
 
 
 def upgrade():
-    ENUM.create(op.get_bind(), checkfirst=True)
+    # Create the type in the active schema even if it also exists later on the search path.
+    ENUM.create(op.get_bind(), checkfirst=False)
     op.add_column(TABLE, sa.Column("verification_state", ENUM, nullable=False, server_default="not_verified"))
     op.add_column(TABLE, sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column(TABLE, sa.Column("verified_by_user_id", sa.UUID(), nullable=True))
@@ -38,4 +39,4 @@ def downgrade():
     op.drop_constraint("pg_demo_pages_verified_by_user_id_fkey", TABLE, type_="foreignkey")
     for column in ("verified_by_api_key_id", "verified_by_user_id", "verified_at", "verification_state"):
         op.drop_column(TABLE, column)
-    ENUM.drop(op.get_bind(), checkfirst=True)
+    ENUM.drop(op.get_bind(), checkfirst=False)

@@ -213,13 +213,23 @@ async def test_migration_defaults_existing_pages_and_downgrades(migrated_postgre
             config = migration_config()
             config.attributes["connection"] = sync
             (command.downgrade if downgrade else command.upgrade)(config, target)
+        column_uses_local_enum = text("""
+            SELECT atttypid = to_regtype(current_schema() || '.pg_demo_verification_state')
+            FROM pg_attribute
+            WHERE attrelid = 'pg_demo_pages'::regclass AND attname = 'verification_state'
+              AND NOT attisdropped
+        """)
+        assert await connection.scalar(column_uses_local_enum) is True
         await connection.run_sync(lambda sync: migrate(sync, "d34a021b0015", True))
-        assert await connection.scalar(text("SELECT to_regtype('pg_demo_verification_state')")) is None
+        assert await connection.scalar(text(
+            "SELECT to_regtype(current_schema() || '.pg_demo_verification_state')"
+        )) is None
         source, document, page = (uuid.uuid4() for _ in range(3))
         url = f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document}?page=uuid:{page}"
         await connection.execute(text("INSERT INTO pg_demo_sources (id, source_type, url) VALUES (:id, 'page', :url)"), {"id": source, "url": url})
         await connection.execute(text("INSERT INTO pg_demo_pages (id, library, document_id, page_id) VALUES (:id, 'legacy', :document, :page)"), {"id": source, "document": document, "page": page})
         await connection.run_sync(lambda sync: migrate(sync, "head"))
+        assert await connection.scalar(column_uses_local_enum) is True
         row = (await connection.execute(text(
             "SELECT verification_state::text, verified_at, verified_by_user_id, verified_by_api_key_id FROM pg_demo_pages WHERE id = :id"
         ), {"id": source})).one()
