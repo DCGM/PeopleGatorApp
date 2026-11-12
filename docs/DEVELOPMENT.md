@@ -1,7 +1,8 @@
 # Local development and test stores
 
 Run commands from the directories shown, inside your task's worktree under
-`../PeopleGatorApp-worktrees/` (see [AGENTS.md](../AGENTS.md#worktrees)).
+`../PeopleGatorApp-worktrees/` (see [AGENTS.md](../AGENTS.md#worktrees)), never
+in the main checkout, which stays on the latest `main`.
 Keep credentials, `.env` files, media and disposable databases out of Git.
 
 ## Prerequisites and installation
