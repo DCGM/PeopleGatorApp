@@ -2,7 +2,7 @@
 
 import json
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, asynccontextmanager
 
 import pytest
 import pytest_asyncio
@@ -139,6 +139,15 @@ def isolated_model_indexes():
 @pytest_asyncio.fixture
 async def migrated_postgres():
     """A unique migrated schema on the explicitly disposable schema-test store."""
+    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
+    if not url:
+        pytest.skip("requires a disposable schema test database")
+    async with migrated_schema(url) as engine:
+        yield engine
+
+
+@asynccontextmanager
+async def migrated_schema(url: str):
     import uuid
 
     from alembic import command
@@ -147,9 +156,6 @@ async def migrated_postgres():
 
     from people_gator_api.persistence.postgres.schema import migration_config
 
-    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
-    if not url:
-        pytest.skip("requires a disposable schema test database")
     admin = create_async_engine(url)
     schema = "isolated_test_" + uuid.uuid4().hex
     async with admin.begin() as connection:
