@@ -106,7 +106,8 @@ class SeedTemplate:
 
     async def clone(self, storage: Path) -> tuple[str, AsyncEngine]:
         """A private copy of the seeded database and storage for one case."""
-        name = f"{self.database}_{uuid.uuid4().hex[:12]}"
+        # Within PostgreSQL's 63-character limit: pytest_worker_<32 hex>_seed_<8 hex>.
+        name = f"{self.database}_{uuid.uuid4().hex[:8]}"
         await admin_command(self.server_url, f'CREATE DATABASE "{name}" TEMPLATE "{self.database}"')
         shutil.copytree(self.storage, storage, dirs_exist_ok=True)
         # Registering a model attaches its index definition to the ORM table,

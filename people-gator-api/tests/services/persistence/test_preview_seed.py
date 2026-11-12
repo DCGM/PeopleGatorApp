@@ -85,6 +85,8 @@ from preview_seed_snapshot import SeedTemplate, fresh_seed, owns_template, share
 
 
 type SeedTarget = tuple[Database, LocalFilesystem, AsyncEngine]
+# The seed's fixture data as imported; a copied seed is only valid for these.
+SEED_INPUTS = {name: value for name, value in vars(preview).items() if name.isupper()}
 
 
 @pytest.fixture(scope="session")
@@ -123,6 +125,8 @@ async def seed_target(
         async def seed_copy(target_database, target_filesystem):
             # The case's first action; later calls run the real seed.
             assert target_database is database and target_filesystem is filesystem
+            changed = [name for name, value in SEED_INPUTS.items() if getattr(preview, name) is not value]
+            assert not changed, f"seed inputs {changed} changed before seeding; use @fresh_seed"
             monkeypatch.setattr(preview, "seed_preview", real_seed)
             return template.result.model_copy(deep=True)
 

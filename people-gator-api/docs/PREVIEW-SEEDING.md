@@ -152,8 +152,10 @@ calls run the real seed. Any other test, or one decorated with `@fresh_seed`,
 starts from an empty migrated schema and seeds for real, so upgrade and
 recovery tests that prepare state or patch the seed first keep a real first
 seed automatically. Use `@fresh_seed` when a test must check the fresh seed
-itself. `test_worker_seed_copy_matches_a_fresh_seed` checks that a copy equals a
-real fresh seed. See [test performance](../../docs/TEST-PERFORMANCE.md#ci-runner-speed-up-156).
+itself or changes seed inputs through a fixture; a copy fails if module-level
+seed inputs such as `preview.PEOPLE` have changed.
+`test_worker_seed_copy_matches_a_fresh_seed` checks that a copy equals a real
+fresh seed. See [test performance](../../docs/TEST-PERFORMANCE.md#ci-runner-speed-up-156).
 
 The same run's `deploy-preview` job runs the deployment utility from the PR's
 checkout. It removes the selected PR's old containers while retaining its
