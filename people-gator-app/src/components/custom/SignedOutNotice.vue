@@ -39,7 +39,7 @@ async function retry() {
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{{ forbidden ? 'Access denied' : 'Signed out' }}</ItemTitle>
-        <ItemDescription v-if="forbidden">This account has no access.</ItemDescription>
+        <ItemDescription v-if="forbidden">Close the browser to use another account.</ItemDescription>
       </ItemContent>
       <ItemActions>
         <Button :disabled="pending" @click="retry">
