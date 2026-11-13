@@ -6,6 +6,7 @@ import PageVerification from '@/components/custom/PageVerification.vue'
 import PageReviewControls from '@/components/custom/PageReviewControls.vue'
 import VerificationProgress from '@/components/custom/VerificationProgress.vue'
 import { verificationProgress, verifiedPercentLabel } from '@/lib/verification'
+import { defaultDirection } from '@/lib/sorting'
 import type { PageResponse } from '@/client'
 
 const mocks = vi.hoisted(() => ({
@@ -100,6 +101,8 @@ describe('page verification (#149)', () => {
     expect(verifiedPercentLabel(3, 4)).toBe('75%')
     expect(verifiedPercentLabel(199, 200)).toBe('99%')
     expect(verifiedPercentLabel(0, 0)).toBe('—')
+    // Mirrors the API: the largest share comes first.
+    expect(defaultDirection('verified_page_percentage')).toBe('desc')
     const ring = mount(VerificationProgress, { props: { verified: 1, total: 3 } })
     expect(ring.text()).toBe('1/3')
     expect(ring.get('[role="img"]').attributes('aria-label')).toBe('1 of 3 pages verified')
