@@ -2,8 +2,8 @@ import asyncio
 import logging
 import uuid
 from botocore.exceptions import ClientError
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import Depends, HTTPException, Query, Request, Security, status
 from fastapi.security import APIKeyHeader
 from typing import Literal
 from people_gator_api.schemas.common import GenericActor
@@ -130,16 +130,9 @@ async def resolve_active_user(
 
 
 
-async def get_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    database_context: IdentityContextDependency,
-) -> TokenResponse:
-    """Get the raw access token and refresh token from the request context."""
-    username = form_data.username
-    password = form_data.password
-    scopes = form_data.scopes
-    users = await get_users()
-    user_record = users.get(username)
+async def _verify_password(username: str, password: str, challenge: str) -> UserRecord:
+    """Return the user's record when the password matches its Argon2 hash."""
+    user_record = (await get_users()).get(username)
     valid_password = False
     if user_record is not None:
         try:
@@ -150,9 +143,15 @@ async def get_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Basic"},
+            headers={"WWW-Authenticate": challenge},
         )
-    _check_scopes(scopes, user_record["scopes"])
+    return user_record
+
+
+async def _issue_session(
+    username: str, scopes: list[str], database_context: IdentityContext,
+) -> TokenResponse:
+    """Issue an access token and a refresh token tracked as an in-memory session."""
     user = await resolve_active_user(database_context, username)
 
     access_token = await issue_access_token(subject=username, scopes=scopes, user_id=user.user_id)
@@ -167,8 +166,49 @@ async def get_token(
         if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
             oldest_session_id = next(iter(refresh_sessions))
             del refresh_sessions[oldest_session_id]
-    
+
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+async def get_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    database_context: IdentityContextDependency,
+) -> TokenResponse:
+    """Issue tokens for a username and password posted as an OAuth2 password form."""
+    # Not "Basic": a Basic challenge makes browsers prompt for credentials this form ignores.
+    user_record = await _verify_password(form_data.username, form_data.password, "Bearer")
+    _check_scopes(form_data.scopes, user_record["scopes"])
+    return await _issue_session(form_data.username, form_data.scopes, database_context)
+
+
+BASIC_REALM = "People Gator"
+BASIC_CHALLENGE = f'Basic realm="{BASIC_REALM}", charset="UTF-8"'
+basic_security = HTTPBasic(auto_error=False, realm=BASIC_REALM)
+
+
+async def get_basic_token(
+    credentials: Annotated[HTTPBasicCredentials | None, Depends(basic_security)],
+    database_context: IdentityContextDependency,
+    scope: Annotated[str, Query(description="Space-separated scopes; defaults to all allowed scopes")] = "",
+) -> TokenResponse:
+    """Issue tokens for HTTP Basic credentials, the browser's sign-in dialog.
+
+    Missing or wrong credentials get a Basic challenge, so the browser asks the
+    user and retries. The token carries the requested scopes the user holds.
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in required",
+            headers={"WWW-Authenticate": BASIC_CHALLENGE},
+        )
+    user_record = await _verify_password(credentials.username, credentials.password, BASIC_CHALLENGE)
+    allowed = set(user_record["scopes"]) & KNOWN_SCOPES
+    requested = scope.split() or sorted(allowed)
+    scopes = [item for item in dict.fromkeys(requested) if item in allowed]
+    if not scopes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permitted scopes")
+    return await _issue_session(credentials.username, scopes, database_context)
     
 
 api_key_security = APIKeyHeader(name="X-API-Key", scheme_name="PeopleGatorAPIKey", auto_error=False)
@@ -322,6 +362,7 @@ async def refresh_access_token(
 
 
 type TokenDependency = Annotated[TokenResponse, Depends(get_token)]
+type BasicTokenDependency = Annotated[TokenResponse, Depends(get_basic_token)]
 
 type DataIngestActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[INGEST_SCOPE])]
 type AnnotatorActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[ANNOTATE_SCOPE])]
