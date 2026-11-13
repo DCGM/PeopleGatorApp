@@ -1077,6 +1077,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-verification": "/documents?" + urlencode({
                 "library": "preview-verification", "sort": "verified_page_count",
             }),
+            "document-verification-percentage": "/documents?" + urlencode({
+                "library": "preview-verification", "sort": "verified_page_percentage",
+            }),
             "document-verification-not-verified": "/documents?" + urlencode({
                 "library": "preview-verification", "verification": "not_verified",
             }),

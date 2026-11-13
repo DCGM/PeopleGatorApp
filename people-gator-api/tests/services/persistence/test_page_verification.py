@@ -151,11 +151,11 @@ async def test_documents_derive_state_counts_filters_and_sort(migrated_postgres)
         assert await document_ids(verification_state=[VERIFIED]) == {same_id.source_id}
 
         # Verified-page count sorts numerically with source UUID ties, across cursor batches.
-        async def ordered(direction):
+        async def ordered(direction, sort="verified_page_count"):
             found, cursor = [], None
             while True:
                 batch = await db.sources.list_documents(DocumentListRequest(
-                    limit=2, cursor=cursor, sort="verified_page_count", sort_direction=direction,
+                    limit=2, cursor=cursor, sort=sort, sort_direction=direction,
                     filter_=DocumentListFilter(library=[library, mirror]),
                 ))
                 found += batch.items
@@ -175,6 +175,19 @@ async def test_documents_derive_state_counts_filters_and_sort(migrated_postgres)
         # Counts default to descending.
         assert [item.source_id for item in default.items] == [item.source_id for item in await ordered("desc")]
         assert [item.verified_page_count for item in default.items] == [1, 1, 1, 1, 0]
+
+        # The verified share orders documents, then the verified count; no pages sorts last.
+        for direction in ("asc", "desc"):
+            items = await ordered(direction, "verified_page_percentage")
+            sign = -1 if direction == "desc" else 1
+
+            def share_key(item):
+                if not item.registered_page_count:
+                    return (1, 0, 0, item.source_id)
+                share = item.verified_page_count / item.registered_page_count
+                return (0, sign * share, sign * item.verified_page_count, item.source_id)
+            assert [item.source_id for item in items] == [item.source_id for item in sorted(items, key=share_key)]
+            assert len(items) == len(expected)
 
 
 @pytest.mark.asyncio

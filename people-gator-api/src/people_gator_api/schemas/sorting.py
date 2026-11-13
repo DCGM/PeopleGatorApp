@@ -69,6 +69,7 @@ class DocumentSortField(StrEnum):
     LIBRARY = "library"
     PAGE_COUNT = "page_count"
     VERIFIED_PAGE_COUNT = "verified_page_count"
+    VERIFIED_PAGE_PERCENTAGE = "verified_page_percentage"
     LAST_TOUCHED_AT = "last_touched_at"
 
 
@@ -126,7 +127,7 @@ RELEVANCE = "relevance"
 
 # Fields whose natural first direction is descending: newest, largest, best.
 DESCENDING_BY_DEFAULT = frozenset({
-    "relevance", "last_touched_at", "created_at", "page_count", "verified_page_count", "count",
+    "relevance", "last_touched_at", "created_at", "page_count", "verified_page_count", "verified_page_percentage", "count",
     *ANNOTATION_COUNT_FIELDS,
 })
 

@@ -8,6 +8,7 @@ from typing import Any, cast as type_cast
 from sqlalchemy import (
     ColumnElement,
     Float,
+    cast,
     inspect,
     column,
     delete,
@@ -221,6 +222,16 @@ class PostgresSourceRepository(SourceRepository):
                 "document_id": lambda desc: [SortKey(document.document_id, "uuid", desc)],
                 "page_count": lambda desc: [SortKey(document_page_count(), "number", desc)],
                 "verified_page_count": lambda desc: [SortKey(document_verified_page_count(), "number", desc)],
+                # Share of registered pages, so 2/2 precedes 3/4; more verified pages break
+                # ties and documents without registered pages sort last.
+                "verified_page_percentage": lambda desc: [
+                    SortKey(
+                        # Double precision, so the value round-trips exactly through keyset cursors.
+                        cast(document_verified_page_count(), Float) * 100 / func.nullif(document_page_count(), 0),
+                        "number", desc,
+                    ),
+                    SortKey(document_verified_page_count(), "number", desc),
+                ],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
         if counts is not None:

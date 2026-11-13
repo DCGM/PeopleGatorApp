@@ -5490,8 +5490,28 @@ async def test_page_verification_scenario_derives_documents_and_keeps_reviews(se
                 for item in result.items]
 
     done, partial = seed.documents["verification-done"], seed.documents["verification-partial"]
-    assert await documents() == [(done, verified, 2, 2), (partial, not_verified, 1, 3)]
-    assert [item[0] for item in await documents(verification_state=[not_verified])] == [partial]
+    most = seed.documents["verification-most"]
+    assert await documents() == [
+        (most, not_verified, 3, 4), (done, verified, 2, 2), (partial, not_verified, 1, 3)]
+
+    async def by_percentage(**values):
+        # One row per page proves the fractional key survives the keyset cursor.
+        ids, cursor = [], None
+        while True:
+            result = await database.sources.list_documents(DocumentListRequest(
+                limit=1, cursor=cursor, sort="verified_page_percentage",
+                filter_=DocumentListFilter(library=["preview-verification"]), **values,
+            ))
+            ids += [item.source_id for item in result.items]
+            if (cursor := result.cursor) is None:
+                return ids
+
+    # The share orders 2/2 before 3/4, unlike the verified-page count.
+    assert await by_percentage() == [done, most, partial]
+    assert await by_percentage(sort_direction="asc") == [partial, most, done]
+    assert parse_qs(urlsplit(seed.filter_examples["document-verification-percentage"]).query) == {
+        "library": ["preview-verification"], "sort": ["verified_page_percentage"]}
+    assert [item[0] for item in await documents(verification_state=[not_verified])] == [most, partial]
     # A verified page can still hold unverified evidence.
     page = await database.sources.get_page(seed.pages["verification-done-1"])
     assert page.verification_state == verified and page.verified_by_user_id == reviewer
@@ -5499,7 +5519,8 @@ async def test_page_verification_scenario_derives_documents_and_keeps_reviews(se
     remaining = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
         library=["preview-verification"], verification_state=[not_verified])))
     assert {item.source_id for item in remaining.items} == {
-        seed.pages["verification-partial-2"], seed.pages["verification-partial-3"]}
+        seed.pages["verification-partial-2"], seed.pages["verification-partial-3"],
+        seed.pages["verification-most-4"]}
     # Both viewer examples open page 2 beside the verified badge for page 1.
     example = urlsplit(seed.filter_examples["page-verification"])
     expanded = urlsplit(seed.filter_examples["page-verification-expanded"])
@@ -5528,7 +5549,8 @@ async def test_page_verification_scenario_derives_documents_and_keeps_reviews(se
     assert await preview.seed_preview(database, filesystem) == seed
     assert await database.sources.get_page(seed.pages["verification-partial-1"]) == removed
     assert await database.sources.get_page(seed.pages["verification-done-1"]) == page
-    assert await documents() == [(done, verified, 2, 2), (partial, not_verified, 0, 3)]
+    assert await documents() == [
+        (most, not_verified, 3, 4), (done, verified, 2, 2), (partial, not_verified, 0, 3)]
 
 
 @pytest.mark.asyncio
