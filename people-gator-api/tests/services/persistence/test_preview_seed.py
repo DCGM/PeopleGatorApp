@@ -1,10 +1,13 @@
 """Exercise the preview dataset against migrated PostgreSQL and real local media."""
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterator
+import asyncio
 import io
+import os
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -67,6 +70,7 @@ from people_gator_api.seeding.fixtures import (
     MODEL,
     PAGE_GALLERY_MISSING_MEDIA,
     PAGE_GALLERY_PAGES,
+    PAGE_SCROLL_PAGES,
     PAGES,
     SECOND_MODEL,
     SIDEBAR_LEGACY_MENTIONS,
@@ -77,20 +81,88 @@ from people_gator_api.seeding.fixtures import (
 )
 from people_gator_api.services import filesystem_service
 from people_gator_api.settings import settings
+from conftest import migrated_schema
+from preview_seed_snapshot import SeedTemplate, fresh_seed, owns_template, shared_template, starts_with_seed
 
 
 type SeedTarget = tuple[Database, LocalFilesystem, AsyncEngine]
+# The seed's fixture data as imported; a copied seed is only valid for these.
+SEED_INPUTS = {name: value for name, value in vars(preview).items() if name.isupper()}
+
+
+@pytest.fixture(scope="session")
+def seed_templates() -> Iterator[dict[str, SeedTemplate]]:
+    """This worker's fresh preview seed, built by the first eligible case."""
+    templates: dict[str, SeedTemplate] = {}
+    yield templates
+    if owns_template():
+        for template in templates.values():
+            asyncio.run(template.drop(template.database))
 
 
 @pytest_asyncio.fixture
 async def seed_target(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, migrated_postgres: AsyncEngine,
+    request: pytest.FixtureRequest, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch, seed_templates: dict[str, SeedTemplate],
 ) -> AsyncIterator[SeedTarget]:
+    """A migrated empty store, or a copy of a fresh seed (see preview_seed_snapshot)."""
     filesystem = LocalFilesystem(tmp_path)
     monkeypatch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
     monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", False)
-    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
-        yield postgres_database(session), filesystem, migrated_postgres
+    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
+    if not url:
+        pytest.skip("requires a disposable schema test database")
+    if not starts_with_seed(request.function):
+        async with migrated_schema(url) as engine:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                yield postgres_database(session), filesystem, engine
+        return
+
+    template = await worker_template(url, tmp_path_factory, seed_templates)
+    async with seeded_copy(template, filesystem) as target:
+        database = target[0]
+        real_seed = preview.seed_preview
+
+        async def seed_copy(target_database, target_filesystem):
+            # The case's first action; later calls run the real seed.
+            assert target_database is database and target_filesystem is filesystem
+            changed = [name for name, value in SEED_INPUTS.items() if getattr(preview, name) is not value]
+            assert not changed, f"seed inputs {changed} changed before seeding; use @fresh_seed"
+            monkeypatch.setattr(preview, "seed_preview", real_seed)
+            return template.result.model_copy(deep=True)
+
+        monkeypatch.setattr(preview, "seed_preview", seed_copy)
+        yield target
+
+
+async def worker_template(
+    url: str, tmp_path_factory: pytest.TempPathFactory, templates: dict[str, SeedTemplate],
+) -> SeedTemplate:
+    if url not in templates:
+        with pytest.MonkeyPatch.context() as patch:
+            templates[url] = await shared_template(
+                url, tmp_path_factory.getbasetemp(), building_seed(patch), preview.SeedResult)
+    return templates[url]
+
+
+def building_seed(patch: pytest.MonkeyPatch):
+    async def seed(database, filesystem):
+        # Media the seed reads back resolves in the storage it is seeding.
+        patch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
+        return await preview.seed_preview(database, filesystem)
+
+    return seed
+
+
+@asynccontextmanager
+async def seeded_copy(template: SeedTemplate, filesystem: LocalFilesystem) -> AsyncIterator[SeedTarget]:
+    name, engine = await template.clone(filesystem.root)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            yield postgres_database(session), filesystem, engine
+    finally:
+        await engine.dispose()
+        await template.drop(name)
 
 
 async def counts(database):
@@ -112,11 +184,13 @@ async def counts(database):
 
 
 @pytest.mark.asyncio
+@fresh_seed
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (47, 169, 123)
-    assert len(result.documents) == 61 and len(result.pages) == 141
+    assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
+    assert result.pages.keys() == {page.key for page in PAGES}
 
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
@@ -255,6 +329,8 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             with pytest.raises(SourceResolutionError) as missing_layout:
                 await get_page_layout(document.library, document.document_id, page.page_id)
             assert missing_layout.value.status_code == 404
+        if page.key == "faces-no-ocr-1":
+            assert not page.has_layout
             stored = await database.sources.get_page(result.pages[page.key])
             assert stored.entity_link_stats.faces.unassigned == 2
             assert stored.entity_link_stats.mentions.total == 0
@@ -280,6 +356,38 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             )
             with Image.open(io.BytesIO(crop.content)) as image:
                 assert 0 < image.width <= 256 and image.width == image.height
+
+
+@pytest.mark.asyncio
+@fresh_seed
+async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates, tmp_path_factory):
+    """Cases starting with a seed get the worker's copy; it must equal a real seed."""
+    database, filesystem, _ = seed_target
+    fresh = await preview.seed_preview(database, filesystem)
+    template = await worker_template(
+        os.environ["PEOPLE_GATOR_SCHEMA_TEST_URL"], tmp_path_factory, seed_templates)
+
+    copy_filesystem = LocalFilesystem(tmp_path_factory.mktemp("copy"))
+    async with seeded_copy(template, copy_filesystem) as (copy, storage, _):
+        copied = template.result.model_copy(deep=True)
+        # Database-generated identities differ; fixture keys, counts and media do not.
+        for field in type(fresh).model_fields:
+            assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
+        assert await counts(copy) == await counts(database) == (47, 169, 123)
+
+        def files(root: Path) -> dict[Path, bytes]:
+            return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+
+        fresh_files, copied_files = files(filesystem.root), files(storage.root)
+        assert copied_files.keys() == fresh_files.keys()
+        # Seed state files record database-generated identities and times.
+        identities = {Path(preview.MANIFEST_KEY), Path(preview.UPGRADES_KEY)}
+        assert {key: value for key, value in copied_files.items() if key not in identities} == {
+            key: value for key, value in fresh_files.items() if key not in identities
+        }
+        # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
+        assert await preview.seed_preview(copy, storage) == copied
+        assert await counts(copy) == (47, 169, 123)
 
 
 @pytest.mark.asyncio
@@ -1320,12 +1428,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
         batches.append(await database.sources.document_library_filter_options(
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
-    expected_libraries = [
-        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-page-strip', 'preview-page-strip-mirror', 'preview-pagination',
-        'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
-        'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
-        'preview-verification',
-    ]
+    expected_libraries = sorted({document.library for document in DOCUMENTS if document.registered})
     assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
     assert all(len(batch.items) == 1 for batch in batches)
     assert [batch.items[0].library for batch in batches] == expected_libraries
@@ -5231,6 +5334,48 @@ async def test_expanded_page_browser_links_resolve_media_membership_and_preserve
     preserved = await database.sources.get_page(seed.pages["page-strip-18"])
     assert preserved.page_number == 88
     assert preserved.last_touched_at == edited.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_page_browser_scroll_fixture_resolves_ordered_batches_and_thumbnails(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    route = urlsplit(seed.filter_examples["document-page-browser-scroll"])
+    _, _, library, _, document_id, _, page_id = route.path.split("/")
+    assert route.query == ""  # Start compact so the scrollbar orientation changes.
+    document = await database.sources.lookup_document(DocumentLookupRequest(
+        library=library, document_id=uuid.UUID(document_id),
+    ))
+    assert document.source_id == seed.documents["page-scroll"]
+
+    request = PageListRequest(
+        limit=12, return_total_count=True, sort="page_number", sort_direction="asc",
+        filter_=PageListFilter(library=[library], document_id=[uuid.UUID(document_id)]),
+    )
+    pages = []
+    while True:
+        batch = await database.sources.list_pages(request)
+        assert batch.total_count == PAGE_SCROLL_PAGES
+        pages.extend(batch.items)
+        if batch.cursor is None:
+            break
+        assert len(pages) < PAGE_SCROLL_PAGES
+        request = request.model_copy(update={"cursor": batch.cursor})
+    assert str(pages[0].page_id) == page_id
+    assert [page.page_number for page in pages] == list(range(1, PAGE_SCROLL_PAGES + 1))
+    assert [page.source_id for page in pages] == [
+        seed.pages[f"page-scroll-{i}"] for i in range(1, PAGE_SCROLL_PAGES + 1)
+    ]
+    for page in (pages[0], pages[-1]):
+        thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width == 256
+
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.filter_examples["document-page-browser-scroll"] == route.geturl()
+    assert rerun.pages == seed.pages
+    after = await database.sources.get_page(pages[-1].source_id)
+    assert after.last_touched_at == pages[-1].last_touched_at
 
 
 @pytest.mark.asyncio

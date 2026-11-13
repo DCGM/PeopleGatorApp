@@ -44,9 +44,15 @@ def worker_databases(urls: dict[str, str]):
         # leftover connections; it never targets the caller's original store.
         errors = []
         for original, name in reversed(created):
-            try:
-                asyncio.run(database_command(original, f'DROP DATABASE "{name}" WITH (FORCE)'))
-            except Exception as error:
-                errors.append(error)
+            # Workers share one preview-seed template named after its builder's
+            # database (see preview_seed_snapshot); drop it once all have finished.
+            for statement in (
+                f'DROP DATABASE IF EXISTS "{name}_seed" WITH (FORCE)',
+                f'DROP DATABASE "{name}" WITH (FORCE)',
+            ):
+                try:
+                    asyncio.run(database_command(original, statement))
+                except Exception as error:
+                    errors.append(error)
         if errors:
             raise ExceptionGroup("Could not remove private pytest databases", errors)

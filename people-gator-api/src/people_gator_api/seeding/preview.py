@@ -560,6 +560,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     actions_document = next(item for item in DOCUMENTS if item.key == actions_page.document)
     activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
     gallery_document = next(item for item in DOCUMENTS if item.key == "page-gallery")
+    scroll_document = next(item for item in DOCUMENTS if item.key == "page-scroll")
+    scroll_page = next(item for item in PAGES if item.key == "page-scroll-1")
     focus_document = next(item for item in DOCUMENTS if item.key == "focus")
     focus_path = (
         f"/libraries/{focus_document.library}/documents/{focus_document.document_id}"
@@ -966,6 +968,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-page-browser-missing-media": (
                 f"/pages/{pages['page-gallery-9']}"
                 + "?" + urlencode({"pages_view": "expanded"})
+            ),
+            "document-page-browser-scroll": (
+                f"/libraries/{scroll_document.library}/documents/{scroll_document.document_id}"
+                f"/pages/{scroll_page.page_id}"
             ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. The gallery loads until the current page is found.

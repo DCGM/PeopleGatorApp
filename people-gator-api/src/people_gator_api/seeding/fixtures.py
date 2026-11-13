@@ -196,6 +196,7 @@ DOCUMENTS = (
     ),
     Document("issue10-media", "preview-mzk", "Media upload sandbox"),
     Document("page-gallery", "preview-mzk", "Page gallery navigation"),
+    Document("page-scroll", "preview-page-scroll", "Page scrolling practice"),
     # Accent/case name variants and uneven page counts across two libraries (#33).
     Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
     Document("sorting-notes", "preview-mzk", "radkova notes"),
@@ -378,6 +379,7 @@ SIDEBAR_PAGES = (
 )
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
+PAGE_SCROLL_PAGES = 30
 
 PAGES = (
     *(Page(f"search-merge-{i}", "search-merge", i,
@@ -585,6 +587,9 @@ PAGES = (
            has_layout=i != PAGE_GALLERY_MISSING_MEDIA,
            has_image=i != PAGE_GALLERY_MISSING_MEDIA)
       for i in range(1, PAGE_GALLERY_PAGES + 1)),
+    # Overflow the expanded grid with the desktop panels open.
+    *(Page(f"page-scroll-{i}", "page-scroll", i, has_layout=False)
+      for i in range(1, PAGE_SCROLL_PAGES + 1)),
     # Sorting scenario (#33): three ledger pages (one evidence-free) and one note.
     Page("sorting-ledger-1", "sorting-ledger", 1,
          (Face("sorting-manual", "sorting", 0, 4, "manual", confidence=0.62),

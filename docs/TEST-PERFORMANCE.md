@@ -1,4 +1,121 @@
-# Backend pytest performance investigation (#81)
+# Backend pytest performance
+
+## CI runner speed-up (#156)
+
+Measured on 2026-11-12 from the issue #156 branch (based on `main` at
+`26db464`). CI: GitHub-hosted `ubuntu-24.04`, 4 vCPUs, 15 GB RAM, 7.9 GB
+`/dev/shm`, CPython 3.14.10, PostgreSQL 18/pgvector service container.
+Local: the #81 host below (24 threads, other services running), CPython
+3.14.3 and the same PostgreSQL 18 image in a dedicated container on localhost.
+Times are the pytest step only, from pytest's summary line.
+
+### Where the time goes
+
+All slowest 50 CI cases were preview-seed calls: **49–81 s each** on the
+runner (the slowest was the alignment upgrade case), against 24–36 s locally
+for the same four-worker run. Setup and teardown were under one second. The
+101 preview-seed cases are 12% of the 871 cases and nearly all of the time,
+so progress reached 75% in 1.4 minutes and then took 21 minutes for the rest.
+
+Profiling one fresh seed case locally (`cProfile`, one seed run):
+
+- PostgreSQL executed 14,346 statements in **0.4 s** of server time
+  (`pg_stat_statements`), and a localhost round trip took 0.045 ms. Neither
+  the database server nor the network is the bottleneck.
+- `LocalFilesystem.write_bytes` fsyncs every file, and one seed writes about
+  1,900 (mostly manifest checkpoints). On disk, the event loop spent 8.5 s
+  waiting for those threads; with pytest's temporary directory on tmpfs it
+  spent 2.1 s, and the case took **8.0 s instead of 13.8 s**.
+- The remainder is Python CPU in repository code: SQLAlchemy statement
+  construction and compilation, link-statistics queries, pydantic models and
+  page-image rendering. A rerun costs about as much as a fresh seed (three
+  seeds took 17 s profiled), and migrating a private schema per case takes
+  0.2 s, so sharing migrations would not help.
+
+On the runner that CPU work, PostgreSQL and the four workers share 4 vCPUs.
+Six workers were no faster and two upload-concurrency tests timed out.
+
+### Options compared
+
+One CI run per configuration, all on the same commit and started together.
+Hosted runners vary by about 15% between runs, so differences smaller than
+that are not meaningful.
+
+| Configuration (`-n 4 --dist=worksteal` unless noted) | CI pytest step | Local |
+| --- | --- | --- |
+| Baseline: collection order | 1332 s | 651 s |
+| Seed cases first | 1283 s | — |
+| Seed cases first + tmpfs `--basetemp` | 1486 s | 363 s |
+| … + PostgreSQL `fsync`/`synchronous_commit`/`full_page_writes` off | 1178 s | 327 s |
+| … with `-n 6` | 1238 s, 2 timeouts | — |
+| … with `-n 8` | — | 218 s |
+| … shard 1 of 3 (`--shard=1/3`) | 348 s | — |
+| Seed cases spread, tmpfs, durability off, `--shard=I/4` | 274–360 s per shard (3 runs) | 372 s (no shard, durability on) |
+| … + one fresh seed per worker, copied into eligible cases | 186–259 s per shard | 200 s (no shard) |
+| … + one template per run, shards balanced by cost, `--shard=I/6` (final) | 85–173 s per shard (3 runs) | 194 s (no shard) |
+
+tmpfs and disabled durability help a lot locally but are within runner noise
+on CI, where the work is CPU-bound. What shortens the CI critical path is
+doing less seed work and splitting the rest across runners.
+
+### Reusing the fresh seed
+
+Most preview-seed cases begin by seeding an empty migrated store, the same
+seconds of CPU every time. The first case of a run that needs it seeds once
+into a template database and storage directory, under a file lock in the
+run's shared temporary directory; the other workers reuse it. An eligible case
+gets `CREATE DATABASE … TEMPLATE` (about 0.3 s locally) and a storage copy,
+and its first `seed_preview` call returns the template's result. Every later
+call in the case (reruns after edits, upgrades, checkpoint recovery) runs the
+real seed, so those behaviors are still verified against real seed runs.
+
+A case is eligible only when its body starts with the `seed_target` unpacking
+followed directly by `await preview.seed_preview(database, filesystem)`, read
+from its source, so nothing it does can precede the replaced call. That covers
+74 of the module's 94 test functions. The 18 that prepare legacy state, patch
+the seed or test recovery before seeding keep a real fresh seed automatically.
+So do `test_seed_graph_vectors_filters_and_media_are_usable` and
+`test_worker_seed_copy_matches_a_fresh_seed` (`@fresh_seed`); the latter
+checks that a copy matches a real fresh seed: fixture keys, record counts,
+all 299 other stored files, and a rerun that keeps every identity and adds nothing.
+Copies also re-register the face models' index definitions on the ORM table,
+as the replaced seed run would have done in the process.
+
+Fresh-seed cases still cost two to three times as much as copied ones, so
+shards split three tiers round robin (fresh seed, copied seed, fast) and each
+tier is spaced evenly through the shard.
+
+### Result
+
+The `backend` job is a matrix: six pytest shards and a `tools` part (CLI
+migration/seed smoke test, snapshot and deployment utility suites, utility
+installation), all in parallel. Each shard has its own PostgreSQL service,
+private worker databases and tmpfs `--basetemp`.
+
+| CI run | Slowest shard (pytest) | `backend` job wall time |
+| --- | --- | --- |
+| Before: [43271445350](https://github.com/DCGM/PeopleGatorApp/actions/runs/43271445350) | 1332 s (one job) | 24 min 0 s |
+| 4 shards, run 1: [43281628144](https://github.com/DCGM/PeopleGatorApp/actions/runs/43281628144) | 347 s (others 282–342 s) | 6 min 16 s |
+| 4 shards, run 2: [43283091214](https://github.com/DCGM/PeopleGatorApp/actions/runs/43283091214) | 320 s (others 295–319 s) | 5 min 50 s |
+| 4 shards, run 3: [43284470634](https://github.com/DCGM/PeopleGatorApp/actions/runs/43284470634) | 360 s (others 274–329 s) | 6 min 31 s |
+| 4 shards + seed copies: [43292218225](https://github.com/DCGM/PeopleGatorApp/actions/runs/43292218225) | 259 s (others 186–226 s) | 4 min 50 s |
+| Final, run 1: [43294289516](https://github.com/DCGM/PeopleGatorApp/actions/runs/43294289516) | 142 s (others 100–120 s) | 2 min 54 s |
+| Final, run 2: [43295106708](https://github.com/DCGM/PeopleGatorApp/actions/runs/43295106708) | 173 s (others 85–119 s) | 3 min 28 s |
+| Final, run 3: [43295106708 attempt 2](https://github.com/DCGM/PeopleGatorApp/actions/runs/43295106708/attempts/2) | 161 s (others 98–145 s) | 3 min 13 s |
+
+The final job is about **7–8× faster** (24 min to about 3 min). Shards remain
+uneven because fresh-seed cases differ in cost (the two alignment upgrade
+cases take 60–80 s each on CI) and runners vary. Its shards ran
+883 passed and 1 skipped in every run: the original 870 + 1 skipped, the 12 scheduling
+tests and the copy check. Per-case times of real seed runs are unchanged
+(48–81 s on CI); there are fewer of them, and each runner has a sixth.
+The tools part finishes in under two minutes.
+
+Each tier is spaced evenly through its shard, so the progress counter tracks
+elapsed time: final shard 1 reached 48% after 1.4 minutes and 97% after 2.2
+of 2.4 minutes. Before, progress reached 75% in 1.4 of 22 minutes.
+
+## Parallel workers (#81)
 
 Measured on 2026-10-27 from `main` at `d9e7e8d` and the issue #81 branch.
 Linux x86-64 (Ubuntu kernel 7.0.0-38), Intel i7-13700KF, CPython 3.14.3,
@@ -9,7 +126,7 @@ settings. No project database, external inference service or live Weaviate was u
 Dependency installation is excluded. These are local observations, not CI budgets;
 the host also runs other services.
 
-## Baseline and diagnosis
+### Baseline and diagnosis
 
 Commands ran from `people-gator-api`, with the locked environment. Full runs used
 `--durations=30 --durations-min=0.1`; a representative test also ran under
@@ -36,7 +153,7 @@ seeded records. A second, small fixture change restores dynamically attached ORM
 index definitions after every test, extending the existing discovery-only guard
 to prevent ordering-dependent bootstrap behavior.
 
-## Worker-count comparison
+### Worker-count comparison
 
 Full comparison commands use the same container/URLs:
 
@@ -61,7 +178,7 @@ DDL, metadata isolation, partial allocation failure and cleanup after worker/dro
 failure. Final verification also covers nested settings overrides, schema-only
 worker settings and rejection of parallel live Weaviate opt-ins.
 
-## Isolation and limits
+### Isolation and limits
 
 Each worker gets separate empty repository/schema databases before collection,
 including fresh application persistence settings. Destructive extension and

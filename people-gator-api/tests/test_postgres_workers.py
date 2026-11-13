@@ -72,21 +72,24 @@ def test_workers_and_store_types_receive_distinct_databases(monkeypatch):
             for variable, original in URLS.items():
                 assert make_url(first[variable]).set(database=make_url(original).database) == make_url(original)
             assert execute.await_count == 4  # Both workers remain alive.
-        assert execute.await_count == 6
+        assert execute.await_count == 8
     statements = [call.args[1] for call in execute.await_args_list]
     for name in names:
         assert statements.count(f'CREATE DATABASE "{name}"') == 1
         assert statements.count(f'DROP DATABASE "{name}" WITH (FORCE)') == 1
+        assert statements.count(f'DROP DATABASE IF EXISTS "{name}_seed" WITH (FORCE)') == 1
 
 
 def test_failed_partial_allocation_cleans_only_created_database(monkeypatch):
-    execute = AsyncMock(side_effect=[None, RuntimeError("create denied"), None])
+    execute = AsyncMock(side_effect=[None, RuntimeError("create denied"), None, None])
     monkeypatch.setattr(postgres_workers, "database_command", execute)
     with pytest.raises(RuntimeError, match="create denied"):
         with postgres_workers.worker_databases(URLS):
             pytest.fail("An incompletely provisioned worker must not start")
-    create, failed, drop = [call.args[1] for call in execute.await_args_list]
+    create, failed, drop_template, drop = [call.args[1] for call in execute.await_args_list]
     assert drop == create.replace("CREATE", "DROP") + " WITH (FORCE)"
+    assert drop_template == create.replace("CREATE DATABASE", "DROP DATABASE IF EXISTS")[:-1] + '_seed" WITH (FORCE)'
+    assert failed.split('"')[1] not in drop_template
     assert failed.split('"')[1] not in drop
 
 
@@ -96,16 +99,16 @@ def test_worker_failure_still_removes_both_databases(monkeypatch):
     with pytest.raises(RuntimeError, match="worker crashed"):
         with postgres_workers.worker_databases(URLS):
             raise RuntimeError("worker crashed")
-    assert execute.await_count == 4
+    assert execute.await_count == 6
 
 
 def test_cleanup_attempts_every_database_even_when_one_drop_fails(monkeypatch):
-    execute = AsyncMock(side_effect=[None, None, RuntimeError("drop denied"), None])
+    execute = AsyncMock(side_effect=[None, None, RuntimeError("drop denied"), None, None, None])
     monkeypatch.setattr(postgres_workers, "database_command", execute)
     with pytest.raises(ExceptionGroup, match="private pytest databases"):
         with postgres_workers.worker_databases(URLS):
             pass
-    assert execute.await_count == 4
+    assert execute.await_count == 6
 
 
 @pytest.mark.skipif(
