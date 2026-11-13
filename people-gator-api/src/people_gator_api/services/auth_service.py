@@ -194,21 +194,28 @@ async def get_basic_token(
     """Issue tokens for HTTP Basic credentials, the browser's sign-in dialog.
 
     Missing or wrong credentials get a Basic challenge, so the browser asks the
-    user and retries. The token carries the requested scopes the user holds.
+    user and retries. A configured public account signs in browsers that send
+    no credentials. The token carries the requested scopes the user holds.
     """
     if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sign in required",
-            headers={"WWW-Authenticate": BASIC_CHALLENGE},
-        )
-    user_record = await _verify_password(credentials.username, credentials.password, BASIC_CHALLENGE)
+        public_account = settings.jwk.public_account
+        public_record = (await get_users()).get(public_account) if public_account else None
+        if public_account is None or public_record is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sign in required",
+                headers={"WWW-Authenticate": BASIC_CHALLENGE},
+            )
+        username, user_record = public_account, public_record
+    else:
+        username = credentials.username
+        user_record = await _verify_password(username, credentials.password, BASIC_CHALLENGE)
     allowed = set(user_record["scopes"]) & KNOWN_SCOPES
     requested = scope.split() or sorted(allowed)
     scopes = [item for item in dict.fromkeys(requested) if item in allowed]
     if not scopes:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permitted scopes")
-    return await _issue_session(credentials.username, scopes, database_context)
+    return await _issue_session(username, scopes, database_context)
     
 
 api_key_security = APIKeyHeader(name="X-API-Key", scheme_name="PeopleGatorAPIKey", auto_error=False)

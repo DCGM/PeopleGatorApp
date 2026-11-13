@@ -278,6 +278,8 @@ class JwkSettings(BaseModel):
     access_token_lifetime_seconds: int = Field(default=7200, gt=0)
     issuer: str = "https://preview.peoplegator.dev"
     audience: str = "preview.peoplegator.dev"
+    # Account issued to browsers that sign in without credentials; public previews only.
+    public_account: str | None = Field(default=None, min_length=1)
     
 
 # --------------------------------------------------------------------------------------

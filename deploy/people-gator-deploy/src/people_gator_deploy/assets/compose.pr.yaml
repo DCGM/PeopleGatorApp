@@ -38,6 +38,8 @@ x-backend: &backend
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${DB_NAME:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
     PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
+    # Previews are public: browsers without credentials sign in as the demo account.
+    PEOPLE_GATOR_API__JWK__PUBLIC_ACCOUNT: test
     PEOPLE_GATOR_API__JWK__ISSUER: https://${PREVIEW_HOST:?required}
     PEOPLE_GATOR_API__JWK__AUDIENCE: ${PREVIEW_HOST:?required}
     PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:?required}

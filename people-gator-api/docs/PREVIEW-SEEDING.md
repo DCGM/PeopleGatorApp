@@ -55,7 +55,7 @@ docker compose --env-file /path/to/pr/compose.env \
 The CLI prints IDs and clickable person/page URLs using the configured JWK issuer
 as the application origin. PR deployments set this to their own preview hostname;
 for local use, set it to your local application URL if you want matching links.
-The browser asks for a login; the public preview keeps its `test` / `test` account. Seed actors do not
+The public preview opens as its `test` account without a prompt. Seed actors do not
 add login accounts or usable API-key secrets.
 
 The [staging database runtime test](../../deploy/people-gator-deploy/tests/test_staging_runtime.py)

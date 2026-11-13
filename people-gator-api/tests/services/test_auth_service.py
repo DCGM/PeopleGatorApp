@@ -504,3 +504,28 @@ def test_password_form_rejection_does_not_open_the_browser_dialog(basic_client: 
     })
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_public_account_signs_in_browsers_without_credentials(
+    basic_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.jwk, "public_account", "alice")
+    response = basic_client.post("/token/basic")
+    assert response.status_code == 200
+    token = TokenResponse.model_validate(response.json())
+    claims = asyncio.run(jwk_service.verify_access_token(token.access_token))
+    assert claims["sub"] == "alice"
+    assert claims["uid"] == alice().user_id
+    # Credentials still pick another account and are still checked.
+    assert basic_client.post("/token/basic", auth=("alice", "wrong")).status_code == 401
+    # The password form never falls back to the public account.
+    assert basic_client.post("/token/login", data={"username": "", "password": ""}).status_code != 200
+
+
+def test_missing_public_account_prompts_as_usual(
+    basic_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.jwk, "public_account", "nobody")
+    response = basic_client.post("/token/basic")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == auth_service.BASIC_CHALLENGE

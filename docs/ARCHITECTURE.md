@@ -37,7 +37,8 @@ JWT login checks Argon2 hashes in the users JSON file in the configured storage.
 `/token/login` takes an OAuth2 password form; `/token/basic` takes HTTP Basic
 credentials and answers missing or wrong ones with a Basic challenge, so the
 browser app signs in through the browser's own dialog. It grants the requested
-scopes the account holds.
+scopes the account holds. With `JWK__PUBLIC_ACCOUNT` set (PR previews only), a
+request without credentials signs in as that account instead of prompting.
 Refresh sessions rotate and live in process memory, so a restart invalidates
 them and multiple workers require routing to the issuing worker.
 
