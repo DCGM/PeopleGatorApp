@@ -44,7 +44,6 @@ class TelemetryTests(unittest.TestCase):
             runtime = root / 'runtime.env'
             # Raw env files keep dollar signs and quotes literal.
             runtime.write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\nPEOPLE_GATOR_API__OPENROUTER__API_KEY=sk-$literal"\n')
-            (root / 'staging-login.html').write_text('')
             variables = {
                 'PR_NUMBER': '94', 'COMMIT_SHA': 'abc123', 'RELEASE_TAG': 'v1.2.3',
                 'BACKEND_IMAGE': 'backend:test', 'FRONTEND_IMAGE': 'frontend:test',

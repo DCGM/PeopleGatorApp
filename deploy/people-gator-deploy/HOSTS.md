@@ -150,9 +150,8 @@ and deployment jobs cannot reach your files or containers:
 
 Staging uses the PostgreSQL of its own host account through the admin URL and
 creates its own database there; the first deploy starts it empty. Its media,
-users and keys live in the `STAGING_S3_BUCKET`. Sign in at
-`https://<host>/staging-login.html` with the accounts in that bucket's
-`peoplegator_api/users.json`. Optionally, `snapshot-init`/`refresh` replace the
+users and keys live in the `STAGING_S3_BUCKET`. The browser asks for one of
+the accounts in that bucket's `peoplegator_api/users.json` when the app opens. Optionally, `snapshot-init`/`refresh` replace the
 database with the latest production backup ([backup gathering](README.md#backup-gathering)).
 
 Releases need an external PostgreSQL on `db` (already migrated or
