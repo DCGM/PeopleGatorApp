@@ -125,14 +125,16 @@ class APIKey(Base):
 
 
 class RecordedCreation:
-    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"))
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True)
     created_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"))
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True)
 
 
-class AnnotationMetadata(RecordedCreation):
+class RecordedTouch:
+    """Latest modification fields shared by sources, entities and annotations."""
+
     last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True)
@@ -140,7 +142,11 @@ class AnnotationMetadata(RecordedCreation):
         ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True)
 
 
-class Entity(RecordedCreation, Base):
+class AnnotationMetadata(RecordedCreation, RecordedTouch):
+    """Creation and latest modification metadata for an annotation."""
+
+
+class Entity(RecordedCreation, RecordedTouch, Base):
     """A canonical real-world entity."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("entities")
@@ -166,13 +172,6 @@ class Entity(RecordedCreation, Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), nullable=False, index=True
-    )
-    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True
-    )
-    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
     thumbnail_face_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("faces.id"), name="fk_pg_demo_entities_thumbnail_face",
@@ -252,7 +251,7 @@ class Alias(Base):
     entity: Mapped[Entity] = relationship(back_populates="aliases")
 
 
-class Source(Base):
+class Source(RecordedCreation, RecordedTouch, Base):
     """URL-addressable evidence source and polymorphic source root."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("sources")
@@ -263,13 +262,6 @@ class Source(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True
-    )
-    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
     url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

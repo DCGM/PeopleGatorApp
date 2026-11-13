@@ -39,7 +39,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
 )
-from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, PagePatchRequest, ImageCreateRequest
+from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, PagePatchRequest, PageResponse, ImageCreateRequest
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
@@ -243,25 +243,38 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     for document in DOCUMENTS:
         if not document.registered:
             continue
-        source, _ = await database.sources.get_or_create_document(
-            DocumentCreateRequest(
-                library=document.library,
-                document_id=document.document_id,
-                name=document.title if document.named else None,
-            )
+        request = DocumentCreateRequest(
+            library=document.library, document_id=document.document_id,
+            name=document.title if document.named else None,
         )
+        if document.key == "creation-legacy":
+            source, _ = await database.sources.restore_legacy_source(
+                request.to_generic(), context=actors["reviewer"],
+            )
+        else:
+            source, _ = await database.sources.get_or_create_document(
+                request,
+                context=actors["reviewer" if document.key == "creation-user" else "importer"],
+            )
         documents[document.key] = source.source_id
     people = {person.key: person for person in PEOPLE}
     for page in PAGES:
         document = next(item for item in DOCUMENTS if item.key == page.document)
-        source, _ = await database.sources.get_or_create_page(
-            PageCreateRequest(
-                library=document.library,
-                document_id=document.document_id,
-                page_id=page.page_id,
-                page_number=None if page.key == "page-gallery-9" else page.number,
-            )
+        request = PageCreateRequest(
+            library=document.library, document_id=document.document_id,
+            page_id=page.page_id,
+            page_number=None if page.key == "page-gallery-9" else page.number,
         )
+        if document.key == "creation-legacy":
+            generic, _ = await database.sources.restore_legacy_source(
+                request.to_generic(), context=actors["reviewer"],
+            )
+            source = PageResponse.from_generic(generic)
+        else:
+            source, _ = await database.sources.get_or_create_page(
+                request,
+                context=actors["reviewer" if document.key == "creation-user" else "importer"],
+            )
         # Upgrade legacy synthetic pages once, only while still unannotated.
         # Persist precondition before the write; recovery preserves later edits.
         # The write leaves last-touched attribution as a fresh seed would.
@@ -399,7 +412,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             active_mentions[mention.key] = record.mention_id
             await checkpoint()
     # Standalone image uses the same generic source touch as document pages.
-    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url=ISSUE8_IMAGE_URL))
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url=ISSUE8_IMAGE_URL), context=actors["importer"])
     image_key = image_content_key(ISSUE8_IMAGE_URL)
     stored_image = await _read_optional(filesystem, image_key)
     image_document = next(item for item in DOCUMENTS if item.key == ISSUE8_IMAGE_PAGE.document)
@@ -663,6 +676,18 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         "person": active_faces.get("reference-ada-manual", ""),
         "library": "preview-nlk", "link_state": "verified",
     })
+    # Fixed demo bounds remain stable even when a historical schema upgrade
+    # legitimately leaves creation unknown. Never reconstruct missing history.
+    creation_interval = {"created_from": "2000-01-01T00:00:00Z", "created_to": "2100-01-01T00:00:00Z"}
+    creation_examples = {
+        "documents-created-by": "/documents?" + urlencode({"library": "preview-creation", "created_by": actors["reviewer"].user_id}),
+        "documents-created-key": "/documents?" + urlencode({"library": "preview-creation", "created_key": registered_keys["importer"]}),
+        "documents-created-range": "/documents?" + urlencode({"library": "preview-creation", **creation_interval}),
+        "scans-created-range": "/scans?" + urlencode({"library": "preview-creation", **creation_interval}),
+        "people-created-by": "/people?" + urlencode({"q": "Ada", "created_by": actors["reviewer"].user_id}),
+        "faces-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "faces", "created_key": registered_keys["importer"]}),
+        "mentions-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "mentions", "created_by": actors["importer"].user_id}),
+    }
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -672,6 +697,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            **creation_examples,
+            "document-creation": "/documents?library=preview-creation",
             # #141: document-first entry points backed by existing local pages
             # and a registered empty document. Older /scans examples below are
             # retained as explicit compatibility links handled by redirects.

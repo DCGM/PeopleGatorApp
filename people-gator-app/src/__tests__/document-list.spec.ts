@@ -307,10 +307,14 @@ describe('document table results', () => {
       .map((button) => button.attributes('aria-label') || button.text().trim())
     expect(names).toEqual([
       'Libraries',
+      'Created by',
+      'Created via key',
       'Modified by',
       'Modified via key',
       'Modified from',
       'Modified to',
+      'Created from',
+      'Created to',
       'All annotations',
       'Faces',
       'Text mentions',

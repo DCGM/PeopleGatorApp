@@ -32,19 +32,19 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
         user = await db.users.get_or_create(UserCreateRequest(display_name='Number editor', is_active=True, external_subject='editor', external_issuer='issue53'))
         actor = AuthContext(user_id=user.user_id, api_key_id=None, authentication_method='bearer', scopes=set())
         doc = uuid.uuid4()
-        parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library='numbers', document_id=doc))
+        parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library='numbers', document_id=doc), context=actor)
         records = []
         for i, number in enumerate([10, None, 2, 1, 2, None]):
             spec = PageCreateRequest(library='numbers', document_id=doc, page_id=uuid.UUID(int=100-i), page_number=number)
-            page, _ = await db.sources.get_or_create_page(spec)
+            page, _ = await db.sources.get_or_create_page(spec, context=actor)
             assert page.page_number == number
             assert page.registered_page_count == i+1
-            repeated, _ = await db.sources.get_or_create_page(spec.model_copy(update={'page_number': 999}))
+            repeated, _ = await db.sources.get_or_create_page(spec.model_copy(update={'page_number': 999}), context=actor)
             assert repeated.page_number == number  # imports never overwrite
             records.append(page)
         # Same document UUID in another library, plus another document in this library.
         for library, document in [('elsewhere', doc), ('numbers', uuid.uuid4())]:
-            page, _ = await db.sources.get_or_create_page(PageCreateRequest(library=library, document_id=document, page_id=uuid.uuid4(), page_number=1))
+            page, _ = await db.sources.get_or_create_page(PageCreateRequest(library=library, document_id=document, page_id=uuid.uuid4(), page_number=1), context=actor)
             assert page.registered_page_count == 1
         scope = PageListFilter(library=['numbers'], document_id=[doc])
         async def collect(direction):
@@ -95,7 +95,7 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
         assert parent_after.last_touched_by_user_id == user.user_id
         cleared = await db.sources.patch_page(first.source_id, PagePatchRequest(page_number=None), context=actor)
         assert cleared.page_number is None
-        assert (await db.sources.get_or_create_page(PageCreateRequest(library=first.library, document_id=doc, page_id=first.page_id, page_number=10)))[0].page_number is None
+        assert (await db.sources.get_or_create_page(PageCreateRequest(library=first.library, document_id=doc, page_id=first.page_id, page_number=10), context=actor))[0].page_number is None
         assert await db.sources.patch_page(parent.source_id, PagePatchRequest(page_number=1), context=actor) is None
         filtered = await db.sources.list_pages(PageListRequest(filter_=PageListFilter(source_id=[records[2].source_id]), limit=1))
         assert filtered.items[0].registered_page_count == 6
@@ -113,17 +113,18 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
 async def test_mixed_import_batches_project_final_totals(migrated_postgres, new_first):
     async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
         db = postgres_database(session)
+        actor = await db.users.get_or_create(UserCreateRequest(display_name='Batch importer', external_subject='batch', external_issuer='issue128', is_active=True))
         document = DocumentCreateRequest(library='mixed-import', document_id=uuid.uuid4())
-        await db.sources.get_or_create_document(document)
+        await db.sources.get_or_create_document(document, context=actor)
         existing = PageCreateRequest(library=document.library, document_id=document.document_id, page_id=uuid.uuid4(), page_number=1)
-        original, _ = await db.sources.get_or_create_page(existing)
+        original, _ = await db.sources.get_or_create_page(existing, context=actor)
         added = PageCreateRequest(library=document.library, document_id=document.document_id, page_id=uuid.uuid4(), page_number=2)
         reimport = existing.model_copy(update={'page_number': 99})
         specs = [added, reimport] if new_first else [reimport, added]
         # Include an existing parent and a repeated page in the same generic batch.
         results = await db.sources.get_or_create_batch([
             document.to_generic(), *(spec.to_generic() for spec in specs), reimport.to_generic(),
-        ])
+        ], context=actor)
         assert [item.registered_page_count for item, _ in results] == [2, 2, 2, 2]
         assert [result for _, result in results] == [
             CreateResult.EXISTING,
@@ -137,7 +138,7 @@ async def test_mixed_import_batches_project_final_totals(migrated_postgres, new_
                 assert item.page_number == 1
                 assert item.last_touched_at == original.last_touched_at
         # The typed endpoint uses the same final projections on an idempotent retry.
-        repeated = await db.sources.get_or_create_page_batch([reimport, added])
+        repeated = await db.sources.get_or_create_page_batch([reimport, added], context=actor)
         assert [item.registered_page_count for item, _ in repeated] == [2, 2]
         assert all(result == CreateResult.EXISTING for _, result in repeated)
 
@@ -149,12 +150,12 @@ async def test_number_edits_lock_only_when_writing_and_batches_share_totals(migr
         user = await db.users.get_or_create(UserCreateRequest(display_name='Upgrade', is_active=True, external_subject='upgrade', external_issuer='issue53'))
         actor = AuthContext(user_id=user.user_id, api_key_id=None, authentication_method='bearer', scopes=set())
         doc = uuid.uuid4()
-        parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library='locks', document_id=doc))
+        parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library='locks', document_id=doc), context=actor)
         # One stats pass after the batch reports the same complete total on every new page.
         created = await db.sources.get_or_create_page_batch([
             PageCreateRequest(library='locks', document_id=doc, page_id=uuid.uuid4(), page_number=number)
             for number in (None, 2, 3)
-        ])
+        ], context=actor)
         assert [page.registered_page_count for page, _ in created] == [3, 3, 3]
         page = created[0][0]
         async def graph_lock_free():
@@ -213,7 +214,7 @@ async def test_numbering_api_validation_scopes_and_key_attribution(migrated_post
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test', headers={'Authorization': 'Bearer synthetic'}) as client:
             spec = {'library': 'http', 'document_id': str(uuid.uuid4()), 'page_id': str(uuid.uuid4()), 'page_number': 10}
             # Repository creation avoids depending on ingest scope aliases here.
-            page, _ = await db.sources.get_or_create_page(PageCreateRequest(**spec))
+            page, _ = await db.sources.get_or_create_page(PageCreateRequest(**spec), context=actor)
             url = f'/api/v1/pages/{page.source_id}'
             assert (await client.patch(url, json={'page_number': 2})).status_code == 403
             actor.scopes.add('people-gator:annotate')

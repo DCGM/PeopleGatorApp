@@ -208,13 +208,13 @@ async def test_source_creation_and_repeated_identity(kind: SourceKind) -> None:
     collection = _collection()
     spec = _source_spec(kind)
     repository = WeaviateSourceRepository(_client(collection))
-    source, created = await repository.get_or_create(spec=spec)
+    source, created = await repository.get_or_create(spec=spec, context=GenericActor(user_id=uuid.uuid4()))
     assert created is CreateResult.CREATED
     inserted = collection.data.insert.await_args.kwargs
     existing = _stored(inserted["properties"])
     existing.uuid = inserted["uuid"]
     collection.query.fetch_object_by_id.return_value = existing
-    repeated, created = await repository.get_or_create(spec=spec)
+    repeated, created = await repository.get_or_create(spec=spec, context=GenericActor(user_id=uuid.uuid4()))
     assert created is CreateResult.EXISTING
     assert repeated == source
     collection.data.insert.assert_awaited_once()

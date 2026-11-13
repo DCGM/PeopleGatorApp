@@ -8,7 +8,6 @@ from datetime import timezone
 
 from pydantic import (
     BaseModel,
-    AwareDatetime,
     model_validator,
     Field,
     field_validator,
@@ -18,6 +17,8 @@ from people_gator_api.settings import settings
 from people_gator_api.schemas.entity_counts import EntityCountFilter
 from people_gator_api.schemas.sorting import EntitySortField, SortableRequest
 from people_gator_api.schemas.common import (
+    CreationMetadata,
+    TouchMetadata,
     GenericListRequest,
     GenericListResponse,
     ListFilterBase,
@@ -30,9 +31,6 @@ from people_gator_api.schemas.missing import MISSING, MissingType
 # ---------------------------------------------------------------------------
 
 MAX_ENTITY_BATCH_SIZE = settings.batch.max_entity_batch_size
-
-
-from .creation import CreationMetadata
 
 
 class EntityCreateRequest(BaseModel):
@@ -121,7 +119,7 @@ type EntityBatchPatchRequest = Annotated[
 ]
 
 
-class EntityResponse(CreationMetadata):
+class EntityResponse(CreationMetadata, TouchMetadata):
     """A single entity record."""
 
     entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")
@@ -155,9 +153,6 @@ class EntityResponse(CreationMetadata):
     )
 
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: uuid.UUID | None = None
-    last_touched_by_api_key_id: uuid.UUID | None = None
 
 
 EntityListResponse = GenericListResponse[EntityResponse]

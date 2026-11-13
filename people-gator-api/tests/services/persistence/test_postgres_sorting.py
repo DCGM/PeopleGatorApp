@@ -199,12 +199,12 @@ async def collection(sorted_records):
         (libraries[0], "Bravo", 3),
     ]:
         document, _ = await r.db.sources.get_or_create_document(
-            DocumentCreateRequest(library=library, document_id=uuid.uuid4(), name=name))
+            DocumentCreateRequest(library=library, document_id=uuid.uuid4(), name=name), context=r.actor)
         documents.append(document)
         pages_by_doc[document.source_id] = []
         for _ in range(page_count):
             page, _ = await r.db.sources.get_or_create_page(PageCreateRequest(
-                library=library, document_id=document.document_id, page_id=uuid.uuid4()))
+                library=library, document_id=document.document_id, page_id=uuid.uuid4()), context=r.actor)
             pages_by_doc[document.source_id].append(page)
     pages = [page for items in pages_by_doc.values() for page in items]
     person = r.entities[0].entity_id
@@ -394,7 +394,7 @@ async def test_unknown_document_names_agree_in_paged_browse_and_search(collectio
     # directions, even when a cursor splits the unknown-name group.
     unknown, _ = await c.r.db.sources.get_or_create_document(DocumentCreateRequest(
         library=c.libraries[0], document_id=uuid.uuid4(), name=None,
-    ))
+    ), context=c.r.actor)
     documents = [*c.documents, unknown]
     scope = DocumentListFilter(library=c.libraries)
     expected = sorted(documents, key=lambda row: row.source_id.int)

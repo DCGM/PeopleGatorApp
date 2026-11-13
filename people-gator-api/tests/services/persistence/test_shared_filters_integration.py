@@ -106,15 +106,15 @@ async def matrix():
         v = await actor("v")
         l1, l2 = f"lib-a-{tag}", f"lib-b-{tag}"
         archive, quiet = uuid.uuid4(), uuid.uuid4()
-        d1, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l1, document_id=archive))
+        d1, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l1, document_id=archive), context=u)
         # The same archive document UUID in another library must never leak.
-        d2, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l2, document_id=archive))
-        d3, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l1, document_id=quiet))
+        d2, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l2, document_id=archive), context=u)
+        d3, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=l1, document_id=quiet), context=u)
 
         async def page(library, document_id):
             created, _ = await db.sources.get_or_create_page(PageCreateRequest(
                 library=library, document_id=document_id, page_id=uuid.uuid4(),
-            ))
+            ), context=u)
             return created
 
         p1a, p1b = await page(l1, archive), await page(l1, archive)
@@ -246,7 +246,7 @@ async def test_page_scope_excludes_nonpage_sources_and_parent_documents(matrix):
     m = matrix
     image, _ = await m.db.sources.get_or_create_image(ImageCreateRequest(
         url=f"https://preview.invalid/page-scope/{m.d1.source_id}.png",
-    ))
+    ), context=m.u)
     # Give both non-page sources real annotations, so wrong-kind IDs cannot
     # appear to be excluded just because their sources have no linked records.
     for source in (m.d1, image):

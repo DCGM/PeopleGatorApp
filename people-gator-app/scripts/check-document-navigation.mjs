@@ -185,10 +185,14 @@ try {
     // search and sort sit above the table.
     const filterNames = [
       'Libraries',
+      'Created by',
+      'Created via key',
       'Modified by',
       'Modified via key',
       'Modified from',
       'Modified to',
+      'Created from',
+      'Created to',
       'All annotations',
       'Faces',
       'Text mentions',

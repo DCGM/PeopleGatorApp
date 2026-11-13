@@ -1436,6 +1436,53 @@ transcription; replaced media is kept. Integration tests check the stored
 context, its layout lines, Hana's highlight, the media upgrade, preservation of
 replaced media and rerun stability.
 
+### Document creation (#128)
+
+Open the seed manifest's `document-creation` link (`/documents?library=preview-creation`).
+Use **Add column** to show **Created** and **Created by**. Both are hidden by
+default, retain the table's add/move/remove and saved layout preferences, and
+provide no creation sorting. Created displays local date/time; Created by
+shows the user name and the API-key name in parentheses when used.
+
+The three documents and their local page scans demonstrate a bearer reviewer,
+an API-key importer, and a historical source with **Unknown** creation. Ordinary
+seed registration uses the real preview importer actor; the reviewer example
+uses the preview reviewer. The historical pair uses the repository's internal
+`restore_legacy_source` operation with a restoring actor, without assigning that
+actor to historical creation. This operation only inserts missing records; it
+never clears creation on existing sources and is not an HTTP registration route.
+
+Migration `d34a021b0016` leaves existing source creation fields NULL;
+`d34a021b0017` indexes creation time, user and API key on sources, entities,
+image occurrences and mentions, like the modification fields. Registration
+never backfills them or changes known creation on a retry. Seed reruns retain
+source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
+The creation integration checks query both document and page responses and
+read their actual media before repeating the seed and checking preservation.
+
+
+### Shared creation filters
+
+Every shared panel offers **Created by**, **Created via key**, **Created from**
+and **Created to**, independently of its modification filters. This includes
+Documents, People and person evidence (Faces/Mentions); the scan editor
+sidebar has none. Each list/search matches the returned
+record's own creation, rather than its containing document or latest editor.
+The API accepts `filter.created_from`, `filter.created_to`,
+`filter.created_by_user_id` and `filter.created_by_api_key_id`.
+
+Use `documents-created-by`, `documents-created-key` and `documents-created-range`
+for the three synthetic creation documents. The date example uses a fixed inclusive 2000–2100 interval, showing both known
+creations without inventing historical dates. Unknown legacy
+creation does not match an active date or creator criterion. `scans-created-range`
+is kept as a stable key: since the Scans screen was retired (#141) it opens
+Documents, while page creation filters remain available through `/api/v1/pages`
+and the seed test checks pages' own creation times in the same interval. `people-created-by`,
+`faces-created-by` and `mentions-created-by` open populated people/annotation
+examples, including creation attributed to an importer despite later review edits.
+These example links and the underlying records survive reruns unchanged.
+
+
 ### Page panel layout (#139)
 
 Open **page-panel-layout** to review the existing synthetic scan-sidebar page,

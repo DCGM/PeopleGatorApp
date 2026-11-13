@@ -102,6 +102,7 @@ LIST_FILTERS["/documents"].add("min_linked_entity_count")
 # Every source, annotation and entity list shares one canonical scope and
 # latest-modification vocabulary (#52).
 SHARED_FILTERS = {
+    "created_from", "created_to", "created_by_user_id", "created_by_api_key_id",
     "library", "document_source_id", "page_source_id", "last_touched_from",
     "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id",
 }

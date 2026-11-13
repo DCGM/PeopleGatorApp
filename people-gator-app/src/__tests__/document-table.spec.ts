@@ -119,6 +119,26 @@ describe('document table', () => {
     expect(wrapper.text()).not.toContain('Restore column widths')
     expect(wrapper.get('button').find('svg').exists()).toBe(true)
   })
+  it('adds creation columns with dates, actor labels and Unknown legacy values', async () => {
+    const { wrapper, visibility } = await render()
+    expect(visibility.value.created).toBe(false)
+    expect(visibility.value.created_by).toBe(false)
+    await wrapper.setProps({
+      visibility: { ...visibility.value, created: true, created_by: true },
+      documents: [
+        { ...documents[0]!, created_at: '2026-11-09T12:00:00Z', created_by_user_name: 'Registrar' },
+        { ...documents[0]!, source_id: 'source-key', created_by_user_name: 'Importer', created_by_api_key_name: 'Archive ingest' },
+        { ...documents[0]!, source_id: 'source-legacy', created_at: null, created_by_user_id: null },
+      ],
+    })
+    expect(wrapper.findAll('td[data-column="created"]').map((cell) => cell.text())).toEqual([
+      new Date('2026-11-09T12:00:00Z').toLocaleString(), 'Unknown', 'Unknown',
+    ])
+    expect(wrapper.findAll('td[data-column="created_by"]').map((cell) => cell.text())).toEqual([
+      'Registrar', 'Importer (Archive ingest)', 'Unknown',
+    ])
+    expect(wrapper.find('[aria-label^="Sort by Created"]').exists()).toBe(false)
+  })
   it('keeps stable compact widths across loading, data, sorting and visibility changes', async () => {
     const { wrapper } = await render()
     const widths = () =>

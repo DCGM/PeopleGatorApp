@@ -726,20 +726,26 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
     )
 
     database, _, _ = seed_target
+    from people_gator_api.schemas.users import UserCreateRequest
+    user = await database.users.get_or_create(UserCreateRequest(
+        display_name="Document registrar", is_active=True,
+        external_subject="document-registrar", external_issuer="issue128-test",
+    ))
+    actor = GenericActor(user_id=user.user_id)
     request = DocumentCreateRequest(
         library="names-test", document_id=uuid.uuid4(), name="  Named album  "
     )
-    created = await create_document_route(payload=request, database=database, user=None)
+    created = await create_document_route(payload=request, database=database, user=actor)
     assert created.name == "Named album"
     assert (
         await get_document_route(
-            document_source_id=created.source_id, database=database, user=None
+            document_source_id=created.source_id, database=database, user=actor
         )
     ).name == created.name
     assert (
         await lookup_document_route(
             database=database,
-            user=None,
+            user=actor,
             library=request.library,
             document_id=request.document_id,
         )
@@ -748,15 +754,15 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
     batch = await create_document_batch_route(
         payload=[request.model_copy(update={"name": "Replacement"}), legacy],
         database=database,
-        user=None,
+        user=actor,
     )
     assert [item.name for item in batch] == ["Named album", None]
     with pytest.raises(HTTPException) as conflict:
-        await create_document_route(payload=request, database=database, user=None)
+        await create_document_route(payload=request, database=database, user=actor)
     assert conflict.value.status_code == 409
     listed = await list_documents_route(
         database=database,
-        user=None,
+        user=actor,
         filter=DocumentListFilter(library=["names-test"]),
         list_request=GenericListRequest(limit=100),
     )
@@ -1240,7 +1246,8 @@ async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_ta
     actor = GenericActor(user_id=seed.users["reviewer"])
     doc = await db.sources.get_document(seed.documents["link-states"])
     mirror, _ = await db.sources.get_or_create_document(
-        DocumentCreateRequest(library="other-link-library", document_id=doc.document_id)
+        DocumentCreateRequest(library="other-link-library", document_id=doc.document_id),
+        context=GenericActor(user_id=seed.users['reviewer']),
     )
     direct = await db.text_mentions.create(
         TextMentionCreateRequest(
@@ -1557,7 +1564,7 @@ async def test_issue8_source_only_actor_and_key_references(seed_target):
     database, _, _ = seed_target
     user = await database.users.get_or_create(UserCreateRequest(display_name='Source only actor', external_subject='source-only-actor', external_issuer='issue8-test', is_active=True))
     other = await database.users.get_or_create(UserCreateRequest(display_name='Other actor', external_subject='other-actor', external_issuer='issue8-test', is_active=True))
-    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'))
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'), context=GenericActor(user_id=user.user_id))
     actor = GenericActor(user_id=user.user_id)
     face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), actor)
     await database.faces.delete(face.detection_id, context=actor)
@@ -4234,9 +4241,9 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
     original_patch = db.sources.patch_page
     first_id = legacy = None
 
-    async def legacy_create(spec):
+    async def legacy_create(spec, *, context):
         nonlocal first_id, legacy
-        result = await original_create(spec.model_copy(update={'page_number': None}))
+        result = await original_create(spec.model_copy(update={'page_number': None}), context=context)
         first_id = result[0].source_id
         legacy = result[0]
         return result
@@ -5170,6 +5177,93 @@ async def test_breadcrumb_metadata_links_media_and_rerun_preservation(seed_targe
     assert preserved.page_number == 42
     assert preserved.last_touched_at == edited.last_touched_at
     assert (await database.entities.get(person_id)).name == "Renamed Ada"
+
+
+@pytest.mark.asyncio
+async def test_source_creation_examples_and_legacy_unknown_survive_reruns(seed_target):
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    before = {}
+    for key in ('creation-user', 'creation-key', 'creation-legacy'):
+        document = await db.sources.get_document(seed.documents[key])
+        page = await db.sources.get_page(seed.pages[key + '-1'])
+        before[key] = (document, page)
+        for source in (document, page):
+            if key == 'creation-legacy':
+                assert source.created_at is None
+                assert source.created_by_user_id is None
+                assert source.created_by_api_key_id is None
+                assert source.created_by_user_name is None
+                assert source.created_by_api_key_name is None
+            else:
+                actor = 'reviewer' if key == 'creation-user' else 'importer'
+                assert source.created_at is not None
+                assert source.created_by_user_id == seed.users[actor]
+                assert source.created_by_user_name == ('Preview reviewer' if actor == 'reviewer' else 'Preview face importer')
+                assert source.created_by_api_key_id == (None if actor == 'reviewer' else seed.api_keys['importer'])
+                assert source.created_by_api_key_name == (None if actor == 'reviewer' else 'Preview face importer')
+        # The scenario includes usable media and canonical links.
+        assert (await get_page_image(page.library, page.document_id, page.page_id)).content
+    from people_gator_api.schemas.sources import PagePatchRequest
+    edited = await db.sources.patch_page(before['creation-key'][1].source_id,
+        PagePatchRequest(page_number=9), context=GenericActor(user_id=seed.users['reviewer']))
+    rerun = await preview.seed_preview(db, fs)
+    assert rerun.documents == seed.documents and rerun.pages == seed.pages
+    assert rerun.filter_examples['document-creation'] == '/documents?library=preview-creation'
+    for key, (document, page) in before.items():
+        for original, current in (
+            (document, await db.sources.get_document(document.source_id)),
+            (page, await db.sources.get_page(page.source_id)),
+        ):
+            for field in ('created_at', 'created_by_user_id', 'created_by_api_key_id'):
+                assert getattr(current, field) == getattr(original, field)
+    after = await db.sources.get_page(edited.source_id)
+    assert after.page_number == 9 and after.last_touched_at == edited.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_shared_creation_filter_examples_work_and_survive_seed_reruns(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.faces import FaceListFilter, FaceListRequest
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    for key in ('documents-created-by', 'documents-created-key', 'documents-created-range'):
+        query = parse_qs(urlsplit(seeded.filter_examples[key]).query)
+        filters = DocumentListFilter(
+            library=query['library'],
+            **({'created_by_user_id': query['created_by']} if 'created_by' in query else {}),
+            **({'created_by_api_key_id': query['created_key']} if 'created_key' in query else {}),
+            **({'created_from': query['created_from'][0], 'created_to': query['created_to'][0]} if 'created_from' in query else {}),
+        )
+        found = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=filters))
+        expected = ({seeded.documents['creation-user'], seeded.documents['creation-key']} if 'created_from' in query else
+                    {seeded.documents['creation-key' if 'created_key' in query else 'creation-user']})
+        assert {item.source_id for item in found.items} == expected
+        assert seeded.documents['creation-legacy'] not in {item.source_id for item in found.items}
+    query = parse_qs(urlsplit(seeded.filter_examples['scans-created-range']).query)
+    pages = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
+        library=query['library'], created_from=query['created_from'][0], created_to=query['created_to'][0],
+    )))
+    assert {item.source_id for item in pages.items} == {seeded.pages['creation-user-1'], seeded.pages['creation-key-1']}
+    ada = seeded.entities['ada']
+    people = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        entity_id=[ada], created_by_user_id=[seeded.users['reviewer']],
+    )))
+    assert [item.entity_id for item in people.items] == [ada]
+    assert people.items[0].last_touched_by_user_id != people.items[0].created_by_user_id
+    faces = await database.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        entity_id=[ada], created_by_api_key_id=[seeded.api_keys['importer']],
+    )))
+    assert faces.items and all(face.created_by_api_key_id == seeded.api_keys['importer'] for face in faces.items)
+    mentions = await database.text_mentions.list(TextMentionListRequest(limit=100, filter_=TextMentionListFilter(
+        entity_id=[ada], created_by_user_id=[seeded.users['importer']],
+    )))
+    assert mentions.items and all(mention.created_by_user_id == seeded.users['importer'] for mention in mentions.items)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    for key in seeded.filter_examples:
+        if 'created-' in key:
+            assert rerun.filter_examples[key] == seeded.filter_examples[key]
 
 
 @pytest.mark.asyncio

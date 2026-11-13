@@ -34,6 +34,8 @@ export const DOCUMENT_COLUMN_IDS = [
     DOCUMENT_ANNOTATION_STATES.map((state) => annotationColumnId(group.scope, state.id)),
   ),
   'document_id',
+  'created',
+  'created_by',
   'last_modified',
   'modified_by',
   'api_key',
@@ -233,6 +235,8 @@ export function documentColumnSizing(id: string) {
     library: 200,
     document_id: 320,
     registered_page_count: 120,
+    created: 208,
+    created_by: 288,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
@@ -246,4 +250,12 @@ export function documentColumnSizing(id: string) {
   const maxSize =
     id === 'name' || id === 'identity' || id === 'document_id' ? 720 : Math.max(size * 2, 240)
   return { size, minSize, maxSize }
+}
+
+/** Creation attribution stays together, including API-key registrations. */
+export function documentCreator(document: DocumentResponse): string {
+  const user = document.created_by_user_name || document.created_by_user_id
+  if (!user) return 'Unknown'
+  const key = document.created_by_api_key_name || document.created_by_api_key_id
+  return key ? `${user} (${key})` : user
 }
