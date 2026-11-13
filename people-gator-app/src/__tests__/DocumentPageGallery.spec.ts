@@ -276,7 +276,9 @@ describe('DocumentPageGallery', () => {
       expect(links[2]!.attributes('aria-label')).toContain(', verified')
       expect(links[0]!.attributes('aria-label')).not.toContain('verified')
       expect(wrapper.findAll('[data-verification-badge]')).toHaveLength(1)
-      const badge = links[2]!.get('[data-page-thumbnail] [data-verification-badge]')
+      const badge = links[2]!.get('[data-verification-badge]')
+      // Above the page, not over it.
+      expect(links[2]!.find('[data-page-thumbnail] [data-verification-badge]').exists()).toBe(false)
       expect(badge.text()).toBe('Verified')
       expect(badge.find('svg').exists()).toBe(true)
       const toggle = wrapper

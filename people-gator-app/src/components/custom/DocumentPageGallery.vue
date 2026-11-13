@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
 import ArchiveLink from './ArchiveLink.vue'
@@ -48,6 +48,7 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
+const anyVerified = computed(() => props.items.some((item) => item.verified))
 
 watch(
   [list, expanded],
@@ -268,6 +269,15 @@ useAutomaticPagination({
               :title="`Page ${item.pageId}`"
               :data-current="item.current || undefined"
             >
+              <!-- Badge sits above the page; the row is reserved so thumbnails stay aligned. -->
+              <div v-if="anyVerified" class="flex h-5 w-full items-end">
+                <VerificationBadge
+                  v-if="item.verified"
+                  state="verified"
+                  class="max-w-full"
+                  aria-hidden="true"
+                />
+              </div>
               <div
                 data-page-thumbnail
                 :data-person-match="item.matchesSelectedPerson || undefined"
@@ -297,12 +307,6 @@ useAutomaticPagination({
                     </span>
                   </template>
                 </LoadableImage>
-                <VerificationBadge
-                  v-if="item.verified"
-                  state="verified"
-                  class="absolute top-0.5 left-1/2 max-w-full -translate-x-1/2"
-                  aria-hidden="true"
-                />
               </div>
               <span
                 class="w-full truncate text-center font-mono text-[0.6875rem] leading-tight"
