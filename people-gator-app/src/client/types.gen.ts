@@ -7744,6 +7744,38 @@ export type GetTokenTokenLoginPostResponses = {
 
 export type GetTokenTokenLoginPostResponse = GetTokenTokenLoginPostResponses[keyof GetTokenTokenLoginPostResponses];
 
+export type GetBasicTokenTokenBasicPostData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Scope
+         *
+         * Space-separated scopes; defaults to all allowed scopes
+         */
+        scope?: string;
+    };
+    url: '/token/basic';
+};
+
+export type GetBasicTokenTokenBasicPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetBasicTokenTokenBasicPostError = GetBasicTokenTokenBasicPostErrors[keyof GetBasicTokenTokenBasicPostErrors];
+
+export type GetBasicTokenTokenBasicPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TokenResponse;
+};
+
+export type GetBasicTokenTokenBasicPostResponse = GetBasicTokenTokenBasicPostResponses[keyof GetBasicTokenTokenBasicPostResponses];
+
 export type RefreshTokenTokenRefreshPostData = {
     body: RefreshTokenRequest;
     path?: never;

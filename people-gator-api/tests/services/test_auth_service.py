@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock
 import argon2
 import pytest
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from httpx import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 
@@ -14,7 +16,9 @@ from auth_doubles import IdentityStore
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserResponse
+from people_gator_api.routes import jwks
 from people_gator_api.services import auth_service, jwk_service
+from people_gator_api.services.database_service import get_database_context
 from people_gator_api.settings import (
     JwkSettings, LocalStorageSettings, Settings, StorageSettings, settings,
 )
@@ -431,3 +435,97 @@ async def test_access_token_lifetime_is_configurable(
     with pytest.raises(HTTPException) as expired:
         await jwk_service.verify_access_token(token.access_token)
     assert expired.value.status_code == 401
+
+
+@pytest.fixture
+def basic_client(users_file: Path) -> TestClient:
+    app = FastAPI()
+    app.include_router(jwks.router)
+    app.dependency_overrides[get_database_context] = identity_store.context
+    return TestClient(app)
+
+
+def scopes_of(response: Response) -> list[str]:
+    token = TokenResponse.model_validate(response.json())
+    return asyncio.run(jwk_service.verify_access_token(token.access_token))["scopes"]
+
+
+def test_basic_sign_in_challenges_the_browser(basic_client: TestClient) -> None:
+    responses = [basic_client.post("/token/basic")] + [
+        basic_client.post("/token/basic", auth=auth) for auth in (("alice", "wrong"), ("unknown", "secret"))
+    ]
+    for response in responses:
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == auth_service.BASIC_CHALLENGE
+    assert identity_store.users.records == {}
+
+
+def test_basic_sign_in_grants_the_users_allowed_scopes(basic_client: TestClient) -> None:
+    response = basic_client.post("/token/basic", auth=("alice", "secret"))
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert scopes_of(response) == sorted([auth_service.ANNOTATE_SCOPE, auth_service.BROWSE_SCOPE])
+    # Requested scopes the user lacks are dropped instead of failing the sign-in.
+    everything = " ".join(sorted(auth_service.KNOWN_SCOPES))
+    response = basic_client.post("/token/basic", params={"scope": everything}, auth=("alice", "secret"))
+    assert scopes_of(response) == sorted([auth_service.ANNOTATE_SCOPE, auth_service.BROWSE_SCOPE])
+    response = basic_client.post(
+        "/token/basic", params={"scope": auth_service.BROWSE_SCOPE}, auth=("alice", "secret"),
+    )
+    assert scopes_of(response) == [auth_service.BROWSE_SCOPE]
+    refreshed = asyncio.run(refresh(response.json()["refresh_token"]))
+    assert asyncio.run(jwk_service.verify_access_token(refreshed.access_token))["sub"] == "alice"
+
+
+def test_basic_sign_in_rejects_users_without_permissions(basic_client: TestClient, users_file: Path) -> None:
+    users = json.loads(users_file.read_text())
+    users["bob"]["hash"] = argon2.PasswordHasher().hash("secret")
+    users_file.write_text(json.dumps(users))
+    response = basic_client.post("/token/basic", auth=("bob", "secret"))
+    assert response.status_code == 403
+    assert "www-authenticate" not in response.headers
+    response = basic_client.post(
+        "/token/basic", params={"scope": auth_service.ADMIN_SCOPE}, auth=("alice", "secret"),
+    )
+    assert response.status_code == 403
+
+
+def test_basic_sign_in_rejects_inactive_users_without_a_new_prompt(basic_client: TestClient) -> None:
+    assert basic_client.post("/token/basic", auth=("alice", "secret")).status_code == 200
+    identity_store.users.set_active(alice().user_id, False)
+    response = basic_client.post("/token/basic", auth=("alice", "secret"))
+    assert response.status_code == 403
+    assert "www-authenticate" not in response.headers
+
+
+def test_password_form_rejection_does_not_open_the_browser_dialog(basic_client: TestClient) -> None:
+    response = basic_client.post("/token/login", data={
+        "username": "alice", "password": "wrong", "scope": auth_service.BROWSE_SCOPE,
+    })
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_public_account_signs_in_browsers_without_credentials(
+    basic_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.jwk, "public_account", "alice")
+    response = basic_client.post("/token/basic")
+    assert response.status_code == 200
+    token = TokenResponse.model_validate(response.json())
+    claims = asyncio.run(jwk_service.verify_access_token(token.access_token))
+    assert claims["sub"] == "alice"
+    assert claims["uid"] == alice().user_id
+    # Credentials still pick another account and are still checked.
+    assert basic_client.post("/token/basic", auth=("alice", "wrong")).status_code == 401
+    # The password form never falls back to the public account.
+    assert basic_client.post("/token/login", data={"username": "", "password": ""}).status_code != 200
+
+
+def test_missing_public_account_prompts_as_usual(
+    basic_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.jwk, "public_account", "nobody")
+    response = basic_client.post("/token/basic")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == auth_service.BASIC_CHALLENGE

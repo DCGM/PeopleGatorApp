@@ -78,9 +78,9 @@ The API consumes prepared OCR and face artifacts. This repository does not ship
 an OCR pipeline, train face models or provision an inference service. An optional
 external embedding service and OpenRouter translation integration are separate
 runtime dependencies. Transactional operations target PostgreSQL; the optional
-Weaviate adapter has different guarantees. The browser currently automatically
-logs into a configured demo account; a production identity/login experience is
-not implemented here.
+Weaviate adapter has different guarantees. The browser signs in through its
+own username/password dialog against a users file; single sign-on is not
+implemented here.
 
 ## Proposed roadmap
 
@@ -103,8 +103,7 @@ features. Track accepted work in GitHub issues with acceptance criteria.
    uncertainty and review state for both curators and automated clients.
 4. Improve collection coverage: build and document integration workflows for
    additional prepared OCR/face datasets and models, with validation on import.
-5. Prepare broader use: replace demo authentication with a reviewed login flow,
-   define deployment-specific permissions and verify backup/restore operations.
+5. Prepare broader use: define deployment-specific permissions and verify backup/restore operations.
 6. Evaluate retrieval quality and operations: measure ranking on representative
    evidence, investigate performance with real collection sizes, and add useful
    dashboards without exposing document text or credentials.

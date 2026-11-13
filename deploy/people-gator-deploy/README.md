@@ -3,7 +3,7 @@
 The deployment utility for **PR previews**, **staging from `main`** and
 **tagged releases**. It is a Python package (`people-gator-deploy` command and
 the equivalent `people_gator_deploy.environments.Environment` API) with a pinned
-boto3 S3 client. Compose files, the staging login page, the collector
+boto3 S3 client. Compose files, the collector
 configuration and the database validator ship inside the package.
 
 The [CI workflow](../../.github/workflows/ci.yml) runs it **from the checkout of
@@ -269,12 +269,10 @@ the commit, retries and recovery finish the remaining files from the journal.
 
 ### Release access boundary
 
-The production stack has no reload, debug, seed or development mounts, but the
-current frontend build embeds demo auto-login credentials
-([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled credentials are not
-private authentication: place the release behind a reviewed access boundary (for
-example, proxy authentication or a private network) before creating the
-`PRODUCTION_*` settings.
+The production stack has no reload, debug, seed or development mounts. The
+browser asks for an account from `peoplegator_api/users.json` in
+`PRODUCTION_S3_BUCKET` ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)); upload that file
+before inviting users, and keep `peoplegator_api/jwks.json` there across releases.
 
 ## Development
 

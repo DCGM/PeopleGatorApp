@@ -64,7 +64,7 @@ The database sits on an internal network reachable only by `migrate` and
 restricted runtime role, use [`compose.release.yaml`](#choose-a-deployment-workflow)
 or the [production startup guide](../people-gator-api/docs/PRODUCTION-STARTUP.md).
 Back up both volumes as described in [Data maintenance](DATA_MAINTENANCE.md). The
-browser login limitation below applies to this stack too.
+browser sign-in below applies to this stack too.
 
 ## Production-format images
 
@@ -110,10 +110,13 @@ demo/preview stores, not a real release database. Follow the
 privileges and exact validation limits and [Data maintenance](DATA_MAINTENANCE.md)
 for backup/restore review.
 
-The current browser embeds automatic demo login credentials and requests all
-scopes. Replacing this with a reviewed user login flow is required before treating
-the application as a production access-controlled UI. Changing `VITE_*` values
-cannot make embedded credentials secret.
+The browser signs in through its own username and password dialog:
+`POST /token/basic` answers with an HTTP Basic challenge and issues the usual
+tokens for an account in the users file, limited to that account's scopes. The
+browser remembers the credentials until it closes and signs in again
+silently when the API restarts; signing out means closing the browser. Serve the
+app over HTTPS only. `VITE_API_USERNAME`/`VITE_API_PASSWORD` enable an automatic
+development login and enter browser code, so never set them for a deployed build.
 
 ## Configuration reference
 
@@ -134,6 +137,7 @@ explicitly set the unused object to null, as in [Development](DEVELOPMENT.md).
 | `STORAGE__S3__ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/REGION/ENDPOINT_URL` | S3 backend, mutually exclusive with local configuration |
 | `JWK__USERS_PATH`, `JWK__KEY_PATH` | Relative storage keys `peoplegator_api/users.json`, `peoplegator_api/jwks.json` |
 | `JWK__ISSUER`, `JWK__AUDIENCE` | Match the intended application origin/identity namespace; defaults target the historical preview host |
+| `JWK__PUBLIC_ACCOUNT` | Unset by default. An account from the users file that browsers without credentials sign in as; PR previews set `test`. Never set it where data is private |
 | `JWK__ACCESS_TOKEN_LIFETIME_SECONDS` | Access-token lifetime, default 7200; also the longest a disabled user's issued token stays usable |
 | `API_KEYS__KEYS_PATH` | API-key credential file key, default `peoplegator_api/api-keys.json` |
 | `CORS__ALLOW_ORIGINS`, `CORS__ALLOW_ORIGIN_REGEX` | JSON list and regex; default regex permits loopback HTTP(S) |

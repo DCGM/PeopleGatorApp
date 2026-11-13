@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 from people_gator_api.schemas.auth import (
     JwksResponse,
@@ -7,6 +7,7 @@ from people_gator_api.schemas.auth import (
 )
 from people_gator_api.services.auth_service import (
     KNOWN_SCOPES,
+    BasicTokenDependency,
     TokenDependency,
     refresh_access_token,
 )
@@ -48,6 +49,13 @@ async def get_openid_configuration() -> OpenIDConfigurationResponse:
 @router.post("/token/login", response_model=TokenResponse)
 async def get_token(token: TokenDependency) -> TokenResponse:
     """Return a signed JWT token for testing purposes."""
+    return token
+
+
+@router.post("/token/basic", response_model=TokenResponse)
+async def get_basic_token(token: BasicTokenDependency, response: Response) -> TokenResponse:
+    """Sign in with HTTP Basic credentials, which browsers collect in their own dialog."""
+    response.headers["Cache-Control"] = "no-store"
     return token
 
 

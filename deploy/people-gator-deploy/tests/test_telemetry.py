@@ -44,7 +44,6 @@ class TelemetryTests(unittest.TestCase):
             runtime = root / 'runtime.env'
             # Raw env files keep dollar signs and quotes literal.
             runtime.write_text('PEOPLE_GATOR_API__STORAGE={"local": {"root": "/data"}, "s3": null}\nPEOPLE_GATOR_API__OPENROUTER__API_KEY=sk-$literal"\n')
-            (root / 'staging-login.html').write_text('')
             variables = {
                 'PR_NUMBER': '94', 'COMMIT_SHA': 'abc123', 'RELEASE_TAG': 'v1.2.3',
                 'BACKEND_IMAGE': 'backend:test', 'FRONTEND_IMAGE': 'frontend:test',
@@ -77,6 +76,8 @@ class TelemetryTests(unittest.TestCase):
                     self.assertEqual(rendered['networks']['telemetry']['name'], 'web')  # only otel moves it to the collector network
                     self.assertEqual(rendered['networks']['database']['name'], 'db')
                     self.assertEqual(backend['logging']['driver'], 'json-file')
+                    # Only previews sign in browsers without credentials, as the demo account.
+                    self.assertEqual(env.get('PEOPLE_GATOR_API__JWK__PUBLIC_ACCOUNT'), 'test' if name == 'pr' else None)
                     for service, settings in rendered['services'].items():
                         if service != 'backend':
                             self.assertNotIn('synthetic-rum', json.dumps(settings))
