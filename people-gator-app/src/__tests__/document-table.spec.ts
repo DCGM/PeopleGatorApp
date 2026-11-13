@@ -32,6 +32,8 @@ const documents: DocumentResponse[] = [
     registered_page_count: 2,
     first_page_source_id: 'first-page-source',
     linked_entity_count: 1,
+    verification_state: 'not_verified',
+    verified_page_count: 1,
     last_touched_by_user_name: 'Reviewer',
     last_touched_by_user_id: 'user',
     last_touched_by_api_key_id: null,
@@ -52,7 +54,11 @@ async function render() {
     routes: [
       { path: '/pages/:pageSourceId', name: 'page-source', component: { template: '<div />' } },
       { path: '/documents', name: 'document-list', component: { template: '<div />' } },
-      { path: '/documents/:documentSourceId', name: 'document-source', component: { template: '<div />' } },
+      {
+        path: '/documents/:documentSourceId',
+        name: 'document-source',
+        component: { template: '<div />' },
+      },
     ],
   })
   await router.push('/documents?view=table&library=Archive&link_state=verified')
@@ -193,6 +199,41 @@ describe('document table', () => {
       expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([undefined])
       expect(wrapper.find('th[aria-sort]').exists()).toBe(false)
     }
+  })
+  it('offers derived verification and verified-page columns, sortable by count (#149)', async () => {
+    const { wrapper } = await render()
+    await wrapper.setProps({
+      visibility: {
+        ...defaultDocumentColumns(),
+        verification: true,
+        verified_page_count: true,
+        verified_page_percentage: true,
+      },
+    })
+    expect(wrapper.get('td[data-column="verification"]').text()).toBe('Not verified')
+    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('1/2')
+    expect(wrapper.get('td[data-column="verified_page_percentage"]').text()).toBe('50%')
+    expect(wrapper.find('button[aria-label^="Sort by Verification:"]').exists()).toBe(false)
+    await wrapper
+      .get('button[aria-label="Sort by Verified pages: sort ascending"]')
+      .trigger('click')
+    expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([
+      { field: 'verified_page_count', direction: 'asc' },
+    ])
+    // The share sorts separately, so 2/2 can precede 3/4.
+    const shareSort = wrapper
+      .findAll('button')
+      .find((button) => button.attributes('aria-label') === 'Sort by Verified %: sort ascending')
+    await shareSort!.trigger('click')
+    expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([
+      { field: 'verified_page_percentage', direction: 'asc' },
+    ])
+    await wrapper.setProps({
+      documents: [{ ...documents[0]!, verification_state: 'verified', verified_page_count: 2 }],
+    })
+    expect(wrapper.get('td[data-column="verification"]').text()).toBe('Verified')
+    expect(wrapper.get('td[data-column="verified_page_count"]').text()).toBe('2/2')
+    expect(wrapper.get('td[data-column="verified_page_percentage"]').text()).toBe('100%')
   })
   it('retains configurable annotation breakdowns, unknown/zero values and header associations', async () => {
     const { wrapper } = await render()

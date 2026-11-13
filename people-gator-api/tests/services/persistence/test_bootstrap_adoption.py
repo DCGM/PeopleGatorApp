@@ -217,7 +217,7 @@ async def test_bootstrap_preflight_is_read_only(bootstrap_database):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("adopt", [False, True])
-async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
+async def test_migrations_reuse_bootstrap_enums_and_preserve_old_data(
     bootstrap_database, adopt
 ):
     from people_gator_api.persistence.postgres.models import Base
@@ -229,10 +229,14 @@ async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
             await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0003'"))
         # Reproduce starting the newer ORM in bootstrap mode against old tables.
         await connection.run_sync(Base.metadata.create_all)
-        assert await connection.scalar(text("SELECT to_regtype('pg_demo_entity_link_state')"))
+        for type_name in ("pg_demo_entity_link_state", "pg_demo_verification_state"):
+            assert await connection.scalar(
+                text("SELECT to_regtype(:name)"), {"name": type_name}
+            )
         assert await connection.scalar(text("""
             SELECT count(*) FROM information_schema.columns
-            WHERE table_schema = current_schema() AND column_name = 'entity_link_state'
+            WHERE table_schema = current_schema()
+              AND column_name IN ('entity_link_state', 'verification_state')
         """)) == 0
     await database_cli.migrate_database(adopt_bootstrap=adopt)
     await validate_postgres_schema(engine)

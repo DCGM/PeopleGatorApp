@@ -76,6 +76,7 @@ from people_gator_api.seeding.fixtures import (
     SIDEBAR_LEGACY_MENTIONS,
     SIDEBAR_LONG_CONTEXT,
     SIDEBAR_LONG_TOKEN,
+    fixture_id,
     Person,
 )
 from people_gator_api.services import filesystem_service
@@ -187,7 +188,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (47, 168, 123)
+    assert await counts(database) == (47, 169, 123)
     assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
     assert result.pages.keys() == {page.key for page in PAGES}
 
@@ -372,7 +373,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         # Database-generated identities differ; fixture keys, counts and media do not.
         for field in type(fresh).model_fields:
             assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
-        assert await counts(copy) == await counts(database) == (47, 168, 123)
+        assert await counts(copy) == await counts(database) == (47, 169, 123)
 
         def files(root: Path) -> dict[Path, bytes]:
             return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
@@ -386,7 +387,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         }
         # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
         assert await preview.seed_preview(copy, storage) == copied
-        assert await counts(copy) == (47, 168, 123)
+        assert await counts(copy) == (47, 169, 123)
 
 
 @pytest.mark.asyncio
@@ -507,7 +508,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (47, 168, 123)
+    assert await counts(database) == (47, 169, 123)
 
 
 
@@ -528,7 +529,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (47, 168, 123)
+    assert await counts(database) == (47, 169, 123)
 
 
     stored = await database.entities.get(first.entities["ada"])
@@ -552,7 +553,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (48, 168, 123)
+    assert await counts(database) == (48, 169, 123)
 
 
 
@@ -578,8 +579,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 47 and len(result.faces) == 168
-    assert await counts(database) == (47, 168, 123)
+    assert len(result.entities) == 47 and len(result.faces) == 169
+    assert await counts(database) == (47, 169, 123)
 
 
 
@@ -3727,7 +3728,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (47, 168, 123)
+    assert await counts(db) == (47, 169, 123)
 
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
@@ -5465,3 +5466,124 @@ async def test_document_first_entries_cover_pages_empty_and_orphan_documents(see
     rerun = await preview.seed_preview(database, filesystem)
     assert rerun.filter_examples["document-browse"] == seed.filter_examples["document-browse"]
     assert await database.sources.get_page(original.source_id) == original
+
+
+@pytest.mark.asyncio
+async def test_page_verification_scenario_derives_documents_and_keeps_reviews(seed_target):
+    """Issue #149: seeded page verification, derived document state and rerun preservation."""
+    from people_gator_api.schemas.enums import VerificationState
+    from people_gator_api.schemas.sources import (
+        DocumentListFilter, DocumentListRequest, PageListFilter, PageListRequest, PagePatchRequest,
+    )
+
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    verified, not_verified = VerificationState.verified, VerificationState.not_verified
+    reviewer = seed.users["reviewer"]
+
+    async def documents(**values):
+        result = await database.sources.list_documents(DocumentListRequest(
+            limit=100, sort="verified_page_count",
+            filter_=DocumentListFilter(library=["preview-verification"], **values),
+        ))
+        return [(item.source_id, item.verification_state, item.verified_page_count, item.registered_page_count)
+                for item in result.items]
+
+    done, partial = seed.documents["verification-done"], seed.documents["verification-partial"]
+    most = seed.documents["verification-most"]
+    assert await documents() == [
+        (most, not_verified, 3, 4), (done, verified, 2, 2), (partial, not_verified, 1, 3)]
+
+    async def by_percentage(**values):
+        # One row per page proves the fractional key survives the keyset cursor.
+        ids, cursor = [], None
+        while True:
+            result = await database.sources.list_documents(DocumentListRequest(
+                limit=1, cursor=cursor, sort="verified_page_percentage",
+                filter_=DocumentListFilter(library=["preview-verification"]), **values,
+            ))
+            ids += [item.source_id for item in result.items]
+            if (cursor := result.cursor) is None:
+                return ids
+
+    # The share orders 2/2 before 3/4, unlike the verified-page count.
+    assert await by_percentage() == [done, most, partial]
+    assert await by_percentage(sort_direction="asc") == [partial, most, done]
+    assert parse_qs(urlsplit(seed.filter_examples["document-verification-percentage"]).query) == {
+        "library": ["preview-verification"], "sort": ["verified_page_percentage"]}
+    assert [item[0] for item in await documents(verification_state=[not_verified])] == [most, partial]
+    # A verified page can still hold unverified evidence.
+    page = await database.sources.get_page(seed.pages["verification-done-1"])
+    assert page.verification_state == verified and page.verified_by_user_id == reviewer
+    assert page.entity_link_stats.faces.unassigned == 1
+    remaining = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
+        library=["preview-verification"], verification_state=[not_verified])))
+    assert {item.source_id for item in remaining.items} == {
+        seed.pages["verification-partial-2"], seed.pages["verification-partial-3"],
+        seed.pages["verification-most-4"]}
+    # Both viewer examples open page 2 beside the verified badge for page 1.
+    example = urlsplit(seed.filter_examples["page-verification"])
+    expanded = urlsplit(seed.filter_examples["page-verification-expanded"])
+    active_page = await database.sources.get_page(seed.pages["verification-partial-2"])
+    assert expanded.path == example.path == (
+        f"/libraries/{active_page.library}/documents/{active_page.document_id}/pages/{active_page.page_id}"
+    )
+    assert parse_qs(example.query) == {"panel": ["info"]}
+    assert parse_qs(expanded.query) == {"panel": ["info"], "pages_view": ["expanded"]}
+    gallery = await database.sources.list_pages(PageListRequest(
+        limit=10, sort="page_number", sort_direction="asc",
+        filter_=PageListFilter(library=[active_page.library], document_id=[active_page.document_id]),
+    ))
+    assert [(item.source_id, item.verification_state) for item in gallery.items] == [
+        (seed.pages["verification-partial-1"], verified),
+        (active_page.source_id, not_verified),
+        (seed.pages["verification-partial-3"], not_verified),
+    ]
+    assert parse_qs(urlsplit(seed.filter_examples["document-verification-not-verified"]).query) == {
+        "library": ["preview-verification"], "verification": ["not_verified"]}
+
+    # Reruns keep verification times and a reviewer's later removal.
+    actor = GenericActor(user_id=reviewer)
+    removed = await database.sources.patch_page(
+        seed.pages["verification-partial-1"], PagePatchRequest(verification_state=not_verified), context=actor)
+    assert await preview.seed_preview(database, filesystem) == seed
+    assert await database.sources.get_page(seed.pages["verification-partial-1"]) == removed
+    assert await database.sources.get_page(seed.pages["verification-done-1"]) == page
+    assert await documents() == [
+        (most, not_verified, 3, 4), (done, verified, 2, 2), (partial, not_verified, 0, 3)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('intervening_review', [False, True])
+async def test_page_verification_checkpoint_recovery(seed_target, monkeypatch, intervening_review):
+    """Issue #149: a run interrupted after verifying resumes without re-verifying reviewed pages."""
+    from people_gator_api.schemas.enums import VerificationState
+    from people_gator_api.schemas.sources import PagePatchRequest
+
+    database, filesystem, _ = seed_target
+    original = filesystem.write_bytes
+    failed = False
+
+    async def interrupt(key, content):
+        nonlocal failed
+        if key == preview.UPGRADES_KEY:
+            edit = preview.SeedUpgrades.model_validate_json(content).page_verifications.get('verification-done-1')
+            if edit is not None and edit.complete and not failed:
+                failed = True
+                raise OSError('verification checkpoint interrupted')
+        await original(key, content)
+    monkeypatch.setattr(filesystem, 'write_bytes', interrupt)
+    with pytest.raises(OSError, match='verification checkpoint'):
+        await preview.seed_preview(database, filesystem)
+    page = await database.sources.lookup_page(PageLookupRequest(
+        library='preview-verification', document_id=fixture_id('document/verification-done'),
+        page_id=fixture_id('page/verification-done-1')))
+    assert page.verification_state == VerificationState.verified
+    if intervening_review:
+        page = await database.sources.patch_page(
+            page.source_id, PagePatchRequest(verification_state=VerificationState.not_verified),
+            context=GenericActor(user_id=page.verified_by_user_id))
+    seed = await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_page(seed.pages['verification-done-1']) == page
+    later = await database.sources.get_page(seed.pages['verification-partial-1'])
+    assert later.verification_state == VerificationState.verified

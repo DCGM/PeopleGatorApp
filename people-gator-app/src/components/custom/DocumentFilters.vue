@@ -2,6 +2,8 @@
 import SharedFilterControls from './SharedFilterControls.vue'
 import CountRangeControl from './CountRangeControl.vue'
 import DocumentFilterTags from './DocumentFilterTags.vue'
+import FilterSingleSelect from './FilterSingleSelect.vue'
+import { useDocumentFilters, VERIFICATION_LABELS } from '@/viewmodels/document-filters'
 import {
   DOCUMENT_COUNT_CATEGORIES,
   DOCUMENT_COUNT_STATES,
@@ -14,6 +16,12 @@ import {
 // The sidebar lists applied filters below the selectors; mobile shows them under search.
 defineProps<{ tags?: boolean }>()
 const counts = useDocumentCounts()
+const { verification } = useDocumentFilters()
+const verificationOptions = [
+  { value: 'all' as const, label: 'All' },
+  { value: 'verified' as const, label: VERIFICATION_LABELS.verified },
+  { value: 'not_verified' as const, label: VERIFICATION_LABELS.not_verified },
+]
 const apply = (field: string, lower: string, upper: string) =>
   counts.set(field as DocumentCountField, lower, upper)
 </script>
@@ -21,6 +29,12 @@ const apply = (field: string, lower: string, upper: string) =>
 <template>
   <div class="flex w-full min-w-0 flex-col items-stretch gap-2" role="group" aria-label="Filters">
     <SharedFilterControls :controls="['libraries', 'actors', 'dates']" />
+    <FilterSingleSelect
+      v-model="verification"
+      class="w-full"
+      label="Verification"
+      :options="verificationOptions"
+    />
     <CountRangeControl
       v-for="category in DOCUMENT_COUNT_CATEGORIES"
       :key="category.value"

@@ -220,9 +220,20 @@ cursors include the criteria and must be discarded when they change.
 | Entities | `entity_id`, `entity_type`, `wikidata_id`, `nlcr_authority_id`, related `source_id`, `detection_id`, `mention_id`, `has_mentions`, `has_detections` |
 | Faces | `entity_id`, exact `source_id`, `detection_id`; face-similarity search remains a separate modality |
 | Text mentions | `entity_id`, exact `source_id`, exact recorded `name` |
-| Documents | `url`, archive `document_id`, exact internal `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_unassigned_faces`, count maxima `max_<field>`, `min_linked_entity_count`/`max_linked_entity_count` |
-| Pages | `url`, archive `document_id`, archive `page_id`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_mentions`, `has_faces`, `has_entities` |
+| Documents | `url`, archive `document_id`, exact internal `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_unassigned_faces`, derived `verification_state`, count maxima `max_<field>`, `min_linked_entity_count`/`max_linked_entity_count` |
+| Pages | `url`, archive `document_id`, archive `page_id`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_mentions`, `has_faces`, `has_entities`, `verification_state` |
 | Images | `url`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id` |
+
+`verification_state` takes `verified` and/or `not_verified` (#149). Pages match
+their stored state. Documents match their derived state: verified when they have
+registered pages and all are verified, so documents without pages are not
+verified. Documents also sort by `verified_page_count`. The Documents panel
+offers **Verification** (URL `verification=verified|not_verified`), and the page
+strip's **Not verified only** toggle sets `gallery_not_verified=on`. The viewer
+toolbar keeps verification and previous/next page available with the page list
+expanded. Previous and next follow page-number order and preserve gallery
+settings. The page list shows a verification progress ring before the document
+title and overlays a **Verified** badge at the top of each verified thumbnail.
 
 `has_unassigned_faces=false` includes documents without faces; text-mention
 assignment never satisfies this face-specific condition. Link statistics describe

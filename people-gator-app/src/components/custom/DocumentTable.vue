@@ -29,6 +29,9 @@ import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
+import VerificationBadge from './VerificationBadge.vue'
+import VerificationProgress from './VerificationProgress.vue'
+import { verifiedPercentLabel } from '@/lib/verification'
 import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import {
   documentColumnSizing,
@@ -183,6 +186,30 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     ...documentColumnSizing('api_key'),
     header: 'API key',
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
+  },
+  {
+    id: 'verification',
+    ...documentColumnSizing('verification'),
+    header: 'Verification',
+    accessorFn: (d) => (d.verification_state === 'verified' ? 'Verified' : 'Not verified'),
+    cell: ({ row }) => h(VerificationBadge, { state: row.original.verification_state }),
+  },
+  {
+    id: 'verified_page_count',
+    ...documentColumnSizing('verified_page_count'),
+    header: 'Verified pages',
+    accessorFn: (d) => d.verified_page_count,
+    cell: ({ row }) =>
+      h(VerificationProgress, {
+        verified: row.original.verified_page_count,
+        total: row.original.registered_page_count,
+      }),
+  },
+  {
+    id: 'verified_page_percentage',
+    ...documentColumnSizing('verified_page_percentage'),
+    header: 'Verified %',
+    accessorFn: (d) => verifiedPercentLabel(d.verified_page_count, d.registered_page_count),
   },
   {
     accessorKey: 'linked_entity_count',

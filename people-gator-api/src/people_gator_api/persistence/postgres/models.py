@@ -34,9 +34,10 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-from people_gator_api.schemas.enums import EntityLinkState
+from people_gator_api.schemas.enums import EntityLinkState, VerificationState
 
 ENTITY_LINK_ENUM = Enum(EntityLinkState, name="pg_demo_entity_link_state", values_callable=lambda enum: [item.value for item in enum])
+VERIFICATION_ENUM = Enum(VerificationState, name="pg_demo_verification_state", values_callable=lambda enum: [item.value for item in enum])
 
 def link_constraints(table):
     return (
@@ -319,6 +320,10 @@ class Page(Source):
             name="uq_pg_demo_page_identity",
         ),
         CheckConstraint("page_number > 0", name="ck_pg_demo_pages_page_number"),
+        CheckConstraint(
+            "(verification_state = 'verified' AND verified_at IS NOT NULL AND verified_by_user_id IS NOT NULL) OR (verification_state = 'not_verified' AND verified_at IS NULL AND verified_by_user_id IS NULL AND verified_by_api_key_id IS NULL)",
+            name="ck_pg_demo_pages_verification",
+        ),
         # Also serves (library, document_id) lookups, which need no separate index.
         Index(INDEX_NAME_FORMAT.format("pages_number"), "library", "document_id", "page_number", "id"),
     )
@@ -330,6 +335,18 @@ class Page(Source):
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     page_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Documents derive their verification from these page states (#149).
+    verification_state: Mapped[VerificationState] = mapped_column(
+        VERIFICATION_ENUM, nullable=False, default=VerificationState.not_verified,
+        server_default=VerificationState.not_verified.value,
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT")
+    )
+    verified_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT")
+    )
 
     __mapper_args__ = {"polymorphic_identity": "page"}  # noqa: RUF012
 

@@ -7,6 +7,13 @@ class EntityLinkState(StrEnum):
     verified = "verified"
 
 
+class VerificationState(StrEnum):
+    """Review state stored on pages; a document's state is derived from its pages."""
+
+    not_verified = "not_verified"
+    verified = "verified"
+
+
 class Language(StrEnum):
     """Languages supported by the translation endpoint."""
 

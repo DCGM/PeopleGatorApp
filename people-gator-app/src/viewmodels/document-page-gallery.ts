@@ -20,6 +20,7 @@ export type PageGalleryItem = {
   pageId: string
   label: string
   current: boolean
+  verified: boolean
   matchesSelectedPerson?: boolean | null
   thumbnailUrl: string
   thumbnailLoading: boolean
@@ -44,12 +45,16 @@ export function useDocumentPageGallery(
   sort: MaybeRefOrGetter<SortState<PageSortField>> = GALLERY_DEFAULT,
   personId: MaybeRefOrGetter<string> = '',
   selectedPersonId: MaybeRefOrGetter<string | null> = personId,
+  notVerifiedOnly: MaybeRefOrGetter<boolean> = false,
 ) {
   const query = usePageListQuery(
     computed(() => ({
       'filter.library': [toValue(library)],
       'filter.document_id': [toValue(documentId)],
       ...(toValue(personId) ? { 'filter.entity_id': [toValue(personId)] } : {}),
+      ...(toValue(notVerifiedOnly)
+        ? { 'filter.verification_state': ['not_verified' as const] }
+        : {}),
       ...listSortParams(toValue(sort)),
       limit: batchSize,
       return_total_count: true,
@@ -109,8 +114,8 @@ export function useDocumentPageGallery(
       ),
   )
 
-  // In the unfiltered strip, locate the current page across batches. A person
-  // filter may exclude it, so filtered lists load further batches only on demand.
+  // In the unfiltered strip, locate the current page across batches. Person and
+  // verification filters may exclude it, so filtered lists load further batches only on demand.
   watch(
     () => [
       currentLoaded.value,
@@ -122,6 +127,7 @@ export function useDocumentPageGallery(
     () => {
       if (
         !toValue(personId) &&
+        !toValue(notVerifiedOnly) &&
         !currentLoaded.value &&
         query.data.value &&
         query.hasNextPage.value &&
@@ -163,6 +169,7 @@ export function useDocumentPageGallery(
       pageId: page.page_id,
       label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
+      verified: page.verification_state === 'verified',
       matchesSelectedPerson: !toValue(selectedPersonId)
         ? false
         : toValue(personId) === toValue(selectedPersonId)

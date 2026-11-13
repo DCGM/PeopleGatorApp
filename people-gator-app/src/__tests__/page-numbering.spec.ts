@@ -9,7 +9,7 @@ import type { PageResponse } from '@/client'
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn() }))
 vi.mock('@/query/media', () => ({
-  usePageNumberMutation: () => ({
+  usePagePatchMutation: () => ({
     mutate: mocks.mutate,
     isPending: ref(false),
     isError: ref(false),

@@ -137,7 +137,10 @@ describe('document table results', () => {
     ])
     expect(
       wrapper.findAll('tbody a[href^="/documents/"]').map((link) => link.attributes('href')),
-    ).toEqual(['/documents/a-shared?pages_view=expanded', '/documents/b-shared?pages_view=expanded'])
+    ).toEqual([
+      '/documents/a-shared?pages_view=expanded',
+      '/documents/b-shared?pages_view=expanded',
+    ])
     expect(wrapper.get('[data-slot="input-group"] [role="status"]').text()).toBe('2 results')
     expect(api.pages).not.toHaveBeenCalled()
     expect(api.entities).not.toHaveBeenCalled()
@@ -311,6 +314,7 @@ describe('document table results', () => {
       'Modified via key',
       'Modified from',
       'Modified to',
+      'Verification',
       'All annotations',
       'Faces',
       'Text mentions',
@@ -332,6 +336,18 @@ describe('document table results', () => {
     const tags = active.text()
     expect(tags).toContain('Unassigned faces: Has unassigned faces')
     expect(tags).toMatch(/Verified/)
+  })
+  it('filters documents by derived verification and removes the tag (#149)', async () => {
+    const { wrapper, router } = await render('/documents?verification=not_verified&q=Album')
+    expect(api.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ 'filter.verification_state': ['not_verified'] }),
+      }),
+    )
+    await wrapper.get('button[aria-label="Remove Verification: Not verified"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.verification).toBeUndefined()
+    expect(router.currentRoute.value.query.q).toBe('Album')
   })
   it('applies count and people ranges from the sidebar and sends them to the API', async () => {
     const { wrapper, router } = await render('/documents?library=a')

@@ -188,6 +188,7 @@ async function mountView(renderActions = false) {
               AlertDialogCancel: true,
               DocumentControls: true,
               DocumentPageGallery: true,
+              PageReviewControls: true,
               // Like the real overlay: one card, for the selected face only.
               DocumentPageOverlay: {
                 name: 'DocumentPageOverlay',
@@ -301,9 +302,10 @@ describe('document page gallery navigation', () => {
     const [library, document, page] = mocks.gallery.mock.calls[0]!
     expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
     // Only the route document and the gallery's own order; no evidence filters.
-    const [, , , , order, person] = mocks.gallery.mock.calls[0]!
-    expect(mocks.gallery.mock.calls[0]).toHaveLength(7)
+    const [, , , , order, person, , notVerified] = mocks.gallery.mock.calls[0]!
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(8)
     expect(person.value).toBe('')
+    expect(notVerified.value).toBe(false)
     expect(order.value).toEqual({ field: 'page_number', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
     route.query = {
@@ -315,15 +317,18 @@ describe('document page gallery navigation', () => {
       gallery_person_only: 'on',
       gallery_sort: 'faces_total_count',
       gallery_dir: 'desc',
+      gallery_not_verified: 'on',
       pages_view: 'expanded',
     }
     await settleFocus()
     expect(person.value).toBe('nora')
+    expect(notVerified.value).toBe(true)
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
       query: {
         gallery_person_only: 'on',
+        gallery_not_verified: 'on',
         selectedPerson: 'nora',
         gallery_sort: 'faces_total_count',
         gallery_dir: 'desc',
@@ -338,6 +343,9 @@ describe('document page gallery navigation', () => {
     const gallery = wrapper.findComponent({ name: 'DocumentPageGallery' })
     const viewer = wrapper.get('.workspace-viewer').element
     expect(gallery.props('expanded')).toBe(true)
+    const review = wrapper.findComponent({ name: 'PageReviewControls' })
+    expect(review.element.closest('header.viewer-tools')).not.toBeNull()
+    expect(review.isVisible()).toBe(true)
     expect((viewer as HTMLElement).style.display).toBe('none')
     gallery.vm.$emit('update:expanded', false)
     await flushPromises()

@@ -120,7 +120,7 @@ export type DocumentLibraryOption = {
 /**
  * DocumentListSortField
  */
-export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
+export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
 
 export type DocumentName = string;
 
@@ -191,12 +191,22 @@ export type DocumentResponse = {
      * Name
      */
     name?: string | null;
+    /**
+     * Derived from registered pages: verified when the document has at least one registered page and all of them are verified.
+     */
+    verification_state?: VerificationState;
+    /**
+     * Verified Page Count
+     *
+     * Registered pages in this library/document that are verified.
+     */
+    verified_page_count?: number | null;
 };
 
 /**
  * DocumentSortField
  */
-export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
+export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
 
 /**
  * EntityAnnotation
@@ -1283,6 +1293,16 @@ export type FoundDocument = {
      * Name
      */
     name?: string | null;
+    /**
+     * Derived from registered pages: verified when the document has at least one registered page and all of them are verified.
+     */
+    verification_state?: VerificationState;
+    /**
+     * Verified Page Count
+     *
+     * Registered pages in this library/document that are verified.
+     */
+    verified_page_count?: number | null;
 };
 
 /**
@@ -1586,6 +1606,19 @@ export type FoundPage = {
      * Registered pages in this library/document, not the original document length.
      */
     registered_page_count?: number | null;
+    verification_state?: VerificationState;
+    /**
+     * Verified At
+     */
+    verified_at?: string | null;
+    /**
+     * Verified By User Id
+     */
+    verified_by_user_id?: string | null;
+    /**
+     * Verified By Api Key Id
+     */
+    verified_by_api_key_id?: string | null;
 };
 
 /**
@@ -2263,6 +2296,10 @@ export type PageNumber = number;
  */
 export type PagePatchRequest = {
     page_number?: PageNumber | null;
+    /**
+     * Verify the page or remove its verification; omission preserves it. Repeating the current state changes nothing.
+     */
+    verification_state?: VerificationState | null;
 };
 
 /**
@@ -2312,6 +2349,19 @@ export type PageResponse = {
      * Registered pages in this library/document, not the original document length.
      */
     registered_page_count?: number | null;
+    verification_state?: VerificationState;
+    /**
+     * Verified At
+     */
+    verified_at?: string | null;
+    /**
+     * Verified By User Id
+     */
+    verified_by_user_id?: string | null;
+    /**
+     * Verified By Api Key Id
+     */
+    verified_by_api_key_id?: string | null;
 };
 
 /**
@@ -2940,6 +2990,13 @@ export type ValidationError = {
     };
 };
 
+/**
+ * VerificationState
+ *
+ * Review state stored on pages; a document's state is derived from its pages.
+ */
+export type VerificationState = 'not_verified' | 'verified';
+
 export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     body?: never;
     path?: never;
@@ -3555,6 +3612,12 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'filter.has_entities'?: boolean | null;
         /**
+         * Filter.Verification State
+         *
+         * Filter by page verification state.
+         */
+        'filter.verification_state'?: Array<VerificationState> | null;
+        /**
          * Filter.Min Annotations Total Count
          *
          * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
@@ -3822,6 +3885,12 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          * Whether any face in the document scope is unassigned; false includes documents without faces.
          */
         'filter.has_unassigned_faces'?: boolean | null;
+        /**
+         * Filter.Verification State
+         *
+         * Filter by derived document verification state. Derived from registered pages: verified when the document has at least one registered page and all of them are verified.
+         */
+        'filter.verification_state'?: Array<VerificationState> | null;
         /**
          * Filter.Min Annotations Total Count
          *
@@ -5801,6 +5870,12 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          */
         'filter.has_unassigned_faces'?: boolean | null;
         /**
+         * Filter.Verification State
+         *
+         * Filter by derived document verification state. Derived from registered pages: verified when the document has at least one registered page and all of them are verified.
+         */
+        'filter.verification_state'?: Array<VerificationState> | null;
+        /**
          * Filter.Min Annotations Total Count
          *
          * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
@@ -6305,6 +6380,12 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Filter by whether the page has at least one entity assigned to a text mention or face detection.
          */
         'filter.has_entities'?: boolean | null;
+        /**
+         * Filter.Verification State
+         *
+         * Filter by page verification state.
+         */
+        'filter.verification_state'?: Array<VerificationState> | null;
         /**
          * Filter.Min Annotations Total Count
          *

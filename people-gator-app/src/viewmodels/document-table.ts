@@ -30,6 +30,9 @@ export const DOCUMENT_COLUMN_IDS = [
   'library',
   'registered_page_count',
   'linked_entity_count',
+  'verification',
+  'verified_page_count',
+  'verified_page_percentage',
   ...DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
     DOCUMENT_ANNOTATION_STATES.map((state) => annotationColumnId(group.scope, state.id)),
   ),
@@ -212,6 +215,8 @@ export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSort
   library: 'library',
   document_id: 'document_id',
   registered_page_count: 'page_count',
+  verified_page_count: 'verified_page_count',
+  verified_page_percentage: 'verified_page_percentage',
   last_modified: 'last_touched_at',
   ...Object.fromEntries(
     DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
@@ -237,6 +242,9 @@ export function documentColumnSizing(id: string) {
     modified_by: 224,
     api_key: 224,
     linked_entity_count: 144,
+    verification: 144,
+    verified_page_count: 144,
+    verified_page_percentage: 128,
   }
   // Count headers fit their title, menu chevron and sort strip on one line:
   // Annotations needs the most room, then Mentions; Faces keeps the 128px default.

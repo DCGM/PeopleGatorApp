@@ -24,7 +24,7 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityResponse,
 )
-from people_gator_api.schemas.enums import EntityType, EntityLinkState
+from people_gator_api.schemas.enums import EntityType, EntityLinkState, VerificationState
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
@@ -43,7 +43,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, Face
+from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, VERIFIED_PAGES, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -72,6 +72,7 @@ class SeedUpgrades(BaseModel):
     thumbnail: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
     record_edits: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
     page_numbers: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
+    page_verifications: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
 
 
 class SeedManifest(BaseModel):
@@ -648,6 +649,32 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         sidebar_examples["page-panel-layout-expanded"] = (
             sidebar_examples["page-panel-layout"] + "&pages_view=expanded"
         )
+    # #149: verify each listed page once. The checkpoint precedes the write, so an
+    # interrupted run resumes, and a page a reviewer has since changed stays as is.
+    for key in VERIFIED_PAGES:
+        source = await database.sources.get_page(pages[key])
+        if source is None:
+            raise RuntimeError(f"preview page {key} disappeared before its verification")
+        edit = upgrades.page_verifications.get(key)
+        if edit is None:
+            edit = RecordEditUpgrade(expected_touched_at=source.last_touched_at)
+            upgrades.page_verifications[key] = edit
+            await checkpoint_upgrades()
+        if not edit.complete:
+            if (source.verification_state == VerificationState.not_verified
+                    and source.last_touched_at == edit.expected_touched_at):
+                await database.sources.patch_page(
+                    source.source_id, PagePatchRequest(verification_state=VerificationState.verified),
+                    context=actors["reviewer"],
+                )
+            edit.complete = True
+            await checkpoint_upgrades()
+    verification_page = next(item for item in PAGES if item.key == "verification-partial-2")
+    verification_document = next(item for item in DOCUMENTS if item.key == verification_page.document)
+    verification_path = (
+        f"/libraries/{verification_document.library}/documents/{verification_document.document_id}"
+        f"/pages/{verification_page.page_id}"
+    )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
@@ -1046,6 +1073,20 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-navigation": "/documents?" + urlencode({
                 "library": ["preview-table-navigation", "preview-table", "preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination"],
             }, doseq=True),
+            # #149: derived document verification and the page strip's not-verified scope.
+            "document-verification": "/documents?" + urlencode({
+                "library": "preview-verification", "sort": "verified_page_count",
+            }),
+            "document-verification-percentage": "/documents?" + urlencode({
+                "library": "preview-verification", "sort": "verified_page_percentage",
+            }),
+            "document-verification-not-verified": "/documents?" + urlencode({
+                "library": "preview-verification", "verification": "not_verified",
+            }),
+            "page-verification": verification_path + "?" + urlencode({"panel": "info"}),
+            "page-verification-expanded": verification_path + "?" + urlencode({
+                "panel": "info", "pages_view": "expanded",
+            }),
             "document-table-widths": "/documents?" + urlencode({
                 "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
                 "sort": "name",
