@@ -34,6 +34,10 @@ relationships. See [Database](DATABASE.md).
 Protected routes accept either a bearer JWT or `X-API-Key`. Sending both returns
 400; missing/invalid credentials return 401; insufficient scopes return 403.
 JWT login checks Argon2 hashes in the users JSON file in the configured storage.
+`/token/login` takes an OAuth2 password form; `/token/basic` takes HTTP Basic
+credentials and answers missing or wrong ones with a Basic challenge, so the
+browser app signs in through the browser's own dialog. It grants the requested
+scopes the account holds.
 Refresh sessions rotate and live in process memory, so a restart invalidates
 them and multiple workers require routing to the issuing worker.
 

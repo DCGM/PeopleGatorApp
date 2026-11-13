@@ -101,6 +101,8 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 Set the API base explicitly: without it the client falls back to a remote
 development server. The app automatically logs in with the configured demo
 credentials and requests all four scopes. `VITE_*` values enter browser code.
+Without `VITE_API_USERNAME` the browser asks for a username and password instead,
+as deployments do.
 
 ## Readiness and first checks
 
