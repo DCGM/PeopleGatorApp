@@ -340,8 +340,8 @@ unsupported-adapter rejection. Preview tests verify the linked examples and
 preserve their identities, media and edits on rerun.
 
 `people-gator-app/scripts/check-creation-filters.mjs` uses the running seeded
-application to exercise Documents, People, Scans, person Faces/Mentions, and all
-three scan-viewer result panels at desktop 1440 × 900 and mobile 390 × 844. It
+application to exercise Documents, People and person Faces/Mentions at desktop
+1440 × 900 and mobile 390 × 844. It
 checks creator/date controls, URL restoration and backend query parameters,
 multi-select changes, individual removal, date/time editing and evidence reset.
 See [screenshots and reproduction](evidence/issue128/creation-filters/README.md).

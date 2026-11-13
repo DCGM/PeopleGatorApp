@@ -25,4 +25,4 @@ sorting and absence of document-level horizontal overflow at both viewports.
 It fails on browser errors. Physical touch/trackpad devices were not tested.
 
 The [creation-filter evidence](creation-filters/README.md) covers the shared date,
-creator and API-key controls on the Documents, Scans and People screens.
+creator and API-key controls on Documents, People and person Faces/Mentions.
