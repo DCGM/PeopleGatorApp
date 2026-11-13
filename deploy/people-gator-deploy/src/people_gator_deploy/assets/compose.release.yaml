@@ -42,9 +42,15 @@ services:
   migrate:
     <<: *backend
     profiles: [tools]
+    # Replaces the backend's env_file: only the migration role, never the
+    # application role or the production storage credentials.
     env_file:
       - path: ${MIGRATION_FILE:?required}
         format: raw
+    environment:
+      <<: *production
+      # Migrations touch only the database; the settings still need one backend.
+      PEOPLE_GATOR_API__STORAGE: '{"local":{"root":"/tmp/database-tools"},"s3":null}'
     command: [migrate]
 
   check:
