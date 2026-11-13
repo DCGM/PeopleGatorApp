@@ -87,5 +87,31 @@ class TelemetryTests(unittest.TestCase):
                         self.assertEqual(rendered['services']['seed']['environment']['PEOPLE_GATOR_API__STORAGE'], env['PEOPLE_GATOR_API__STORAGE'])
 
 
+    def test_release_migrations_get_only_the_migration_role_and_local_storage(self):
+        assets = Path(__file__).resolve().parents[1] / 'src/people_gator_deploy/assets'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime, migration = root / 'runtime.env', root / 'migration.env'
+            runtime.write_text('PEOPLE_GATOR_API__STORAGE={"local": null, "s3": {"bucket_name": "prod", "secret_access_key": "s3-secret"}}\n'
+                               'PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=app\nPEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD=app-pw\n')
+            migration.write_text('PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\nPEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD=migrator-pw\n')
+            environment = {key: os.environ[key] for key in ('PATH', 'HOME') if key in os.environ}
+            environment.update({'COMMIT_SHA': 'abc123', 'RELEASE_TAG': 'v1.2.3', 'BACKEND_IMAGE': 'backend:test',
+                                'FRONTEND_IMAGE': 'frontend:test', 'RELEASE_HOST': 'app.example',
+                                'RUNTIME_FILE': str(runtime), 'MIGRATION_FILE': str(migration),
+                                'CORS_ORIGIN_REGEX': '^https://app.example$', 'TELEMETRY_FILE': '/dev/null'})
+            result = subprocess.run(['docker', 'compose', '-f', str(assets / 'compose.release.yaml'), '--profile', 'tools',
+                                     'config', '--format', 'json'], env=environment, capture_output=True, text=True, check=True)
+        services = json.loads(result.stdout)['services']
+        migrate = services['migrate']['environment']
+        # Before #169 the migrate service lost every storage setting and the backend refused to start.
+        self.assertEqual(json.loads(migrate['PEOPLE_GATOR_API__STORAGE']), {"local": {"root": "/tmp/database-tools"}, "s3": None})
+        self.assertEqual(migrate['PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER'], 'migrator')
+        self.assertNotIn('s3-secret', json.dumps(services['migrate']))
+        self.assertNotIn('app-pw', json.dumps(services['migrate']))
+        self.assertEqual(migrate['PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE'], 'validate')
+        self.assertIn('s3-secret', services['backend']['environment']['PEOPLE_GATOR_API__STORAGE'])
+
+
 if __name__ == "__main__":
     unittest.main()
