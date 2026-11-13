@@ -33,6 +33,7 @@ export const DOCUMENT_SORTS: SortOption<DocumentSortField>[] = [
   { value: 'document_id', label: 'Document ID', kind: 'id' },
   { value: 'page_count', label: 'Pages', kind: 'number' },
   { value: 'verified_page_count', label: 'Verified pages', kind: 'number' },
+  { value: 'verified_page_percentage', label: 'Verified %', kind: 'number' },
   { value: 'last_touched_at', label: 'Last processing', kind: 'time' },
   ...COUNT_OPTIONS,
 ]

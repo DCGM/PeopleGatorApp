@@ -31,6 +31,7 @@ import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
 import VerificationBadge from './VerificationBadge.vue'
 import VerificationProgress from './VerificationProgress.vue'
+import { verifiedPercentLabel } from '@/lib/verification'
 import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import {
   documentColumnSizing,
@@ -203,6 +204,12 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
         verified: row.original.verified_page_count,
         total: row.original.registered_page_count,
       }),
+  },
+  {
+    id: 'verified_page_percentage',
+    ...documentColumnSizing('verified_page_percentage'),
+    header: 'Verified %',
+    accessorFn: (d) => verifiedPercentLabel(d.verified_page_count, d.registered_page_count),
   },
   {
     accessorKey: 'linked_entity_count',

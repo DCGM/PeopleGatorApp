@@ -120,7 +120,7 @@ export type DocumentLibraryOption = {
 /**
  * DocumentListSortField
  */
-export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'last_touched_at';
+export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
 
 export type DocumentName = string;
 
@@ -206,7 +206,7 @@ export type DocumentResponse = {
 /**
  * DocumentSortField
  */
-export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'last_touched_at';
+export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
 
 /**
  * EntityAnnotation

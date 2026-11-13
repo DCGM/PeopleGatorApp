@@ -19,3 +19,10 @@ export const verificationVisuals: Record<
 export function verificationProgress(verified?: number | null, total?: number | null) {
   return total ? Math.min(1, Math.max(0, (verified ?? 0) / total)) : 0
 }
+
+/** Whole verified percentage, rounded down so only complete documents read 100%. */
+export function verifiedPercentLabel(verified?: number | null, total?: number | null) {
+  return verified == null || !total
+    ? '—'
+    : `${Math.floor(verificationProgress(verified, total) * 100)}%`
+}
