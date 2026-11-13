@@ -21,6 +21,8 @@ const TRANSIENT_CLIENT_ERRORS = new Set([408, 429])
 
 /** Retry like Vue Query's default, but not a request the API rejected as invalid. */
 export function retryUnlessClientError(failureCount: number, error: unknown) {
+  // Signed-out requests wait for the user to sign in again.
+  if (error instanceof Error && error.name === 'SignInRequiredError') return false
   const status = isAxiosError(error) ? error.response?.status : undefined
   const rejected =
     status !== undefined && status >= 400 && status < 500 && !TRANSIENT_CLIENT_ERRORS.has(status)

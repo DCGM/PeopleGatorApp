@@ -1,10 +1,44 @@
-import axios, { AxiosHeaders } from 'axios'
+import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
-import { apiClient } from '@/query/client'
+import { retryUnlessClientError } from '@/query/api'
+import { apiClient, getAccessToken, signIn, signInProblem } from '@/query/client'
 
-afterEach(() => sessionStorage.clear())
+afterEach(() => {
+  sessionStorage.clear()
+  signInProblem.value = undefined
+  vi.unstubAllEnvs()
+})
+
+const freshToken = () =>
+  `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
+
+type Reply = { status: number; data?: unknown }
+
+/** Route API calls through a fake adapter that answers with the given replies in order. */
+async function withReplies<T>(
+  replies: Reply[],
+  run: (calls: InternalAxiosRequestConfig[]) => Promise<T>,
+): Promise<T> {
+  const calls: InternalAxiosRequestConfig[] = []
+  const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => {
+    calls.push(config)
+    const reply = replies.shift() ?? { status: 500 }
+    const response = { data: reply.data, status: reply.status, statusText: '', headers: {}, config }
+    if (reply.status >= 400) {
+      throw new AxiosError('failed', String(reply.status), config, undefined, response)
+    }
+    return response
+  })
+  const previous = apiClient.getConfig().axios
+  apiClient.setConfig({ axios: axios.create({ adapter }) })
+  try {
+    return await run(calls)
+  } finally {
+    apiClient.setConfig({ axios: previous })
+  }
+}
 
 describe('generated client authentication alternatives', () => {
   it.each(['bearer', 'api-key'] as const)(
@@ -68,5 +102,70 @@ describe('generated client authentication alternatives', () => {
     } finally {
       apiClient.setConfig({ axios: previous })
     }
+  })
+
+  it('signs in through the browser dialog endpoint without sending credentials', async () => {
+    const token = freshToken()
+    await withReplies(
+      [{ status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } }],
+      async (calls) => {
+        expect(await getAccessToken()).toBe(token)
+        expect(calls).toHaveLength(1)
+        const url = new URL(calls[0]!.url!)
+        expect(url.pathname).toBe('/token/basic')
+        expect(calls[0]!.method).toBe('post')
+        expect(url.searchParams.get('scope')).toContain('people-gator:browse')
+        expect(AxiosHeaders.from(calls[0]!.headers).get('Authorization')).toBeUndefined()
+        expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('r')
+      },
+    )
+  })
+
+  it('stays signed out after the dialog is dismissed until the user signs in again', async () => {
+    const token = freshToken()
+    await withReplies(
+      [
+        { status: 401 },
+        { status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } },
+      ],
+      async (calls) => {
+        await expect(getAccessToken()).rejects.toThrow()
+        expect(signInProblem.value).toBe('signed-out')
+        const waiting = await getAccessToken().catch((error: unknown) => error)
+        expect(calls).toHaveLength(1)
+        expect(retryUnlessClientError(0, waiting)).toBe(false)
+        await signIn()
+        expect(signInProblem.value).toBeUndefined()
+        expect(await getAccessToken()).toBe(token)
+        expect(calls).toHaveLength(2)
+      },
+    )
+  })
+
+  it('reports an account without access', async () => {
+    await withReplies([{ status: 403 }], async () => {
+      await expect(getAccessToken()).rejects.toThrow()
+      expect(signInProblem.value).toBe('forbidden')
+    })
+  })
+
+  it('does not treat an unreachable API as signed out', async () => {
+    await withReplies([{ status: 503 }], async () => {
+      await expect(getAccessToken()).rejects.toThrow()
+      expect(signInProblem.value).toBeUndefined()
+    })
+  })
+
+  it('signs in automatically with a configured development account', async () => {
+    vi.stubEnv('VITE_API_USERNAME', 'test')
+    vi.stubEnv('VITE_API_PASSWORD', 'test')
+    const token = freshToken()
+    await withReplies(
+      [{ status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } }],
+      async (calls) => {
+        expect(await getAccessToken()).toBe(token)
+        expect(calls[0]!.url).toMatch(/\/token\/login$/)
+      },
+    )
   })
 })

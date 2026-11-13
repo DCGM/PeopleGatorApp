@@ -1,5 +1,12 @@
+import { isAxiosError } from 'axios'
+import { ref } from 'vue'
 import { apiBaseUrl } from '@/telemetry'
-import { getTokenTokenLoginPost, refreshTokenTokenRefreshPost, type TokenResponse } from '@/client'
+import {
+  getBasicTokenTokenBasicPost,
+  getTokenTokenLoginPost,
+  refreshTokenTokenRefreshPost,
+  type TokenResponse,
+} from '@/client'
 import { client } from '@/client/client.gen'
 
 const accessTokenKey = 'people-gator.access-token'
@@ -12,6 +19,16 @@ const tokenScopes = [
 ].join(' ')
 
 let pendingToken: Promise<string> | undefined
+
+/** Why the browser has no session: the sign-in dialog was dismissed or the account was refused. */
+export const signInProblem = ref<'signed-out' | 'forbidden'>()
+
+export class SignInRequiredError extends Error {
+  override name = 'SignInRequiredError'
+  constructor() {
+    super('Sign in required')
+  }
+}
 
 function storage() {
   return typeof window === 'undefined' ? undefined : window.sessionStorage
@@ -54,20 +71,37 @@ async function requestTokens(): Promise<string> {
     }
   }
 
-  const response = await getTokenTokenLoginPost({
-    body: {
-      username: import.meta.env.VITE_API_USERNAME || 'test',
-      password: import.meta.env.VITE_API_PASSWORD || 'test',
-      scope: tokenScopes,
-    },
-    throwOnError: true,
-  })
-  return persistTokens(response.data)
+  // Local development signs in automatically with the configured account.
+  const username = import.meta.env.VITE_API_USERNAME
+  if (username) {
+    const response = await getTokenTokenLoginPost({
+      body: { username, password: import.meta.env.VITE_API_PASSWORD ?? '', scope: tokenScopes },
+      throwOnError: true,
+    })
+    return persistTokens(response.data)
+  }
+
+  // A Basic challenge makes the browser ask for credentials, or reuse the ones it remembers.
+  try {
+    const response = await getBasicTokenTokenBasicPost({
+      query: { scope: tokenScopes },
+      throwOnError: true,
+    })
+    return persistTokens(response.data)
+  } catch (error) {
+    const status = isAxiosError(error) ? error.response?.status : undefined
+    if (status === 401 || status === 403) {
+      signInProblem.value = status === 401 ? 'signed-out' : 'forbidden'
+    }
+    throw error
+  }
 }
 
 export async function getAccessToken() {
   const savedToken = storage()?.getItem(accessTokenKey)
   if (savedToken && tokenExpiry(savedToken) > Date.now() + 30_000) return savedToken
+  // Without a session, wait for the user to ask instead of reopening the dialog per request.
+  if (signInProblem.value) throw new SignInRequiredError()
 
   pendingToken ??= requestTokens().finally(() => {
     pendingToken = undefined
@@ -75,6 +109,11 @@ export async function getAccessToken() {
   return pendingToken
 }
 
+/** Show the browser's sign-in dialog again after it was dismissed. */
+export async function signIn() {
+  signInProblem.value = undefined
+  await getAccessToken()
+}
 
 client.setConfig({
   // SDK endpoint paths start with '/'; a root base must be empty to avoid '//host' URLs.
