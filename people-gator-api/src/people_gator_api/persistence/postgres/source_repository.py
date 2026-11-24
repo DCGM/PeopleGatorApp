@@ -204,6 +204,7 @@ class PostgresSourceRepository(SourceRepository):
                 "page_number": lambda desc: [SortKey(page.page_number, "number", desc)],
                 "page_id": lambda desc: [SortKey(page.page_id, "uuid", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+                "created_at": lambda desc: [SortKey(Source.created_at, "datetime", desc)],
             }
         elif model is Document:
             # Unknown names compare as empty strings: first ascending, last
@@ -233,6 +234,7 @@ class PostgresSourceRepository(SourceRepository):
                     SortKey(document_verified_page_count(), "number", desc),
                 ],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+                "created_at": lambda desc: [SortKey(Source.created_at, "datetime", desc)],
             }
         if counts is not None:
             builders.update({

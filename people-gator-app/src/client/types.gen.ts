@@ -120,7 +120,7 @@ export type DocumentLibraryOption = {
 /**
  * DocumentListSortField
  */
-export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
+export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at' | 'created_at';
 
 export type DocumentName = string;
 
@@ -226,7 +226,7 @@ export type DocumentResponse = {
 /**
  * DocumentSortField
  */
-export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
+export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityAnnotation
@@ -2389,7 +2389,7 @@ export type PageLayoutModel = {
 /**
  * PageListSortField
  */
-export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'library' | 'document_id' | 'page_id' | 'last_touched_at' | 'created_at';
 
 export type PageNumber = number;
 
@@ -2491,7 +2491,7 @@ export type PageResponse = {
 /**
  * PageSortField
  */
-export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at' | 'created_at';
 
 /**
  * RefreshTokenRequest

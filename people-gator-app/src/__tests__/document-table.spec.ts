@@ -143,7 +143,12 @@ describe('document table', () => {
     expect(wrapper.findAll('td[data-column="created_by"]').map((cell) => cell.text())).toEqual([
       'Registrar', 'Importer (Archive ingest)', 'Unknown',
     ])
-    expect(wrapper.find('[aria-label^="Sort by Created"]').exists()).toBe(false)
+    // Creation time sorts on the server; the creator has no server order.
+    await wrapper.get('button[aria-label="Sort by Created: sort ascending"]').trigger('click')
+    expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([
+      { field: 'created_at', direction: 'asc' },
+    ])
+    expect(wrapper.find('[aria-label^="Sort by Created by"]').exists()).toBe(false)
   })
   it('keeps stable compact widths across loading, data, sorting and visibility changes', async () => {
     const { wrapper } = await render()

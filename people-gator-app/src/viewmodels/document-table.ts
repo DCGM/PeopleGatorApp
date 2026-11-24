@@ -220,6 +220,7 @@ export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSort
   verified_page_count: 'verified_page_count',
   verified_page_percentage: 'verified_page_percentage',
   last_modified: 'last_touched_at',
+  created: 'created_at',
   ...Object.fromEntries(
     DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
       DOCUMENT_ANNOTATION_STATES.map((state) => [

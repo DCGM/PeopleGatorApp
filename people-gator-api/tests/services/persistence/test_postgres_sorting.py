@@ -250,6 +250,36 @@ async def test_document_sorts_cover_name_library_and_page_count(collection):
         item.document_id.int for item in by_library[:2])
 
 
+async def test_source_creation_sort_places_unknown_last_in_both_directions(collection):
+    c = collection
+    documents = list(c.pages_by_doc)
+    # A tie, a missing (historical) creation time, and a distinct time.
+    times = dict(zip(documents, [T0, T0 + timedelta(days=1), None, T0], strict=True))
+    for source, created in times.items():
+        for item in (source, *(page.source_id for page in c.pages_by_doc[source])):
+            await c.r.session.execute(
+                text("UPDATE pg_demo_sources SET created_at = :at WHERE id = :id"), {"at": created, "id": item},
+            )
+    await c.r.session.commit()
+    owner = {page.source_id: source for source in documents for page in c.pages_by_doc[source]}
+    for direction in ("asc", "desc"):
+        def expected(ids, time_of):
+            known = sorted((item for item in ids if time_of(item) is not None), key=lambda item: item.int)
+            known = sorted(known, key=time_of, reverse=direction == "desc")
+            return [*known, *sorted((item for item in ids if time_of(item) is None), key=lambda item: item.int)]
+        found, _ = await pages(c.r.db.sources.list_documents, DocumentListRequest,
+                               filter_=DocumentListFilter(library=c.libraries),
+                               sort="created_at", sort_direction=direction)
+        assert [item.source_id for item in found] == expected(documents, times.get)
+        found, _ = await pages(c.r.db.sources.list_pages, PageListRequest,
+                               filter_=PageListFilter(library=c.libraries),
+                               sort="created_at", sort_direction=direction)
+        assert [item.source_id for item in found] == expected(list(owner), lambda item: times[owner[item]])
+    newest = await c.r.db.sources.list_documents(DocumentListRequest(
+        limit=1, filter_=DocumentListFilter(library=c.libraries), sort="created_at"))
+    assert newest.items[0].created_at == T0 + timedelta(days=1)
+
+
 async def test_page_identifier_sorts_never_invent_page_numbers(collection):
     c = collection
     scope = PageListFilter(library=c.libraries)

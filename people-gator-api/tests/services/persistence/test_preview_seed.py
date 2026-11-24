@@ -5211,6 +5211,17 @@ async def test_source_creation_examples_and_legacy_unknown_survive_reruns(seed_t
     rerun = await preview.seed_preview(db, fs)
     assert rerun.documents == seed.documents and rerun.pages == seed.pages
     assert rerun.filter_examples['document-creation'] == '/documents?library=preview-creation'
+    # Newest first by default; the historical document's unknown creation sorts last either way.
+    assert rerun.filter_examples['document-creation-sort'] == '/documents?library=preview-creation&sort=created_at'
+    from people_gator_api.schemas.sources import DocumentListFilter
+    for direction in ('asc', 'desc'):
+        listed = await db.sources.list_documents(DocumentListRequest(
+            limit=100, filter_=DocumentListFilter(library=['preview-creation']),
+            sort='created_at', sort_direction=direction))
+        known = sorted((before[key][0] for key in ('creation-user', 'creation-key')),
+                       key=lambda item: item.created_at, reverse=direction == 'desc')
+        assert [item.source_id for item in listed.items] == [
+            *(item.source_id for item in known), before['creation-legacy'][0].source_id]
     for key, (document, page) in before.items():
         for original, current in (
             (document, await db.sources.get_document(document.source_id)),

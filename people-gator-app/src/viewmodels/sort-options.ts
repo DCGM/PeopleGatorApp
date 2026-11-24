@@ -35,6 +35,7 @@ export const DOCUMENT_SORTS: SortOption<DocumentSortField>[] = [
   { value: 'verified_page_count', label: 'Verified pages', kind: 'number' },
   { value: 'verified_page_percentage', label: 'Verified %', kind: 'number' },
   { value: 'last_touched_at', label: 'Last processing', kind: 'time' },
+  { value: 'created_at', label: 'Created', kind: 'time' },
   ...COUNT_OPTIONS,
 ]
 export const DOCUMENT_BROWSE_DEFAULT: SortState<DocumentSortField> = {
@@ -49,6 +50,7 @@ export const PAGE_SORTS: SortOption<PageSortField>[] = [
   { value: 'document_id', label: 'Document ID', kind: 'id' },
   { value: 'page_id', label: 'Page ID', kind: 'id' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },
+  { value: 'created_at', label: 'Created', kind: 'time' },
   ...COUNT_OPTIONS,
 ]
 export const PAGE_BROWSE_DEFAULT: SortState<PageSortField> = { field: 'library', direction: 'asc' }
@@ -58,6 +60,7 @@ export const GALLERY_SORTS: SortOption<PageSortField>[] = [
   { value: 'page_number', label: 'Page number', kind: 'number' },
   { value: 'page_id', label: 'Page ID', kind: 'id' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },
+  { value: 'created_at', label: 'Created', kind: 'time' },
   ...COUNT_OPTIONS,
 ]
 export const GALLERY_DEFAULT: SortState<PageSortField> = { field: 'page_number', direction: 'asc' }

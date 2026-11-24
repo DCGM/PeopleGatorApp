@@ -732,6 +732,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             **creation_examples,
             "document-creation": "/documents?library=preview-creation",
+            "document-creation-sort": "/documents?library=preview-creation&sort=created_at",
             # #141: document-first entry points backed by existing local pages
             # and a registered empty document. Older /scans examples below are
             # retained as explicit compatibility links handled by redirects.

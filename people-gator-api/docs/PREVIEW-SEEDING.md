@@ -1442,8 +1442,11 @@ replaced media and rerun stability.
 
 Open the seed manifest's `document-creation` link (`/documents?library=preview-creation`).
 Use **Add column** to show **Created** and **Created by**. Both are hidden by
-default, retain the table's add/move/remove and saved layout preferences, and
-provide no creation sorting. Created displays local date/time; Created by
+default and retain the table's add/move/remove and saved layout preferences.
+The `document-creation-sort` link (`…&sort=created_at`) orders them newest
+first; the **Created** header and the **Sort by** menu's **Created** option
+switch direction, and the historical document stays last. Scans offer the same
+sort. Created displays local date/time; Created by
 shows the user name and the API-key name in parentheses when used.
 
 The three documents and their local page scans demonstrate a bearer reviewer,

@@ -71,6 +71,7 @@ class DocumentSortField(StrEnum):
     VERIFIED_PAGE_COUNT = "verified_page_count"
     VERIFIED_PAGE_PERCENTAGE = "verified_page_percentage"
     LAST_TOUCHED_AT = "last_touched_at"
+    CREATED_AT = "created_at"
 
 
 class PageSortField(StrEnum):
@@ -96,6 +97,7 @@ class PageSortField(StrEnum):
     DOCUMENT_ID = "document_id"
     PAGE_ID = "page_id"
     LAST_TOUCHED_AT = "last_touched_at"
+    CREATED_AT = "created_at"
 
 
 class FaceSortField(StrEnum):
