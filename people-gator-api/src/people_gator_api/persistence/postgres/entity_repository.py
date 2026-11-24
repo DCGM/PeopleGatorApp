@@ -12,12 +12,15 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from people_gator_api.persistence.contracts import (
+    EntityPutResult,
     EntityRepository,
+    EntityTypeConflictError,
 )
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.entities import (
@@ -31,6 +34,7 @@ from people_gator_api.schemas.entities import (
     EntityPatchBatchItem,
     EntityPatchRequest,
     EntityResponse,
+    entity_replacement,
 )
 from people_gator_api.schemas.missing import (
     is_missing,
@@ -285,6 +289,39 @@ class PostgresEntityRepository(EntityRepository):
             entity_response(entity) if (entity := entities.get(item_id)) else None
             for item_id in ids
         ]
+
+    async def put(
+        self, entity_id: uuid.UUID, payload: EntityCreateRequest, context: GenericActor
+    ) -> EntityPutResult:
+        try:
+            await ensure_ids(self._session, User, [context.user_id], "actor user")
+            entity = (await self._load_many([entity_id], lock=True)).get(entity_id)
+            if entity is None:
+                new = self._new(payload, context)
+                new.id = entity_id
+                try:
+                    async with self._session.begin_nested():
+                        self._session.add(new)
+                except IntegrityError as exc:
+                    # A concurrent PUT created this ID first: replace its row.
+                    entity = (await self._load_many([entity_id], lock=True)).get(entity_id)
+                    if entity is None:
+                        raise ValueError("entity create violates a persistence constraint") from exc
+                else:
+                    await commit(self._session, "entity create violates a persistence constraint")
+                    return EntityPutResult(entity_response(new), created=True)
+            if entity.kind != payload.entity_type.value:
+                raise EntityTypeConflictError(
+                    f"entity_type cannot change from {entity.kind} to {payload.entity_type.value}"
+                )
+            if self._apply(entity, entity_replacement(payload)):
+                for name, value in touch_values(context).items():
+                    setattr(entity, name, value)
+            await commit(self._session, "entity replace violates a persistence constraint")
+        except Exception:
+            await self._session.rollback()
+            raise
+        return EntityPutResult(entity_response(entity), created=False)
 
     async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
         result = await self.delete_batch([entity_id], context=context)

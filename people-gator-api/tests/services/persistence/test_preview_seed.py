@@ -188,7 +188,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (47, 169, 123)
+    assert await counts(database) == (48, 170, 124)
     assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
     assert result.pages.keys() == {page.key for page in PAGES}
 
@@ -373,7 +373,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         # Database-generated identities differ; fixture keys, counts and media do not.
         for field in type(fresh).model_fields:
             assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
-        assert await counts(copy) == await counts(database) == (47, 169, 123)
+        assert await counts(copy) == await counts(database) == (48, 170, 124)
 
         def files(root: Path) -> dict[Path, bytes]:
             return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
@@ -387,7 +387,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         }
         # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
         assert await preview.seed_preview(copy, storage) == copied
-        assert await counts(copy) == (47, 169, 123)
+        assert await counts(copy) == (48, 170, 124)
 
 
 @pytest.mark.asyncio
@@ -508,7 +508,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (47, 169, 123)
+    assert await counts(database) == (48, 170, 124)
 
 
 
@@ -529,7 +529,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (47, 169, 123)
+    assert await counts(database) == (48, 170, 124)
 
 
     stored = await database.entities.get(first.entities["ada"])
@@ -553,7 +553,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (48, 169, 123)
+    assert await counts(database) == (49, 170, 124)
 
 
 
@@ -579,8 +579,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 47 and len(result.faces) == 169
-    assert await counts(database) == (47, 169, 123)
+    assert len(result.entities) == 48 and len(result.faces) == 170
+    assert await counts(database) == (48, 170, 124)
 
 
 
@@ -3728,7 +3728,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (47, 169, 123)
+    assert await counts(db) == (48, 170, 124)
 
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
@@ -5587,3 +5587,41 @@ async def test_page_verification_checkpoint_recovery(seed_target, monkeypatch, i
     assert await database.sources.get_page(seed.pages['verification-done-1']) == page
     later = await database.sources.get_page(seed.pages['verification-partial-1'])
     assert later.verification_state == VerificationState.verified
+
+
+@pytest.mark.asyncio
+async def test_put_created_person_keeps_evidence_when_replaced_and_reruns_keep_it(seed_target):
+    """#173: PUT creates at a stable UUID; replacing keeps evidence; reruns keep the replacement."""
+    from people_gator_api.schemas.entities import EntityCreateRequest
+    from people_gator_api.schemas.enums import EntityType
+    from people_gator_api.seeding.fixtures import fixture_entity_id
+
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    entity_id = seed.entities["put-replace"]
+    assert entity_id == fixture_entity_id("put-replace")
+    assert seed.filter_examples["put-replace-person"] == f"/people/{entity_id}"
+    created = await database.entities.get(entity_id)
+    assert (created.name, created.aliases) == ("Pia Replace", ["P. Replace"])
+    assert created.user_id == seed.users["reviewer"]
+    face = await database.faces.get(seed.faces["put-replace-face"])
+    mention = await database.text_mentions.get(seed.mentions["put-replace-mention"])
+    assert face.entity_id == mention.entity_id == entity_id
+    assert face.source_id == mention.source_id == seed.pages["put-replace-1"]
+    assert created.thumbnail_face_id == face.detection_id
+
+    # Replacing the person clears omitted fields but keeps evidence and portrait.
+    reviewer = GenericActor(user_id=seed.users["reviewer"])
+    replaced = await database.entities.put(
+        entity_id, EntityCreateRequest(entity_type=EntityType.person, name="Pia Renamed"), reviewer
+    )
+    assert replaced.created is False
+    after = await database.entities.get(entity_id)
+    assert (after.name, after.aliases, after.description) == ("Pia Renamed", [], None)
+    assert after.entity_link_stats.faces.total == after.entity_link_stats.mentions.total == 1
+    assert after.thumbnail_face_id == face.detection_id
+
+    # Reruns neither recreate nor re-replace the reviewed record.
+    repeated = await preview.seed_preview(database, filesystem)
+    assert repeated.entities["put-replace"] == entity_id
+    assert await database.entities.get(entity_id) == after
