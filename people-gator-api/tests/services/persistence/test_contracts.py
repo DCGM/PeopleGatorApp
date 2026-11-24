@@ -40,6 +40,7 @@ def test_contract_abstract_surfaces_are_explicit() -> None:
         "create_batch",
         "patch",
         "patch_batch",
+        "put",
         "delete",
         "merge_batch",
         "delete_many",

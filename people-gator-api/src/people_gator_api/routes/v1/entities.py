@@ -2,8 +2,9 @@
 
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 
+from people_gator_api.persistence.contracts import EntityTypeConflictError
 from people_gator_api.schemas.entities import (
     EntityBatchCreateRequest,
     EntityBatchPatchRequest,
@@ -135,6 +136,38 @@ async def patch_entity_route(
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
+
+
+@router.put(
+    "/entities/{entity_id}",
+    response_model=EntityResponse,
+    summary="Create or replace an entity",
+    description="Create the entity with this UUID if it does not exist (201), otherwise replace its fields (200). Omitted optional fields are cleared on replace. Linked faces, text mentions and the portrait selection are kept. entity_type cannot change (409).",
+    responses={
+        status.HTTP_200_OK: {"description": "The existing entity was replaced."},
+        status.HTTP_201_CREATED: {
+            "model": EntityResponse,
+            "description": "The entity was created with this UUID.",
+        },
+        status.HTTP_409_CONFLICT: {"description": "The request changes entity_type."},
+    },
+)
+async def put_entity_route(
+    entity_id: uuid.UUID,
+    payload: EntityCreateRequest,
+    response: Response,
+    database: DatabaseDependency,
+    user: AnnotatorActorDependency,
+) -> EntityResponse:
+    try:
+        result = await database.entities.put(entity_id, payload, user)
+    except EntityTypeConflictError as exc:
+        raise_api_error(409, "entity_type_conflict", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
+    if result.created:
+        response.status_code = status.HTTP_201_CREATED
+    return result.entity
 
 
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)

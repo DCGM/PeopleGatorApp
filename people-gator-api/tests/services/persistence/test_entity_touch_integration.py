@@ -211,6 +211,132 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
     assert (await entity(r, 1)).last_touched_at > before
 
 
+async def test_put_creates_with_id_then_replaces_fields_and_keeps_evidence(records):
+    r = records
+    entity_id = uuid.uuid4()
+    full = EntityCreateRequest(
+        entity_type=EntityType.person,
+        name="Grace Hopper",
+        description="Computer scientist",
+        short_description="Admiral",
+        aliases=["Amazing Grace"],
+        wikidata_id="Q11641",
+        nlcr_authority_id="jn20000700001",
+    )
+    created = await r.db.entities.put(entity_id, full, r.actor)
+    assert created.created is True
+    assert created.entity.entity_id == entity_id
+    assert created.entity.user_id == r.user.user_id
+    stored = await r.db.entities.get(entity_id)
+    assert stored.aliases == ["Amazing Grace"]
+    assert stored.created_by_api_key_id == r.key.api_key_id
+
+    f = await face(r, entity_id)
+    m = await mention(r, entity_id)
+    linked = await r.db.entities.get(entity_id)
+    assert linked.thumbnail_face_id == f.detection_id
+
+    # An identical replacement records no edit.
+    same = await r.db.entities.put(entity_id, full, r.user)
+    assert same.created is False
+    assert same.entity.last_touched_at == linked.last_touched_at
+    assert same.entity.last_touched_by_api_key_id == r.key.api_key_id
+
+    replaced = await r.db.entities.put(
+        entity_id,
+        EntityCreateRequest(entity_type=EntityType.person, name="Grace Brewster Hopper"),
+        r.user,
+    )
+    assert replaced.created is False
+    after = await r.db.entities.get(entity_id)
+    assert after == replaced.entity
+    assert after.name == "Grace Brewster Hopper"
+    assert (
+        after.description,
+        after.short_description,
+        after.aliases,
+        after.wikidata_id,
+        after.nlcr_authority_id,
+    ) == (None, None, [], None, None)
+    assert after.last_touched_at > linked.last_touched_at
+    assert after.last_touched_by_api_key_id is None
+    # Creation metadata, evidence links and the portrait survive replacement.
+    assert (after.user_id, after.created_at, after.created_by_api_key_id) == (
+        linked.user_id, linked.created_at, linked.created_by_api_key_id,
+    )
+    assert after.entity_link_stats.faces.total == 1
+    assert after.entity_link_stats.mentions.total == 1
+    assert (await r.db.faces.get(f.detection_id)).entity_id == entity_id
+    assert (await r.db.text_mentions.get(m.mention_id)).entity_id == entity_id
+    assert (after.thumbnail_face_id, after.thumbnail_mode) == (
+        linked.thumbnail_face_id, linked.thumbnail_mode,
+    )
+
+
+async def test_put_rejects_type_change_without_modifying_entity(records):
+    from people_gator_api.persistence.contracts import EntityTypeConflictError
+
+    r = records
+    before = await entity(r)
+    # Only "person" exists today; construct a future type to exercise the guard.
+    payload = EntityCreateRequest.model_construct(
+        entity_type=SimpleNamespace(value="location"), name="Brno"
+    )
+    with pytest.raises(EntityTypeConflictError, match="person to location"):
+        await r.db.entities.put(before.entity_id, payload, r.user)
+    assert await entity(r) == before
+
+
+async def test_put_recovers_when_another_put_creates_the_id_first(records, monkeypatch):
+    from people_gator_api.persistence.postgres.entity_repository import (
+        PostgresEntityRepository,
+    )
+
+    r = records
+    entity_id = uuid.uuid4()
+    await r.db.entities.put(
+        entity_id, EntityCreateRequest(entity_type=EntityType.person, name="First"), r.actor
+    )
+    original = PostgresEntityRepository._load_many
+    calls = 0
+
+    async def miss_once(self, ids, *, lock=False):
+        # Simulate the row being committed between this PUT's lookup and insert.
+        nonlocal calls
+        calls += 1
+        return {} if calls == 1 else await original(self, ids, lock=lock)
+
+    monkeypatch.setattr(PostgresEntityRepository, "_load_many", miss_once)
+    result = await r.db.entities.put(
+        entity_id, EntityCreateRequest(entity_type=EntityType.person, name="Second"), r.user
+    )
+    monkeypatch.undo()
+    assert result.created is False
+    assert result.entity.name == "Second"
+    assert (await r.db.entities.get(entity_id)).name == "Second"
+
+
+async def test_concurrent_puts_for_a_new_id_create_one_entity(records):
+    r = records
+    entity_id = uuid.uuid4()
+
+    async def put(name):
+        async with r.sessions() as session:
+            db = postgres_database(session)
+            return await db.entities.put(
+                entity_id, EntityCreateRequest(entity_type=EntityType.person, name=name), r.user
+            )
+
+    results = await asyncio.gather(*(put(f"Racer {index}") for index in range(4)))
+    assert sum(result.created for result in results) == 1
+    total = await r.db.entities.list(
+        EntityListRequest(
+            filter_=EntityListFilter(entity_id=[entity_id]), limit=0, return_total_count=True
+        )
+    )
+    assert total.total_count == 1
+
+
 async def test_document_time_actor_filters_counts_search_and_cursors(records):
     r = records
     ids = [item.entity_id for item in r.entities]
