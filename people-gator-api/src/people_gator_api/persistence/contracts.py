@@ -143,6 +143,18 @@ class CreateResult(enum.StrEnum):
     CREATED = "created"
 
 
+class EntityTypeConflictError(ValueError):
+    """A replacement tried to change an existing entity's immutable type."""
+
+
+@dataclass(frozen=True)
+class EntityPutResult:
+    """The stored entity and whether the PUT created it."""
+
+    entity: EntityResponse
+    created: bool
+
+
 class EntityRepository(ABC):
     @abstractmethod
     async def get(self, entity_id: uuid.UUID) -> EntityResponse | None:
@@ -236,6 +248,21 @@ class EntityRepository(ABC):
         :type context: GenericActor
         :return: The list of updated entities, with None for entities that do not exist.
         :rtype: list[EntityResponse | None]
+        """
+
+    @abstractmethod
+    async def put(
+        self, entity_id: uuid.UUID, payload: EntityCreateRequest, context: GenericActor
+    ) -> EntityPutResult:
+        """Create an entity with the given ID, or replace an existing one's fields.
+
+        Replacement sets every field from the payload and clears omitted
+        optional ones. Linked faces, text mentions, the portrait selection and
+        creation metadata are kept. A replacement that changes nothing does not
+        touch the entity.
+
+        :raises EntityTypeConflictError: when the payload changes the type of
+            an existing entity.
         """
 
     @abstractmethod

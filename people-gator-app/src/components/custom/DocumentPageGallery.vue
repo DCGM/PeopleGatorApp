@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
 import ArchiveLink from './ArchiveLink.vue'
@@ -13,6 +13,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PageGalleryItem } from '@/viewmodels/document-page-gallery'
 import type { PageSortField } from '@/client'
 import SortControl from './SortControl.vue'
+import VerificationBadge from './VerificationBadge.vue'
+import VerificationProgress from './VerificationProgress.vue'
 import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
@@ -20,6 +22,7 @@ const props = defineProps<{
   documentName?: string | null
   pageNumber?: number | null
   documentPageCount?: number | null
+  verifiedPageCount?: number | null
   selectedPersonId?: string | null
   selectedPersonName?: string | null
   documentUrl?: string
@@ -34,6 +37,7 @@ const props = defineProps<{
 }>()
 const expanded = defineModel<boolean>('expanded', { default: false })
 const personOnly = defineModel<boolean>('personOnly', { default: false })
+const notVerifiedOnly = defineModel<boolean>('notVerifiedOnly', { default: false })
 const sort = defineModel<SortState<PageSortField>>('sort')
 
 const emit = defineEmits<{
@@ -44,6 +48,7 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
+const anyVerified = computed(() => props.items.some((item) => item.verified))
 
 watch(
   [list, expanded],
@@ -55,7 +60,7 @@ watch(
 )
 
 function itemName(item: PageGalleryItem) {
-  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
+  return `Page ${item.pageId}${item.current ? ', current page' : ''}${item.verified ? ', verified' : ''}${item.matchesSelectedPerson ? `, ${props.selectedPersonName || 'selected person'} appears on this page` : ''}`
 }
 
 /** Scroll only the strip, never the window, so the scan stays where it is. */
@@ -120,63 +125,66 @@ useAutomaticPagination({
     @keydown.stop
   >
     <div class="px-3 pt-2 sm:px-5" :class="expanded && 'flex min-h-0 flex-1 flex-col'">
-      <div class="flex shrink-0 items-center gap-2">
-        <div class="min-w-0 flex-1 overflow-x-auto">
-          <div
-            class="gallery-header flex w-full min-w-[22rem] sm:min-w-[32rem] flex-row flex-nowrap items-center gap-2 pb-1"
-          >
-            <div class="flex min-w-0 items-center gap-2">
-              <h2
-                id="document-pages-title"
-                class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
-                :title="props.documentName || 'Document pages'"
-              >
-                {{ props.documentName || 'Document pages' }}
-              </h2>
-              <template v-if="documentUrl">
-                <span aria-hidden="true">·</span>
-                <ArchiveLink :url="documentUrl" kind="document" />
-              </template>
+      <div class="flex shrink-0 items-start gap-2">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 pb-1">
+          <div class="flex min-h-7 min-w-0 flex-[1_1_12rem] items-center gap-2">
+            <VerificationProgress
+              v-if="verifiedPageCount != null && documentPageCount != null"
+              :verified="verifiedPageCount"
+              :total="documentPageCount"
+              hide-count
+            />
+            <h2
+              id="document-pages-title"
+              class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
+              :title="props.documentName || 'Document pages'"
+            >
+              {{ props.documentName || 'Document pages' }}
+            </h2>
+            <template v-if="documentUrl">
               <span aria-hidden="true">·</span>
-              <PagePosition
-                class="shrink-0"
-                :number="pageNumber"
-                :total="documentPageCount ?? (personOnly ? undefined : totalCount)"
-              />
-            </div>
-            <div class="ml-auto flex shrink-0 flex-row flex-nowrap items-center gap-2">
-              <Toggle
-                :model-value="personOnly && Boolean(selectedPersonId)"
-                variant="outline"
+              <ArchiveLink :url="documentUrl" kind="document" />
+            </template>
+            <span aria-hidden="true">·</span>
+            <PagePosition
+              class="shrink-0"
+              :number="pageNumber"
+              :total="documentPageCount ?? (personOnly || notVerifiedOnly ? undefined : totalCount)"
+            />
+          </div>
+          <div class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+            <Toggle
+              :model-value="personOnly && Boolean(selectedPersonId)"
+              variant="outline"
+              size="sm"
+              class="min-w-0 max-w-28 sm:max-w-36"
+              :disabled="!selectedPersonId"
+              :aria-label="
+                selectedPersonId
+                  ? `${selectedPersonName || 'Selected person'} only`
+                  : 'Select a person in the right panel to filter pages'
+              "
+              :title="
+                selectedPersonId
+                  ? `${selectedPersonName || 'Selected person'} only`
+                  : 'Select a person in the right panel to filter pages'
+              "
+              @update:model-value="personOnly = $event"
+              ><span class="truncate">{{
+                selectedPersonId ? `${selectedPersonName || 'Selected person'} only` : 'Person only'
+              }}</span></Toggle
+            >
+            <Toggle v-model="notVerifiedOnly" variant="outline" size="sm">
+              Not verified only
+            </Toggle>
+            <div v-if="sort && sortOptions" class="min-w-0 max-w-full sm:max-w-44">
+              <SortControl
+                v-model="sort"
+                :options="sortOptions"
+                label="Sort pages"
                 size="sm"
-                class="w-28 min-w-0 sm:w-36"
-                :disabled="!selectedPersonId"
-                :aria-label="
-                  selectedPersonId
-                    ? `${selectedPersonName || 'Selected person'} only`
-                    : 'Select a person in the right panel to filter pages'
-                "
-                :title="
-                  selectedPersonId
-                    ? `${selectedPersonName || 'Selected person'} only`
-                    : 'Select a person in the right panel to filter pages'
-                "
-                @update:model-value="personOnly = $event"
-                ><span class="truncate">{{
-                  selectedPersonId
-                    ? `${selectedPersonName || 'Selected person'} only`
-                    : 'Person only'
-                }}</span></Toggle
-              >
-              <div v-if="sort && sortOptions" class="w-20 min-w-0 sm:w-44">
-                <SortControl
-                  v-model="sort"
-                  :options="sortOptions"
-                  label="Sort pages"
-                  size="sm"
-                  compact-on-mobile
-                />
-              </div>
+                compact-on-mobile
+              />
             </div>
           </div>
         </div>
@@ -203,7 +211,10 @@ useAutomaticPagination({
         v-else-if="
           !props.loading &&
           (documentPageCount === 1 ||
-            (documentPageCount == null && !personOnly && props.totalCount === 1))
+            (documentPageCount == null &&
+              !personOnly &&
+              !notVerifiedOnly &&
+              props.totalCount === 1))
         "
         class="sr-only"
         role="status"
@@ -248,7 +259,7 @@ useAutomaticPagination({
           <li
             v-for="item in props.items"
             :key="item.sourceId"
-            :class="expanded ? 'min-w-0' : 'w-14 shrink-0 sm:w-16'"
+            :class="expanded ? 'min-w-0' : 'w-20 shrink-0'"
           >
             <RouterLink
               :to="props.location(item)"
@@ -258,6 +269,15 @@ useAutomaticPagination({
               :title="`Page ${item.pageId}`"
               :data-current="item.current || undefined"
             >
+              <!-- Badge sits above the page; the row is reserved so thumbnails stay aligned. -->
+              <div v-if="anyVerified" class="flex h-5 w-full items-end">
+                <VerificationBadge
+                  v-if="item.verified"
+                  state="verified"
+                  class="max-w-full"
+                  aria-hidden="true"
+                />
+              </div>
               <div
                 data-page-thumbnail
                 :data-person-match="item.matchesSelectedPerson || undefined"
@@ -300,7 +320,7 @@ useAutomaticPagination({
             v-for="index in props.loading || props.isFetchingNextPage ? 3 : 0"
             :key="`loading-${index}`"
             class="aspect-[8/11] shrink-0 animate-pulse rounded-md border bg-muted"
-            :class="expanded ? 'w-full' : 'w-14 sm:w-16'"
+            :class="expanded ? 'w-full' : 'w-20'"
             aria-hidden="true"
           />
           <li

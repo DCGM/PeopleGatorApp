@@ -12,7 +12,7 @@ import DocumentFilters from '@/components/custom/DocumentFilters.vue'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
-import { useDocumentFilters } from '@/viewmodels/document-filters'
+import { useDocumentFilters, verificationQuery } from '@/viewmodels/document-filters'
 import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
 import {
   DOCUMENT_BROWSE_DEFAULT,
@@ -29,8 +29,12 @@ const counts = useDocumentCounts()
 // Filters sit in a sidebar from 1024px and in a drawer below that (#111).
 const desktop = useMediaQuery('(min-width: 1024px)')
 const filtersOpen = ref(false)
-const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
-const { searchTerm, unassigned } = useDocumentFilters()
+const { searchTerm, unassigned, verification } = useDocumentFilters()
+const sourceParams = computed(() => ({
+  ...shared.params.value,
+  ...counts.params.value,
+  ...verificationQuery(verification.value),
+}))
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
 const sort = useRouteSort(
@@ -73,6 +77,7 @@ const filtered = computed(
     counts.tags.value.length ||
     searchTerm.value.trim() ||
     unassigned.value !== 'all' ||
+    verification.value !== 'all' ||
     hasSharedFilters(shared.filters.value),
 )
 const listEnd = ref<HTMLElement | null>(null)

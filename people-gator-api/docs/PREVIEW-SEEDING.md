@@ -83,6 +83,8 @@ This does not automatically seed the actual staging environment.
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
+| Page and document verification (#149) | Open `document-verification`: **Verification: all pages verified** (2 / 2) and **Verification: in progress** (1 / 3) and **Verification: mostly done** (3 / 4) in `preview-verification`; `document-verification-percentage` sorts them by **Verified %**. See [Page verification](#page-verification-149). |
+| Create or replace a person by ID (#173) | Open `put-replace-person`: **Pia Replace**, created through `PUT /api/v1/entities/{id}` at a fixed UUID, with one face and one mention. See [Create or replace by ID](#create-or-replace-by-id-173). |
 | Deactivated reviewer attribution (#66) | Open `deactivated-reviewer`: **Olga Expiry** matches **Modified by: Preview former reviewer**, an inactive user |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
@@ -1452,8 +1454,8 @@ uses the preview reviewer. The historical pair uses the repository's internal
 actor to historical creation. This operation only inserts missing records; it
 never clears creation on existing sources and is not an HTTP registration route.
 
-Migration `d34a021b0016` leaves existing source creation fields NULL;
-`d34a021b0017` indexes creation time, user and API key on sources, entities,
+Migration `d34a021b0017` leaves existing source creation fields NULL;
+`d34a021b0018` indexes creation time, user and API key on sources, entities,
 image occurrences and mentions, like the modification fields. Registration
 never backfills them or changes known creation on a retry. Seed reruns retain
 source UUIDs, creation timestamps, attribution and reviewed numbering/evidence.
@@ -1634,3 +1636,62 @@ entries through repository queries, multi-batch traversal and actual page media,
 then confirms reviewed document/mention state survives reseeding. Browser
 layout storage is exercised separately by frontend tests and the maintained
 `check-document-persistence.mjs` browser check.
+
+## Page verification (#149)
+
+Three synthetic documents in `preview-verification` show page verification and
+the document state derived from it. The reviewer verifies six pages once:
+
+| Document | Pages | Derived state |
+| --- | --- | --- |
+| Verification: all pages verified | page 1 (with an unassigned face), page 2 | Verified, 2 / 2 |
+| Verification: in progress | page 1 verified; pages 2 and 3 not verified | Not verified, 1 / 3 |
+| Verification: mostly done | pages 1–3 verified; page 4 not verified | Not verified, 3 / 4 (75%) |
+
+- Open `document-verification`, then show the **Verification** (green
+  Verified / grey Not verified label) and **Verified pages** (progress ring and
+  count) columns. `document-verification-not-verified` applies the
+  **Verification: Not verified** filter.
+- Sorting by **Verified pages** orders by count, so 3 / 4 precedes 2 / 2.
+  `document-verification-percentage` sorts by **Verified %** instead
+  (descending: 100%, 75%, 33%); show that column to compare.
+- Open `page-verification` for page 2 of the in-progress document, or
+  `page-verification-expanded` for the same page with the page list expanded.
+  Both show the progress ring before the document name and a **Verified** badge
+  at the top of page 1’s thumbnail. Use **Verify** in the viewer toolbar, go to the next page, and
+  verify page 3 to fill the ring. The **Verified** menu shows the reviewer and
+  offers **Remove verification**. Turn on **Not verified only** to see the pages
+  still awaiting review.
+- Page 1 of the first document is verified while its face stays unassigned:
+  page verification never changes evidence link states.
+
+Reruns add missing pages and verify each listed page only once. A checkpoint is
+saved before each write, so an interrupted run resumes without re-verifying a
+page a reviewer has since changed. Integration tests check the derived states,
+counts, both sorts across cursor pages, filters, the example links, rerun preservation of a removed verification
+and checkpoint recovery.
+
+## Create or replace by ID (#173)
+
+The seed creates **Pia Replace** (alias **P. Replace**) through
+`PUT /api/v1/entities/{entity_id}` at the stable UUID
+`fixture_entity_id("put-replace")` (`05d2b89d-c90a-5fab-a617-4ce0d22fef03`).
+Page 1 of **Create or replace practice** (`preview-mzk`) holds her one face and
+one mention; the face is her portrait.
+
+Open `put-replace-person`, then replace her with annotator credentials. Omitted
+optional fields are cleared, so the alias and descriptions disappear, while the
+face, mention and portrait stay linked:
+
+```sh
+curl -X PUT "$API/api/v1/entities/05d2b89d-c90a-5fab-a617-4ce0d22fef03" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"entity_type": "person", "name": "Pia Renamed"}'
+```
+
+The response is `200` for a replacement and `201` when the UUID was free.
+Changing `entity_type` returns `409`.
+
+Reruns find her through the seed manifest, then by name, then by that UUID, and
+never PUT over an existing record, so replacements and other review edits survive. Integration tests check the UUID,
+linked evidence, portrait, a replacement and rerun preservation.

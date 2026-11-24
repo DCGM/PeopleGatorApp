@@ -29,3 +29,16 @@ export function useGalleryPerson(selectedPersonId: MaybeRefOrGetter<string | nul
     personId: computed(() => (only.value ? toValue(selectedPersonId) || '' : '')),
   }
 }
+
+export const GALLERY_NOT_VERIFIED_KEY = 'gallery_not_verified'
+
+/** The strip's "Not verified" setting (#149), kept in the URL like the person scope. */
+export function useGalleryNotVerified() {
+  const route = useRoute()
+  const patch = useRouteQueryPatch()
+  return computed({
+    get: () => route.query[GALLERY_NOT_VERIFIED_KEY] === 'on',
+    set: (value: boolean) =>
+      patch({ [GALLERY_NOT_VERIFIED_KEY]: value ? 'on' : undefined }, 'push'),
+  })
+}

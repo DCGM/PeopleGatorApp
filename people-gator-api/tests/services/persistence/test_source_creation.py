@@ -167,6 +167,25 @@ async def test_populated_migration_preserves_unknown_creation(migrated_postgres)
         assert status == CreateResult.EXISTING and creation(repeated) == creation(original)
 
 
+@pytest.mark.asyncio
+async def test_preview_stamped_before_renumbering_gains_page_verification(migrated_postgres):
+    """A retained preview applied creation as d34a021b0016/0017, without page verification."""
+    async with migrated_postgres.begin() as connection:
+        def migrate(sync, target, downgrade=False):
+            config = migration_config()
+            config.attributes['connection'] = sync
+            (command.downgrade if downgrade else command.upgrade)(config, target)
+        await connection.run_sync(lambda sync: migrate(sync, 'd34a021b0015', True))
+        await connection.run_sync(lambda sync: migrate(sync, 'head'))
+        await connection.execute(text('ALTER TABLE pg_demo_pages DROP COLUMN verification_state, DROP COLUMN verified_at, '
+                                      'DROP COLUMN verified_by_user_id, DROP COLUMN verified_by_api_key_id'))
+        await connection.execute(text('DROP TYPE pg_demo_verification_state'))
+        await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0017'"))
+        await connection.run_sync(lambda sync: migrate(sync, 'head'))
+        assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == 'd34a021b0018'
+        await connection.run_sync(validate_schema)
+
+
 @pytest.mark.parametrize('response', [DocumentResponse, PageResponse, SourceResponseBase, ImageResponse])
 def test_unknown_creation_survives_typed_projection(response):
     kind = {DocumentResponse: 'document', PageResponse: 'page', ImageResponse: 'image'}.get(response, 'document')

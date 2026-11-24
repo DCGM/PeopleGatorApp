@@ -4,7 +4,7 @@ import { useCanAnnotate } from '@/composables/can-annotate'
 import type { PageResponse } from '@/client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { usePageNumberMutation } from '@/query/media'
+import { usePagePatchMutation } from '@/query/media'
 const props = defineProps<{ page: PageResponse }>()
 const allowed = useCanAnnotate()
 const value = ref('')
@@ -15,7 +15,7 @@ watch(
   },
   { immediate: true },
 )
-const mutation = usePageNumberMutation()
+const mutation = usePagePatchMutation()
 const valid = computed(
   () => value.value === '' || (/^[1-9]\d*$/.test(value.value) && Number(value.value) <= 2147483647),
 )

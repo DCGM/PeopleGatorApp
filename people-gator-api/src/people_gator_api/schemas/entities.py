@@ -24,7 +24,7 @@ from people_gator_api.schemas.common import (
     ListFilterBase,
 )
 from people_gator_api.schemas.enums import EntityType
-from people_gator_api.schemas.missing import MISSING, MissingType
+from people_gator_api.schemas.missing import MISSING, MissingType, missing_to_none
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -104,6 +104,21 @@ class EntityPatchRequest(BaseModel):
         if isinstance(aliases, list) and len(aliases) != len(set(aliases)):
             raise ValueError("aliases must be unique")
         return aliases
+
+
+def entity_replacement(payload: EntityCreateRequest) -> EntityPatchRequest:
+    """Patch that sets every replaceable field, clearing omitted optional ones.
+
+    The portrait selection is not part of the payload, so it is left unchanged.
+    """
+    return EntityPatchRequest(
+        name=payload.name,
+        aliases=missing_to_none(payload.aliases) or [],
+        description=missing_to_none(payload.description),
+        short_description=missing_to_none(payload.short_description),
+        wikidata_id=missing_to_none(payload.wikidata_id),
+        nlcr_authority_id=missing_to_none(payload.nlcr_authority_id),
+    )
 
 
 class EntityPatchBatchItem(EntityPatchRequest):
@@ -281,6 +296,7 @@ __all__ = [
     "EntityCreateRequest",
     "EntityBatchCreateRequest",
     "EntityPatchRequest",
+    "entity_replacement",
     "EntityPatchBatchItem",
     "EntityBatchPatchRequest",
     "EntityResponse",

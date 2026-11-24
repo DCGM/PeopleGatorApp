@@ -440,10 +440,11 @@ const PAGE_ORDERED_LISTS = [
 ] as const
 
 /**
- * Discard ordered cursor chains after a numbering edit; keep the edited page,
- * images, layouts and spans cached so the workspace does not reload.
+ * Discard ordered cursor chains after a numbering edit and refresh them after a
+ * verification change (#149), which also changes derived document state. Keep
+ * the edited page, images, layouts and spans cached so the workspace does not reload.
  */
-export function usePageNumberMutation() {
+export function usePagePatchMutation() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ sourceId, payload }: { sourceId: string; payload: PagePatchRequest }) =>
@@ -454,14 +455,17 @@ export function usePageNumberMutation() {
           throwOnError: true,
         }),
       ),
-    onSuccess: async (page) => {
+    onSuccess: async (page, { payload }) => {
       client.setQueryData(queryKeys.pages.detail(page.source_id), page)
       client.setQueryData(
         queryKeys.pages.lookup(page.library, page.document_id, page.page_id),
         page,
       )
+      const renumbered = 'page_number' in payload
       await Promise.all([
-        ...PAGE_ORDERED_LISTS.map((queryKey) => client.resetQueries({ queryKey })),
+        ...PAGE_ORDERED_LISTS.map((queryKey) =>
+          renumbered ? client.resetQueries({ queryKey }) : client.invalidateQueries({ queryKey }),
+        ),
         client.invalidateQueries({ queryKey: ['documents', 'detail'] }),
         client.invalidateQueries({ queryKey: ['documents', 'lookup'] }),
       ])

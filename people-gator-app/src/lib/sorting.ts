@@ -30,6 +30,7 @@ const DESCENDING_FIRST = new Set([
   'last_touched_at',
   'created_at',
   'page_count',
+  'verified_page_percentage',
   'count',
 ])
 

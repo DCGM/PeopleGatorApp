@@ -99,6 +99,57 @@ async def test_entity_creation_serializes_properties_and_preserves_response_type
 
 
 @pytest.mark.asyncio
+async def test_put_creates_missing_entity_with_requested_id() -> None:
+    collection = _collection()
+    actor = GenericActor(user_id=uuid.uuid4())
+    entity_id = uuid.uuid4()
+    result = await WeaviateEntityRepository(_client(collection)).put(
+        entity_id, EntityCreateRequest(name="Ada", entity_type=EntityType.person), actor
+    )
+    assert result.created is True
+    assert result.entity.entity_id == entity_id
+    assert collection.data.insert.await_args.kwargs["uuid"] == entity_id
+    collection.data.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_put_replaces_every_field_and_clears_omitted_ones() -> None:
+    collection = _collection()
+    stored = _stored(
+        {
+            "name": "Ada",
+            "entity_type": "person",
+            "description": "Old",
+            "wikidata_id": "Q7259",
+            "aliases": ["Countess"],
+        },
+        user=uuid.uuid4(),
+    )
+    collection.query.fetch_object_by_id.return_value = stored
+    sent: list[dict] = []
+    collection.data.update.side_effect = lambda **kwargs: sent.append(dict(kwargs["properties"]))
+    result = await WeaviateEntityRepository(_client(collection)).put(
+        stored.uuid,
+        EntityCreateRequest(name="Ada King", entity_type=EntityType.person),
+        GenericActor(user_id=uuid.uuid4()),
+    )
+    assert result.created is False
+    assert result.entity.name == "Ada King"
+    assert result.entity.description is None
+    assert result.entity.wikidata_id is None
+    assert result.entity.aliases is None
+    assert sent == [{
+        "name": "Ada King",
+        "aliases": [],
+        "description": None,
+        "short_description": None,
+        "wikidata_id": None,
+        "nlcr_authority_id": None,
+    }]
+    collection.data.insert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_list_sorts_and_resumes_with_opaque_cursor() -> None:
     collection = _collection()
     owner = uuid.uuid4()

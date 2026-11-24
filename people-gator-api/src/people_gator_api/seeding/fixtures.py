@@ -14,6 +14,11 @@ def fixture_id(key: str) -> UUID:
     return uuid5(NAMESPACE, key)
 
 
+def fixture_entity_id(key: str) -> UUID:
+    """Client-chosen UUID for a person the seed creates through PUT."""
+    return fixture_id("entity/" + key)
+
+
 @dataclass(frozen=True)
 class Person:
     key: str
@@ -21,6 +26,8 @@ class Person:
     aliases: tuple[str, ...]
     description: str
     actor: str
+    # Create through PUT at fixture_entity_id(key) instead of POST.
+    put: bool = False
 
 
 PAGINATION_ITEMS = 14
@@ -134,6 +141,10 @@ PEOPLE = (
            "Synthetic scan-sidebar person with one face on another page of the document.", "importer"),
     Person("sidebar-karel", "Karel Crowd", (),
            "Synthetic scan-sidebar person whose many faces span several pages.", "importer"),
+    # Issue #173: created through PUT at a stable UUID (see fixture_entity_id).
+    Person("put-replace", "Pia Replace", ("P. Replace",),
+           "Synthetic person created by PUT; replace her to see evidence stay linked.", "reviewer",
+           put=True),
 )
 
 
@@ -215,6 +226,12 @@ DOCUMENTS = (
     Document("alignment", "preview-mzk", "Face alignment recovery"),
     Document("teleprompter", "preview-mzk", "Teleprompter reading practice"),
     Document("scan-sidebar", "preview-mzk", "Scan sidebar practice"),
+    # #149: page verification; documents derive their state from these pages.
+    Document("verification-done", "preview-verification", "Verification: all pages verified"),
+    Document("verification-partial", "preview-verification", "Verification: in progress"),
+    # More verified pages than "all pages verified", but a smaller share.
+    Document("verification-most", "preview-verification", "Verification: mostly done"),
+    Document("put-replace", "preview-mzk", "Create or replace practice"),
 )
 
 
@@ -672,6 +689,22 @@ PAGES = (
     Page("creation-user-1", "creation-user", 1),
     Page("creation-key-1", "creation-key", 1),
     Page("creation-legacy-1", "creation-legacy", 1),
+    # #149: a verified page may still hold unverified evidence (an unassigned face).
+    Page("verification-done-1", "verification-done", 1,
+         (Face("verification-unassigned", None, 0, 0, embedded=False),)),
+    Page("verification-done-2", "verification-done", 2),
+    *(Page(f"verification-partial-{i}", "verification-partial", i) for i in range(1, 4)),
+    *(Page(f"verification-most-{i}", "verification-most", i) for i in range(1, 5)),
+    # #173: evidence that stays linked when the person is replaced through PUT.
+    Page("put-replace-1", "put-replace", 1,
+         (Face("put-replace-face", "put-replace", 0, 0, embedded=False),),
+         (Mention("put-replace-mention", "put-replace", "Pia Replace signed the register."),)),
+)
+
+# Pages the seed verifies once as the reviewer; reruns keep later review edits.
+VERIFIED_PAGES = (
+    "verification-done-1", "verification-done-2", "verification-partial-1",
+    "verification-most-1", "verification-most-2", "verification-most-3",
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

@@ -1,9 +1,13 @@
-"""Record source creation without inventing history for registered sources."""
+"""Record source creation without inventing history for registered sources.
+
+Revision ID: d34a021b0017
+Revises: d34a021b0016
+"""
 from alembic import op
 import sqlalchemy as sa
 
-revision = "d34a021b0016"
-down_revision = "d34a021b0015"
+revision = "d34a021b0017"
+down_revision = "d34a021b0016"
 branch_labels = None
 depends_on = None
 

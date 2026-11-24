@@ -121,6 +121,23 @@ No persisted counter, migration or additional index is required; existing source
 state and library/document relationship indexes serve the scope. Responses retain
 their bounded batch summary queries, independent of result batch size.
 
+### Page and document verification (#149)
+
+`pg_demo_pages.verification_state` (`pg_demo_verification_state`: `not_verified`
+or `verified`) is the only stored review state. Verified pages also record
+`verified_at`, `verified_by_user_id` and, for key requests, `verified_by_api_key_id`;
+a check constraint keeps these empty for not-verified pages. Existing pages
+migrate as not verified. `PATCH /api/v1/pages/{page_source_id}` with
+`verification_state` sets or clears it under the annotate scope; repeating the
+current state changes nothing. Changes touch the page and its document.
+
+Documents store no state. A document is verified when it has at least one
+registered page with the same library/document identity and all such pages are
+verified; `verified_page_count` reports progress. The summary query computes
+both in the existing page window, and `filter.verification_state` uses correlated
+`EXISTS` checks over the page identity index. Page verification is unrelated to
+evidence link states (`pg_demo_entity_link_state`).
+
 ### Page sequence metadata
 
 `pg_demo_pages.page_number` is a nullable positive 32-bit integer: a 1-based

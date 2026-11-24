@@ -44,9 +44,12 @@ import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import PanelBar from '@/components/custom/PanelBar.vue'
+import PageReviewControls from '@/components/custom/PageReviewControls.vue'
 import {
+  GALLERY_NOT_VERIFIED_KEY,
   GALLERY_PERSON_KEY,
   LEGACY_GALLERY_PERSON_KEY,
+  useGalleryNotVerified,
   useGalleryPerson,
 } from '@/viewmodels/gallery-person'
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
@@ -185,6 +188,7 @@ const peopleScope = setting('peopleScope')
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
 const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
+const galleryNotVerified = useGalleryNotVerified()
 const gallerySelectedPerson = useEntityQuery(computed(() => selectedPersonId.value || ''))
 const galleryExpanded = useGalleryView()
 const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
@@ -219,6 +223,7 @@ const gallery = useDocumentPageGallery(
   gallerySort,
   galleryPerson,
   selectedPersonId,
+  galleryNotVerified,
 )
 function galleryLocation(item: PageGalleryItem) {
   return {
@@ -226,6 +231,7 @@ function galleryLocation(item: PageGalleryItem) {
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
     query: {
       [GALLERY_PERSON_KEY]: galleryPersonOnly.value ? 'on' : undefined,
+      [GALLERY_NOT_VERIFIED_KEY]: galleryNotVerified.value ? 'on' : undefined,
       selectedPerson: selectedPersonId.value || undefined,
       [GALLERY_SORT_KEYS.field]: route.query[GALLERY_SORT_KEYS.field],
       [GALLERY_SORT_KEYS.direction]: route.query[GALLERY_SORT_KEYS.direction],
@@ -1022,8 +1028,10 @@ onBeforeUnmount(() => {
                   @reset-view="resetView"
                   @toggle-badge-names="showBadgeNames = !showBadgeNames"
                 />
-                <template v-if="isWideWorkspace && !sidebarVisible" #end>
+                <template v-if="page || (isWideWorkspace && !sidebarVisible)" #end>
+                  <PageReviewControls v-if="page" :page="page" />
                   <Button
+                    v-if="isWideWorkspace && !sidebarVisible"
                     type="button"
                     variant="ghost"
                     size="icon-sm"
@@ -1131,10 +1139,14 @@ onBeforeUnmount(() => {
                 v-model:expanded="galleryExpanded"
                 :document-name="documentQuery.data.value?.name || documentId"
                 :page-number="page?.page_number"
-                :document-page-count="page?.registered_page_count"
+                :document-page-count="
+                  documentQuery.data.value?.registered_page_count ?? page?.registered_page_count
+                "
+                :verified-page-count="documentQuery.data.value?.verified_page_count"
                 :selected-person-id="selectedPersonId"
                 :selected-person-name="gallerySelectedPerson.data.value?.name"
                 v-model:person-only="galleryPersonOnly"
+                v-model:not-verified-only="galleryNotVerified"
                 :document-url="documentQuery.data.value?.url"
                 :items="gallery.items.value"
                 :total-count="gallery.totalCount.value"
