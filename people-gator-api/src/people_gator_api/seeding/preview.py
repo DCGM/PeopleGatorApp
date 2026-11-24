@@ -43,7 +43,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, VERIFIED_PAGES, Face
+from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, VERIFIED_PAGES, Face, fixture_entity_id
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -222,18 +222,24 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 active_entities[person.key] = entity_id
             continue
         entity = next((item for item in existing if item.name == person.name), None)
+        if entity is None and person.put:
+            # Recover by the stable ID, even if renamed, so PUT never replaces edits.
+            entity = await database.entities.get(fixture_entity_id(person.key))
         if entity is None:
-            entity = await database.entities.create(
-                EntityCreateRequest(
-                    entity_type=EntityType.person,
-                    name=person.name,
-                    aliases=list(person.aliases),
-                    short_description=person.description,
-                    description=person.description
-                    + " This record belongs to the synthetic preview dataset.",
-                ),
-                actors["reviewer"],
+            request = EntityCreateRequest(
+                entity_type=EntityType.person,
+                name=person.name,
+                aliases=list(person.aliases),
+                short_description=person.description,
+                description=person.description
+                + " This record belongs to the synthetic preview dataset.",
             )
+            if person.put:
+                entity = (await database.entities.put(
+                    fixture_entity_id(person.key), request, actors["reviewer"]
+                )).entity
+            else:
+                entity = await database.entities.create(request, actors["reviewer"])
             existing.append(entity)
         manifest.entities[person.key] = entity.entity_id
         active_entities[person.key] = entity.entity_id
@@ -825,6 +831,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Ada Review's sidebar shows automatic/verified counts beside a zero
             # manual count and her recorded last change (#43).
             "person-last-change": f"/people/{manifest.entities['link-ada']}",
+            # #173: created through PUT /api/v1/entities/{id}; PUT again to replace.
+            "put-replace-person": f"/people/{manifest.entities['put-replace']}",
             "document-pages-without-annotations": "/documents?" + urlencode({
                 "q": "Příběhy archivářů",
             }),

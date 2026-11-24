@@ -31,7 +31,9 @@ from weaviate.collections.collection.async_ import CollectionAsync
 from people_gator_api.persistence.contracts import (
     CreateResult,
     Database,
+    EntityPutResult,
     EntityRepository,
+    EntityTypeConflictError,
     FaceModelRepository,
     FaceRepository,
     SourceRepository,
@@ -66,6 +68,7 @@ from people_gator_api.schemas.entities import (
     EntityPatchBatchItem,
     EntityPatchRequest,
     EntityResponse,
+    entity_replacement,
 )
 from people_gator_api.schemas.enums import SourceKind, EntityLinkState
 from people_gator_api.schemas.entity_links import EntityLinkStats
@@ -868,8 +871,12 @@ class WeaviateEntityRepository(EntityRepository):
     async def create(
         self, payload: EntityCreateRequest, context: GenericActor
     ) -> EntityResponse:
+        return await self._insert(new_uuid6(), payload, context)
+
+    async def _insert(
+        self, i: uuid.UUID, payload: EntityCreateRequest, context: GenericActor
+    ) -> EntityResponse:
         await _require(self._client, USER_COLLECTION, context.user_id, "user")
-        i = new_uuid6()
         p = _props(payload)
         p["aliases"] = p.get("aliases") or []
         await self._client.collections.get(ENTITY_COLLECTION).data.insert(
@@ -903,6 +910,23 @@ class WeaviateEntityRepository(EntityRepository):
         if p.get("aliases") == []:
             p["aliases"] = None
         return old.model_copy(update=p)
+
+    async def put(
+        self, entity_id: uuid.UUID, payload: EntityCreateRequest, context: GenericActor
+    ) -> EntityPutResult:
+        # Weaviate has no transactions: unlike PostgreSQL, two simultaneous
+        # PUTs for a new ID may both try to insert, and one then fails.
+        old = await self.get(entity_id)
+        if old is None:
+            return EntityPutResult(await self._insert(entity_id, payload, context), created=True)
+        if old.entity_type != payload.entity_type:
+            raise EntityTypeConflictError(
+                f"entity_type cannot change from {old.entity_type.value} to {payload.entity_type.value}"
+            )
+        entity = await self.patch(entity_id, entity_replacement(payload), context)
+        if entity is None:
+            raise ValueError("entity was deleted during replacement")
+        return EntityPutResult(entity, created=False)
 
     async def patch_batch(
         self, commands: Sequence[EntityPatchBatchItem], context: GenericActor

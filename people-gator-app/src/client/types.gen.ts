@@ -4625,6 +4625,44 @@ export type PatchEntityRouteApiV1EntitiesEntityIdPatchResponses = {
 
 export type PatchEntityRouteApiV1EntitiesEntityIdPatchResponse = PatchEntityRouteApiV1EntitiesEntityIdPatchResponses[keyof PatchEntityRouteApiV1EntitiesEntityIdPatchResponses];
 
+export type PutEntityRouteApiV1EntitiesEntityIdPutData = {
+    body: EntityCreateRequest;
+    path: {
+        /**
+         * Entity Id
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/entities/{entity_id}';
+};
+
+export type PutEntityRouteApiV1EntitiesEntityIdPutErrors = {
+    /**
+     * The request changes entity_type.
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutEntityRouteApiV1EntitiesEntityIdPutError = PutEntityRouteApiV1EntitiesEntityIdPutErrors[keyof PutEntityRouteApiV1EntitiesEntityIdPutErrors];
+
+export type PutEntityRouteApiV1EntitiesEntityIdPutResponses = {
+    /**
+     * The existing entity was replaced.
+     */
+    200: EntityResponse;
+    /**
+     * The entity was created with this UUID.
+     */
+    201: EntityResponse;
+};
+
+export type PutEntityRouteApiV1EntitiesEntityIdPutResponse = PutEntityRouteApiV1EntitiesEntityIdPutResponses[keyof PutEntityRouteApiV1EntitiesEntityIdPutResponses];
+
 export type PatchEntityBatchRouteApiV1EntitiesBatchPatchData = {
     /**
      * Payload
