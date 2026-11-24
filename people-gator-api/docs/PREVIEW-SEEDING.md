@@ -1645,6 +1645,6 @@ curl -X PUT "$API/api/v1/entities/05d2b89d-c90a-5fab-a617-4ce0d22fef03" \
 The response is `200` for a replacement and `201` when the UUID was free.
 Changing `entity_type` returns `409`.
 
-Reruns first look her up by that UUID and never PUT over an existing record, so
-replacements and other review edits survive. Integration tests check the UUID,
+Reruns find her through the seed manifest, then by name, then by that UUID, and
+never PUT over an existing record, so replacements and other review edits survive. Integration tests check the UUID,
 linked evidence, portrait, a replacement and rerun preservation.
