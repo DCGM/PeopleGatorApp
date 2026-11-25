@@ -6,6 +6,7 @@ import { linkMetadata } from '@/lib/entity-links'
 import type { EntityLinkState, FaceSortField, PageResponse, TextMentionSortField } from '@/client'
 import type {
   PersonIdentifiers,
+  PersonNameDates,
   PersonFace,
   PersonMention,
   PersonProfile,
@@ -197,6 +198,13 @@ export function usePersonDetail(
     wikidataId: entityQuery.data.value?.wikidata_id ?? '',
     nationalLibraryAuthorityId: entityQuery.data.value?.nlcr_authority_id ?? '',
   }))
+  const nameDates = computed<PersonNameDates>(() => ({
+    firstName: entityQuery.data.value?.first_name ?? '',
+    middleNames: entityQuery.data.value?.middle_names ?? '',
+    surname: entityQuery.data.value?.surname ?? '',
+    birthDate: entityQuery.data.value?.birth_date ?? '',
+    deathDate: entityQuery.data.value?.death_date ?? '',
+  }))
 
   const faces = computed<PersonFace[]>(() =>
     faceRecords.value.flatMap((face, faceIndex) => {
@@ -244,6 +252,19 @@ export function usePersonDetail(
     })
   }
 
+  function updateNameDates(next: PersonNameDates) {
+    patchEntity.mutate({
+      entityId: toValue(personId),
+      body: {
+        first_name: next.firstName || null,
+        middle_names: next.middleNames || null,
+        surname: next.surname || null,
+        birth_date: next.birthDate || null,
+        death_date: next.deathDate || null,
+      },
+    })
+  }
+
   function updateIdentifiers(nextIdentifiers: PersonIdentifiers) {
     patchEntity.mutate({
       entityId: toValue(personId),
@@ -279,6 +300,8 @@ export function usePersonDetail(
     faceCount: computed(() => faceQuery.data.value?.pages[0]?.total_count ?? 0),
     faces,
     identifiers,
+    nameDates,
+    updateNameDates,
     isLoading: computed(
       () =>
         entityQuery.isPending.value || faceQuery.isPending.value || mentionQuery.isPending.value,

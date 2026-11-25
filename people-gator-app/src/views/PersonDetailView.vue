@@ -97,6 +97,7 @@ const {
   faceCount,
   faces,
   identifiers,
+  nameDates,
   libraryCount,
   mentionCount,
   mentionFilters,
@@ -105,6 +106,7 @@ const {
   profile,
   processing,
   updateIdentifiers,
+  updateNameDates,
   updateProfile,
 } = usePersonDetail(
   personId,
@@ -527,8 +529,10 @@ function retrySearch() {
             :library-count="libraryCount"
             :wikidata-id="identifiers.wikidataId"
             :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
+            :name-dates="nameDates"
             @update:model-value="updateProfile"
             @update:identifiers="updateIdentifiers"
+            @update:name-dates="updateNameDates"
           >
           </PersonEditableDetails>
         </TabsContent>

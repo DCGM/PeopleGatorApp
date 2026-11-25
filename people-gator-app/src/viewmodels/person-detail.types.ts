@@ -9,6 +9,17 @@ export type PersonProfile = {
   aliases: string[]
 }
 
+/** Structured person fields (#123); an empty string means unknown. */
+export type PersonNameDates = {
+  firstName: string
+  middleNames: string
+  surname: string
+  /** `YYYY-MM-DD` */
+  birthDate: string
+  /** `YYYY-MM-DD` */
+  deathDate: string
+}
+
 export type PersonProcessingInfo = {
   touchedAt: string | null
   userId: string | null
