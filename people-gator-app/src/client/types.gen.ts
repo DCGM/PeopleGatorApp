@@ -240,6 +240,36 @@ export type EntityAnnotation = 'faces' | 'aliases' | 'name';
  */
 export type EntityCreateRequest = {
     /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
      * The type of the entity. Immutable after creation.
      */
     entity_type: EntityType;
@@ -631,12 +661,36 @@ export type EntityListFilter = {
      * Whether the entity has detections.
      */
     has_detections?: boolean;
+    /**
+     * Birth Date From
+     *
+     * Inclusive earliest person birth date; excludes unknown birth dates.
+     */
+    birth_date_from?: string;
+    /**
+     * Birth Date To
+     *
+     * Inclusive latest person birth date; excludes unknown birth dates.
+     */
+    birth_date_to?: string;
+    /**
+     * Death Date From
+     *
+     * Inclusive earliest person death date; excludes unknown death dates.
+     */
+    death_date_from?: string;
+    /**
+     * Death Date To
+     *
+     * Inclusive latest person death date; excludes unknown death dates.
+     */
+    death_date_to?: string;
 };
 
 /**
  * EntityListSortField
  */
-export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityMergeBatchRequest
@@ -644,6 +698,36 @@ export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' |
  * Identify the sources to merge into the entity addressed by the URL.
  */
 export type EntityMergeBatchRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
     /**
      * Description
      *
@@ -694,6 +778,36 @@ export type EntityMergeBatchResponse = {
  */
 export type EntityMergeFromRequest = {
     /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
      * Description
      *
      * New target description; null clears it and omission preserves it.
@@ -742,6 +856,36 @@ export type EntityMergeResponse = {
  * An item representing a single entity patch operation in a batch.
  */
 export type EntityPatchBatchItem = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
     /**
      * Thumbnail Face Id
      *
@@ -798,6 +942,36 @@ export type EntityPatchBatchItem = {
  * Request body for patching an existing entity.
  */
 export type EntityPatchRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
     /**
      * Thumbnail Face Id
      *
@@ -925,6 +1099,36 @@ export type EntityResponse = {
      */
     user_id: string;
     /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: date of birth.
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: date of death.
+     */
+    death_date?: string | null;
+    /**
      * Thumbnail Face Id
      *
      * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
@@ -942,7 +1146,7 @@ export type EntityResponse = {
 /**
  * EntitySortField
  */
-export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityType
@@ -1467,6 +1671,36 @@ export type FoundEntity = {
      * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: date of birth.
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: date of death.
+     */
+    death_date?: string | null;
     /**
      * Thumbnail Face Id
      *
@@ -3388,6 +3622,30 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.has_detections'?: boolean | null;
         /**
+         * Filter.Birth Date From
+         *
+         * Inclusive earliest person birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_from'?: string | null;
+        /**
+         * Filter.Birth Date To
+         *
+         * Inclusive latest person birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_to'?: string | null;
+        /**
+         * Filter.Death Date From
+         *
+         * Inclusive earliest person death date; excludes unknown death dates.
+         */
+        'filter.death_date_from'?: string | null;
+        /**
+         * Filter.Death Date To
+         *
+         * Inclusive latest person death date; excludes unknown death dates.
+         */
+        'filter.death_date_to'?: string | null;
+        /**
          * Filter.Entity Link State
          *
          * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -4650,6 +4908,30 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * Whether the entity has detections.
          */
         'filter.has_detections'?: boolean | null;
+        /**
+         * Filter.Birth Date From
+         *
+         * Inclusive earliest person birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_from'?: string | null;
+        /**
+         * Filter.Birth Date To
+         *
+         * Inclusive latest person birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_to'?: string | null;
+        /**
+         * Filter.Death Date From
+         *
+         * Inclusive earliest person death date; excludes unknown death dates.
+         */
+        'filter.death_date_from'?: string | null;
+        /**
+         * Filter.Death Date To
+         *
+         * Inclusive latest person death date; excludes unknown death dates.
+         */
+        'filter.death_date_to'?: string | null;
         /**
          * Filter.Entity Link State
          *
