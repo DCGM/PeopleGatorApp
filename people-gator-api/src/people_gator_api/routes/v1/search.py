@@ -69,7 +69,7 @@ async def search_entities_get(
         raise_api_error(422, "invalid_search", str(exc))
 
 
-@router.get("/search-people", response_model=SearchPeopleResultListResponse, tags=["people"])
+@router.get("/search-people", response_model=SearchPeopleResultListResponse)
 async def search_people_get(
     database: DatabaseDependency,
     user: BrowseActorDependency,
