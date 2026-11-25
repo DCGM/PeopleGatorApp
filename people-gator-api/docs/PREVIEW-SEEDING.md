@@ -1726,15 +1726,17 @@ so they sort last and fall outside date ranges:
   **Died to** with **Death date** newest first (Zdeněk, Hrubý). Remove a range
   from its tag; both bounds are inclusive and the URL keeps `born_from`,
   `born_to`, `died_from` and `died_to` as `YYYY-MM-DD`.
-- The API exposes the same ranges as `filter.birth_date_from`,
+- The typed person API exposes the same ranges as `filter.birth_date_from`,
   `filter.birth_date_to`, `filter.death_date_from` and `filter.death_date_to`
-  and the sorts as `sort=surname|birth_date|death_date` on `/api/v1/entities`
-  and `/api/v1/search-entities`.
+  and the sorts as `sort=surname|birth_date|death_date` on `/api/v1/people`
+  and `/api/v1/search-people`; `GET /api/v1/people/{entity_id}` returns the
+  names and dates. `/api/v1/entities` returns only the shared entity fields.
 
 Previews seeded before #123 receive Ada's and Emil's values through the
 `person-details-v1/<fixture>` upgrade (`peoplegator_api/preview-seed-upgrades.json`).
 It records each record's last change first and patches only a record unchanged
 since then whose person fields are all still unknown, so review edits and
 cleared values survive and an interrupted run never repeats a write. The four
-new people are created with their values. Integration tests check the orders,
+new people are created with their values through the typed person contract
+(`create_person`/`put_person`; the upgrade uses `patch_person`). Integration tests check the orders,
 ranges, example links, the upgrade, review-edit preservation and checkpoint recovery.
