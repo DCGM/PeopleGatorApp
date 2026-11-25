@@ -319,3 +319,29 @@ preferences persist for the browser tab; resized widths remain local to the
 mounted view. `npm run test:document-widths` remains a compatibility entry point
 for the same maintained browser checks and accepts `DOCUMENT_WIDTHS_ORIGIN`
 and `DOCUMENT_WIDTHS_EVIDENCE` (default origin port 5193).
+
+### Document creation columns (#128)
+
+`people-gator-app/scripts/check-document-creation.mjs` exercises the real seeded
+`preview-creation` scenario at 1440 × 900 and 390 × 844 CSS pixels. It checks
+hidden defaults, column add/move/remove and tab-session reload persistence,
+creator/API-key labels, local dates and Unknown legacy values. Mobile captures
+scroll the table horizontally to show each new column. See the
+[evidence and reproduction command](evidence/issue128/README.md).
+
+### Shared creation filtering (#128)
+
+`tests/services/persistence/test_creation_filters.py` verifies creator users/API
+keys and inclusive creation bounds for documents, pages, images, generic sources,
+entities, faces and text mentions. It checks each record's own creation after
+later edits, source/annotation independence, null legacy history, cursor query
+binding, searches, grouped mentions, HTTP/OpenAPI validation, and explicit
+unsupported-adapter rejection. Preview tests verify the linked examples and
+preserve their identities, media and edits on rerun.
+
+`people-gator-app/scripts/check-creation-filters.mjs` uses the running seeded
+application to exercise Documents, People and person Faces/Mentions at desktop
+1440 × 900 and mobile 390 × 844. It
+checks creator/date controls, URL restoration and backend query parameters,
+multi-select changes, individual removal, date/time editing and evidence reset.
+See [screenshots and reproduction](evidence/issue128/creation-filters/README.md).

@@ -117,7 +117,7 @@ describe('people filter controls and URL restoration', () => {
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Modified by"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Modified via key"]').exists()).toBe(true)
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
@@ -153,7 +153,7 @@ describe('people filter controls and URL restoration', () => {
       touched_by: id('user', 1),
       api_key: id('api-key', 1),
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.text()).toContain('Document: document One')
     expect(wrapper.text()).toContain('Modified by: user One')
     expect(wrapper.text()).toContain('Modified via key: api-key One')
@@ -304,7 +304,7 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-03T12:00:00Z',
       touched_to: '2026-01-01T12:00:00Z',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
     wrapper.unmount()
   })
@@ -338,6 +338,41 @@ describe('people filter controls and URL restoration', () => {
     ).toHaveLength(0)
     expect(wrapper.text()).not.toContain('Origin ·')
     expect(wrapper.text()).not.toContain('Return to originating view')
+    wrapper.unmount()
+  })
+})
+
+describe('shared creation filters', () => {
+  it('restores creators/dates and removes them individually or together without clearing search', async () => {
+    const { wrapper, router } = await mountedView({
+      q: 'Ada',
+      created_by: [id('user', 1), id('user', 2)],
+      created_key: id('api-key', 1),
+      created_from: '2026-01-01T12:00:00.123456Z',
+      created_to: '2026-02-01T12:00:00Z',
+      cursor: 'old',
+    })
+    expect(wrapper.get('button[aria-label="Created by"]').text()).toContain('Created by')
+    expect(wrapper.get('button[aria-label="Created via key"]').text()).toContain('Created via key')
+    expect(wrapper.text()).toContain('Created by: user One')
+    expect(wrapper.text()).toContain('Created via key: api-key One')
+    await wrapper.get('button[aria-label="Remove Created by: user One"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.created_by).toEqual([id('user', 2)])
+    expect(router.currentRoute.value.query.cursor).toBeUndefined()
+    expect(router.currentRoute.value.query.created_from).toBe('2026-01-01T12:00:00.123456Z')
+    const removeDate = wrapper
+      .findAll('button')
+      .find((button) => button.attributes('aria-label')?.startsWith('Remove Created from:'))!
+    await removeDate.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.created_from).toBeUndefined()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
     wrapper.unmount()
   })
 })

@@ -27,12 +27,16 @@ const route = useRoute(),
 const { filters, error } = useSharedFilters()
 const users = useActorLabels('user', () => filters.value.userIds),
   keys = useActorLabels('api-key', () => filters.value.apiKeyIds)
+const creators = useActorLabels('user', () => filters.value.creatorIds),
+  creationKeys = useActorLabels('api-key', () => filters.value.creationApiKeyIds)
 const documents = useSourceLabels('document', () => filters.value.documentIds)
 const pages = useSourceLabels('page', () => filters.value.pageIds)
 const prefixes: [keyof SharedFilters, string][] = [
   ['libraries', 'Library'],
   ['documentIds', 'Document'],
   ['pageIds', 'Page'],
+  ['creatorIds', 'Created by'],
+  ['creationApiKeyIds', 'Created via key'],
   ['userIds', 'Modified by'],
   ['apiKeyIds', 'Modified via key'],
 ]
@@ -41,6 +45,8 @@ const tags = computed<ActiveFilter[]>(() => {
   const labels: Partial<Record<keyof SharedFilters, Record<string, string>>> = {
     documentIds: { ...documents.labels.value, ...props.documentLabels },
     pageIds: pages.labels.value,
+    creatorIds: creators.labels.value,
+    creationApiKeyIds: creationKeys.labels.value,
     userIds: users.labels.value,
     apiKeyIds: keys.labels.value,
   }
@@ -57,13 +63,20 @@ const tags = computed<ActiveFilter[]>(() => {
       value,
       label: `Link state: ${linkStateVisuals[value].label}`,
     })),
-    ...(['touchedFrom', 'touchedTo'] as const).flatMap((key) =>
+    ...(
+      [
+        ['createdFrom', 'Created from'],
+        ['createdTo', 'Created to'],
+        ['touchedFrom', 'Modified from'],
+        ['touchedTo', 'Modified to'],
+      ] as const
+    ).flatMap(([key, label]) =>
       f[key]
         ? [
             {
               key,
               value: f[key],
-              label: `Modified ${key === 'touchedFrom' ? 'from' : 'to'}: ${f[key].replace('T', ' ')}`,
+              label: `${label}: ${f[key].replace('T', ' ')}`,
             },
           ]
         : [],

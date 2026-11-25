@@ -112,7 +112,7 @@ from .sorting import (
     sort_ranked,
     text_keys,
 )
-from .touch import touch_entities, touch_sources, source_touch_ids, lock_annotation_graph
+from .touch import creation_values, touch_entities, touch_sources, source_touch_ids, lock_annotation_graph
 from people_gator_api.schemas.common import GenericActor
 
 class PostgresSourceRepository(SourceRepository):
@@ -204,6 +204,7 @@ class PostgresSourceRepository(SourceRepository):
                 "page_number": lambda desc: [SortKey(page.page_number, "number", desc)],
                 "page_id": lambda desc: [SortKey(page.page_id, "uuid", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+                "created_at": lambda desc: [SortKey(Source.created_at, "datetime", desc)],
             }
         elif model is Document:
             # Unknown names compare as empty strings: first ascending, last
@@ -233,6 +234,7 @@ class PostgresSourceRepository(SourceRepository):
                     SortKey(document_verified_page_count(), "number", desc),
                 ],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+                "created_at": lambda desc: [SortKey(Source.created_at, "datetime", desc)],
             }
         if counts is not None:
             builders.update({
@@ -300,8 +302,8 @@ class PostgresSourceRepository(SourceRepository):
         )
 
     @staticmethod
-    def _new(spec: GenericSourceCreateRequest) -> Source:
-        common = {"url": str(spec.url)}
+    def _new(spec: GenericSourceCreateRequest, context: GenericActor) -> Source:
+        common = {"url": str(spec.url), **creation_values(context)}
         if spec.source_type == SourceKind.page:
             assert isinstance(spec.library, str)
             assert isinstance(spec.document_id, uuid.UUID)
@@ -330,13 +332,13 @@ class PostgresSourceRepository(SourceRepository):
         )
 
     async def get_or_create(
-        self, spec: GenericSourceCreateRequest
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor
     ) -> tuple[GenericSourceResponse, CreateResult]:
-        [result] = await self.get_or_create_batch([spec])
+        [result] = await self.get_or_create_batch([spec], context=context)
         return result
 
     async def _existing_or_created(
-        self, spec: GenericSourceCreateRequest
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor, legacy: bool = False
     ) -> tuple[Source, CreateResult]:
         """Retain rows until the complete batch is ready for projection."""
         key = str(spec.url)
@@ -364,15 +366,26 @@ class PostgresSourceRepository(SourceRepository):
             return by_url, CreateResult.EXISTING
         if by_url is not None:
             raise ValueError("source URL is already registered with another identity")
-        source = self._new(spec)
+        source = self._new(spec, context)
+        if legacy:
+            source.created_at = None
+            source.created_by_user_id = None
+            source.created_by_api_key_id = None
         self._session.add(source)
         await commit(self._session, "source create violates a persistence constraint")
         return source, CreateResult.CREATED
 
+    async def restore_legacy_source(
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor,
+    ) -> tuple[GenericSourceResponse, CreateResult]:
+        source, result = await self._existing_or_created(spec, context=context, legacy=True)
+        await load_link_stats(self._session, [source])
+        return source_response(source), result
+
     async def get_or_create_batch(
-        self, specs: Sequence[GenericSourceCreateRequest]
+        self, specs: Sequence[GenericSourceCreateRequest], *, context: GenericActor
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
-        outcomes = [await self._existing_or_created(spec) for spec in specs]
+        outcomes = [await self._existing_or_created(spec, context=context) for spec in specs]
         # Project every result after all inserts, including existing sources:
         # their document totals may have changed during this batch too.
         await load_link_stats(self._session, [item for item, _ in outcomes])

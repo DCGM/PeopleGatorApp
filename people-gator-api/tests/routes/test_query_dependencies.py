@@ -104,6 +104,7 @@ LIST_FILTERS["/documents"].add("min_linked_entity_count")
 # Every source, annotation and entity list shares one canonical scope and
 # latest-modification vocabulary (#52).
 SHARED_FILTERS = {
+    "created_from", "created_to", "created_by_user_id", "created_by_api_key_id",
     "library", "document_source_id", "page_source_id", "last_touched_from",
     "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id",
 }
@@ -175,10 +176,10 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
 @pytest.mark.parametrize(("path", "values"), [
     ("/entities", ["name", "entity_id", "last_touched_at", "created_at"]),
     ("/search-entities", ["relevance", "name", "entity_id", "last_touched_at", "created_at"]),
-    ("/documents", ["name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at"]),
-    ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at"]),
-    ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at"]),
-    ("/search-pages", ["page_number", "relevance", "library", "document_id", "page_id", "last_touched_at"]),
+    ("/documents", ["name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
+    ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
+    ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at", "created_at"]),
+    ("/search-pages", ["page_number", "relevance", "library", "document_id", "page_id", "last_touched_at", "created_at"]),
     ("/faces", ["detection_id", "last_touched_at", "link_state", "confidence", "source", "person"]),
     ("/search-faces", ["relevance", "detection_id", "last_touched_at", "link_state", "confidence", "source", "person"]),
     ("/text-mentions", ["text", "mention_id", "last_touched_at", "link_state", "source", "person"]),

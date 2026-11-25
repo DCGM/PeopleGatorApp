@@ -611,7 +611,7 @@ class SourceRepository(ABC):
 
     @abstractmethod
     async def get_or_create(
-        self, spec: GenericSourceCreateRequest
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor
     ) -> tuple[GenericSourceResponse, CreateResult]:
         """
         Retrieve an existing generic source matching the specification or create a new one if it doesn't exist.
@@ -623,8 +623,19 @@ class SourceRepository(ABC):
         :rtype: tuple[GenericSourceResponse, CreateResult]
         """
 
+    async def restore_legacy_source(
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor,
+    ) -> tuple[GenericSourceResponse, CreateResult]:
+        """Restore a historical source whose creation is unknown.
+
+        Internal import/fixture operation, never exposed by registration routes.
+        Requires the restoring actor but does not attribute historical creation to
+        them. Existing sources and all their metadata remain unchanged.
+        """
+        raise NotImplementedError("Legacy source restoration requires PostgreSQL")
+
     async def get_or_create_page(
-        self, spec: PageCreateRequest
+        self, spec: PageCreateRequest, *, context: GenericActor
     ) -> tuple[PageResponse, CreateResult]:
         """
         Retrieve an existing page matching the specification or create a new one if it doesn't exist.
@@ -635,11 +646,11 @@ class SourceRepository(ABC):
         :return: A tuple containing the response for the page and a flag indicating if it was created.
         :rtype: tuple[PageResponse, CreateResult]
         """
-        generic_response, created = await self.get_or_create(spec.to_generic())
+        generic_response, created = await self.get_or_create(spec.to_generic(), context=context)
         return PageResponse.from_generic(generic_response), created
 
     async def get_or_create_document(
-        self, spec: DocumentCreateRequest
+        self, spec: DocumentCreateRequest, *, context: GenericActor
     ) -> tuple[DocumentResponse, CreateResult]:
         """
         Retrieve an existing document matching the specification or create a new one if it doesn't exist.
@@ -650,11 +661,11 @@ class SourceRepository(ABC):
         :return: A tuple containing the response for the document and a flag indicating if it was created.
         :rtype: tuple[DocumentResponse, CreateResult]
         """
-        generic_response, created = await self.get_or_create(spec.to_generic())
+        generic_response, created = await self.get_or_create(spec.to_generic(), context=context)
         return DocumentResponse.from_generic(generic_response), created
 
     async def get_or_create_image(
-        self, spec: ImageCreateRequest
+        self, spec: ImageCreateRequest, *, context: GenericActor
     ) -> tuple[ImageResponse, CreateResult]:
         """
         Retrieve an existing image matching the specification or create a new one if it doesn't exist.
@@ -665,15 +676,18 @@ class SourceRepository(ABC):
         :return: A tuple containing the response for the image and a flag indicating if it was created.
         :rtype: tuple[ImageResponse, CreateResult]
         """
-        generic_response, created = await self.get_or_create(spec.to_generic())
+        generic_response, created = await self.get_or_create(spec.to_generic(), context=context)
         return ImageResponse.from_generic(generic_response), created
 
     @abstractmethod
     async def get_or_create_batch(
-        self, specs: Sequence[GenericSourceCreateRequest]
+        self, specs: Sequence[GenericSourceCreateRequest], *, context: GenericActor
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
         """
         Retrieve existing generic sources matching the specifications or create new ones if they don't exist.
+
+        Creation records the actor and server time only for newly inserted sources.
+        Existing creation metadata is immutable, including unknown legacy values.
 
         Only unique new items are inserted into the repository.
         Repeated input identities are returned from the repository. The first new occurrence is CREATED and later occurrences are EXISTING.
@@ -690,6 +704,7 @@ class SourceRepository(ABC):
         self,
         specs: Sequence[TI],
         cls: type[TO],
+        *, context: GenericActor,
     ) -> list[tuple[TO, CreateResult]]:
         """
         Internal helper method to retrieve existing sources matching the specifications or create new ones if they don't exist.
@@ -705,7 +720,7 @@ class SourceRepository(ABC):
         """
 
         generic_specs = [spec.to_generic() for spec in specs]
-        generic_results = await self.get_or_create_batch(generic_specs)
+        generic_results = await self.get_or_create_batch(generic_specs, context=context)
         results = [
             (cls.from_generic(response), created)
             for response, created in generic_results
@@ -713,7 +728,7 @@ class SourceRepository(ABC):
         return results
 
     async def get_or_create_image_batch(
-        self, specs: Sequence[ImageCreateRequest]
+        self, specs: Sequence[ImageCreateRequest], *, context: GenericActor
     ) -> list[tuple[ImageResponse, CreateResult]]:
         """
         Retrieve existing images matching the specifications or create new ones if they don't exist.
@@ -727,10 +742,11 @@ class SourceRepository(ABC):
         return await self._get_or_create_batch(
             specs=specs,
             cls=ImageResponse,
+            context=context,
         )
 
     async def get_or_create_document_batch(
-        self, specs: Sequence[DocumentCreateRequest]
+        self, specs: Sequence[DocumentCreateRequest], *, context: GenericActor
     ) -> list[tuple[DocumentResponse, CreateResult]]:
         """
         Retrieve existing documents matching the specifications or create new ones if they don't exist.
@@ -744,6 +760,7 @@ class SourceRepository(ABC):
         return await self._get_or_create_batch(
             specs=specs,
             cls=DocumentResponse,
+            context=context,
         )
 
     async def patch_page(
@@ -759,12 +776,13 @@ class SourceRepository(ABC):
         raise NotImplementedError
 
     async def get_or_create_page_batch(
-        self, specs: Sequence[PageCreateRequest]
+        self, specs: Sequence[PageCreateRequest], *, context: GenericActor
     ) -> list[tuple[PageResponse, CreateResult]]:
         """Get or create pages, preserving input order."""
         return await self._get_or_create_batch(
             specs=specs,
             cls=PageResponse,
+            context=context,
         )
 
     @abstractmethod

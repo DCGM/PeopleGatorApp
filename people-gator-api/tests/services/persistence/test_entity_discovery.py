@@ -51,7 +51,8 @@ async def discovery(migrated_postgres):
                 library="synthetic",
                 document_id=uuid.uuid4(),
                 page_id=uuid.uuid4(),
-            )
+            ),
+            context=actor,
         )
         reference, candidate, empty = await db.entities.create_batch(
             [

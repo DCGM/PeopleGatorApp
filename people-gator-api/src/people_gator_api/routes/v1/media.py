@@ -147,8 +147,7 @@ async def create_document_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> DocumentResponse:
-    del user
-    document, result = await database.sources.get_or_create_document(payload)
+    document, result = await database.sources.get_or_create_document(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Document already registered")
     return document
@@ -165,10 +164,9 @@ async def create_document_batch_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> list[DocumentResponse]:
-    del user
     return [
         response
-        for response, _ in await database.sources.get_or_create_document_batch(payload)
+        for response, _ in await database.sources.get_or_create_document_batch(payload, context=user)
     ]
 
 
@@ -266,8 +264,7 @@ async def create_page_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> PageResponse:
-    del user
-    page, result = await database.sources.get_or_create_page(payload)
+    page, result = await database.sources.get_or_create_page(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Page already registered")
     return page
@@ -284,10 +281,9 @@ async def create_page_batch_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> list[PageResponse]:
-    del user
     return [
         response
-        for response, _ in await database.sources.get_or_create_page_batch(payload)
+        for response, _ in await database.sources.get_or_create_page_batch(payload, context=user)
     ]
 
 
@@ -521,8 +517,7 @@ async def create_image_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> ImageResponse:
-    del user
-    image, result = await database.sources.get_or_create_image(payload)
+    image, result = await database.sources.get_or_create_image(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Image already registered")
     return image
@@ -539,10 +534,9 @@ async def create_image_batch_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> list[ImageResponse]:
-    del user
     return [
         response
-        for response, _ in await database.sources.get_or_create_image_batch(payload)
+        for response, _ in await database.sources.get_or_create_image_batch(payload, context=user)
     ]
 
 

@@ -1,9 +1,12 @@
+from datetime import timezone
 from enum import StrEnum
 from typing import Self
 import uuid
 
 import numpy as np
 from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, field_validator, model_validator
+
+from .missing import MISSING, MissingType, is_missing
 
 
 class ErrorResponse(BaseModel):
@@ -32,6 +35,64 @@ class GenericActor(BaseModel):
     """A generic actor with an ID and optional name."""
 
     user_id: uuid.UUID
+
+
+class CreationMetadata(BaseModel):
+    """Recorded server creation time and actor, independent of later edits."""
+
+    created_at: AwareDatetime | None = None
+    created_by_user_id: uuid.UUID | None = None
+    created_by_api_key_id: uuid.UUID | None = None
+
+
+class TouchMetadata(BaseModel):
+    """Latest recorded modification and actor; legacy history may be unknown."""
+
+    last_touched_at: AwareDatetime | None = None
+    last_touched_by_user_id: uuid.UUID | None = None
+    last_touched_by_api_key_id: uuid.UUID | None = None
+
+
+CREATION_FILTER_FIELDS = (
+    "created_from", "created_to", "created_by_user_id", "created_by_api_key_id",
+)
+
+
+class CreationFilter(BaseModel):
+    """Filter the returned record's own creation, independently of later edits."""
+
+    created_from: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.",
+    )
+    created_to: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.",
+    )
+    created_by_user_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Users who created this record, not its source or latest editor; repeated users combine with OR.",
+    )
+    created_by_api_key_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="API keys used to create this record; unknown creation and user-only registrations do not match.",
+    )
+
+    @model_validator(mode="after")
+    def validate_creation_range(self):
+        for name in ("created_from", "created_to"):
+            value = getattr(self, name)
+            if not is_missing(value):
+                setattr(self, name, value.astimezone(timezone.utc))
+        if (not is_missing(self.created_from) and not is_missing(self.created_to)
+                and self.created_from > self.created_to):
+            raise ValueError("created_from must be before or equal to created_to")
+        return self
+
+    @field_validator("created_by_user_id", "created_by_api_key_id")
+    @classmethod
+    def normalize_creators(cls, value):
+        if is_missing(value):
+            return value
+        if not value:
+            raise ValueError("Creator selections must be nonempty")
+        return sorted(set(value))
 
 
 class GenericListRequest(BaseModel):
@@ -171,6 +232,10 @@ __all__ = [
     "ErrorResponse",
     "FileUploadResponse",
     "GenericActor",
+    "CreationMetadata",
+    "CreationFilter",
+    "CREATION_FILTER_FIELDS",
+    "TouchMetadata",
     "GenericListRequest",
     "GenericListResponse",
     "ListFilterBase",

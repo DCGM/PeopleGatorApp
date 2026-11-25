@@ -185,7 +185,11 @@ def _ref(obj: _StoredObject, name: str, required: bool = False) -> uuid.UUID | N
     return result
 
 
+_CREATION_ONLY_POSTGRES = ("created_from", "created_to", "created_by_user_id", "created_by_api_key_id")
+
+
 _ANNOTATION_ONLY_POSTGRES = (
+    *_CREATION_ONLY_POSTGRES,
     "library", "document_source_id", "page_source_id", "last_touched_from",
     "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id",
 )
@@ -196,7 +200,7 @@ def _require_postgres_for(f, fields):
     if f is not None and not is_missing(f) and any(
         not is_missing(getattr(f, field)) for field in fields
     ):
-        raise NotImplementedError("Shared source scope and modification filters require PostgreSQL")
+        raise NotImplementedError("Creation, source scope and modification filters require PostgreSQL")
 
 
 def _props(
@@ -844,7 +848,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.entity_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.entity_id))
-        _require_postgres_for(query.filter_, ("library", "page_source_id"))
+        _require_postgres_for(query.filter_, ("library", "page_source_id", *_CREATION_ONLY_POSTGRES))
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1135,7 +1139,7 @@ class WeaviateSourceRepository(SourceRepository):
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
         _require_default_sort(query)
         if not is_missing(query.filter_) and any(not is_missing(getattr(query.filter_, name)) for name in (
-            "last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id", "has_unassigned_faces",
+            *_CREATION_ONLY_POSTGRES, "last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id", "has_unassigned_faces",
             *(f"max_{field}" for field in DOCUMENT_RANGE_FIELDS), "min_linked_entity_count",
         ) if hasattr(query.filter_, name)):
             raise NotImplementedError("Source processing filters require PostgreSQL")
@@ -1175,8 +1179,9 @@ class WeaviateSourceRepository(SourceRepository):
         )
 
     async def get_or_create(
-        self, spec: GenericSourceCreateRequest
+        self, spec: GenericSourceCreateRequest, *, context: GenericActor
     ) -> tuple[GenericSourceResponse, CreateResult]:
+        # Legacy adapter omits creation attribution, as with modification metadata.
         i, p = _source_data(spec)
         o = await _get(self._client, SOURCE_COLLECTION, i)
         if o:
@@ -1202,9 +1207,9 @@ class WeaviateSourceRepository(SourceRepository):
         )
 
     async def get_or_create_batch(
-        self, specs: Sequence[GenericSourceCreateRequest]
+        self, specs: Sequence[GenericSourceCreateRequest], *, context: GenericActor
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
-        return [await self.get_or_create(x) for x in specs]
+        return [await self.get_or_create(x, context=context) for x in specs]
 
     async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, SOURCE_COLLECTION, source_id):
@@ -1697,7 +1702,7 @@ async def _basic_search[F: FoundItemBase](
         filters = WeaviateFaceRepository(client).filters(q.filter_)
     elif n == ENTITY_COLLECTION and q.filter_ is not None:
         f = q.filter_
-        _require_postgres_for(f, ("library", "page_source_id"))
+        _require_postgres_for(f, ("library", "page_source_id", *_CREATION_ONLY_POSTGRES))
         filters = _direct(
             f,
             {

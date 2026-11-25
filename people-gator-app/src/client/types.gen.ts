@@ -120,7 +120,7 @@ export type DocumentLibraryOption = {
 /**
  * DocumentListSortField
  */
-export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
+export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at' | 'created_at';
 
 export type DocumentName = string;
 
@@ -130,15 +130,6 @@ export type DocumentName = string;
  * A document with its archive identity.
  */
 export type DocumentResponse = {
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
     /**
      * Last Touched At
      */
@@ -151,6 +142,35 @@ export type DocumentResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -206,7 +226,7 @@ export type DocumentResponse = {
 /**
  * DocumentSortField
  */
-export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at';
+export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'verified_page_count' | 'verified_page_percentage' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityAnnotation
@@ -485,6 +505,30 @@ export type EntityListFilter = {
      * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
      */
     max_annotations_automatic_count?: MinimumCount;
+    /**
+     * Created From
+     *
+     * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+     */
+    created_from?: string;
+    /**
+     * Created To
+     *
+     * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+     */
+    created_to?: string;
+    /**
+     * Created By User Id
+     *
+     * Users who created this record, not its source or latest editor; repeated users combine with OR.
+     */
+    created_by_user_id?: Array<string>;
+    /**
+     * Created By Api Key Id
+     *
+     * API keys used to create this record; unknown creation and user-only registrations do not match.
+     */
+    created_by_api_key_id?: Array<string>;
     /**
      * Entity Link State
      *
@@ -805,6 +849,18 @@ export type EntityPatchRequest = {
  */
 export type EntityResponse = {
     /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
      * Created At
      */
     created_at?: string | null;
@@ -881,18 +937,6 @@ export type EntityResponse = {
      */
     thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
-    /**
-     * Last Touched At
-     */
-    last_touched_at?: string | null;
-    /**
-     * Last Touched By User Id
-     */
-    last_touched_by_user_id?: string | null;
-    /**
-     * Last Touched By Api Key Id
-     */
-    last_touched_by_api_key_id?: string | null;
 };
 
 /**
@@ -1079,18 +1123,6 @@ export type FacePatchRequest = {
  */
 export type FaceResponse = {
     /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1102,6 +1134,18 @@ export type FaceResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1233,15 +1277,6 @@ export type FoundDocument = {
      */
     score: number;
     /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1253,6 +1288,35 @@ export type FoundDocument = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1327,6 +1391,18 @@ export type FoundEntity = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     /**
      * Created At
      */
@@ -1405,18 +1481,6 @@ export type FoundEntity = {
     thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
     /**
-     * Last Touched At
-     */
-    last_touched_at?: string | null;
-    /**
-     * Last Touched By User Id
-     */
-    last_touched_by_user_id?: string | null;
-    /**
-     * Last Touched By Api Key Id
-     */
-    last_touched_by_api_key_id?: string | null;
-    /**
      * Matched Detection Ids
      *
      * Actual face-similarity witnesses for this result; never an arbitrary portrait.
@@ -1449,18 +1513,6 @@ export type FoundFace = {
      */
     score: number;
     /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1472,6 +1524,18 @@ export type FoundFace = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1566,15 +1630,6 @@ export type FoundPage = {
      */
     score: number;
     /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -1586,6 +1641,35 @@ export type FoundPage = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -2080,15 +2164,6 @@ export type ImageCreateRequest = {
  */
 export type ImageResponse = {
     /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2100,6 +2175,35 @@ export type ImageResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
 };
 
 /**
@@ -2285,7 +2389,7 @@ export type PageLayoutModel = {
 /**
  * PageListSortField
  */
-export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'library' | 'document_id' | 'page_id' | 'last_touched_at' | 'created_at';
 
 export type PageNumber = number;
 
@@ -2309,15 +2413,6 @@ export type PagePatchRequest = {
  */
 export type PageResponse = {
     /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2329,6 +2424,35 @@ export type PageResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -2367,7 +2491,7 @@ export type PageResponse = {
 /**
  * PageSortField
  */
-export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at' | 'created_at';
 
 /**
  * RefreshTokenRequest
@@ -2458,15 +2582,6 @@ export type SourceKind = 'page' | 'document' | 'image';
  */
 export type SourceResponseBase = {
     /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2478,6 +2593,35 @@ export type SourceResponseBase = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Created By User Name
+     */
+    created_by_user_name?: string | null;
+    /**
+     * Created By Api Key Name
+     */
+    created_by_api_key_name?: string | null;
 };
 
 /**
@@ -2674,18 +2818,6 @@ export type TextMentionPatchRequest = {
  */
 export type TextMentionResponse = {
     /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2697,6 +2829,18 @@ export type TextMentionResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -2743,18 +2887,6 @@ export type TextMentionSortField = 'text' | 'mention_id' | 'last_touched_at' | '
  */
 export type TextMentionSpanModel = {
     /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
-    /**
      * Last Touched At
      */
     last_touched_at?: string | null;
@@ -2766,6 +2898,18 @@ export type TextMentionSpanModel = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -3292,6 +3436,30 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -3463,6 +3631,30 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -3755,6 +3947,30 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4132,6 +4348,30 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -4458,6 +4698,30 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4860,6 +5124,30 @@ export type ListFacesRouteApiV1FacesGetData = {
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -5261,6 +5549,30 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -5411,6 +5723,30 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -5731,6 +6067,30 @@ export type ListSourcesRouteApiV1SourcesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -6154,6 +6514,30 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -6562,6 +6946,30 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -6995,6 +7403,30 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
     };
     url: '/api/v1/pages/{page_source_id}/text-mentions-spans';
 };
@@ -7101,6 +7533,30 @@ export type ListImagesRouteApiV1ImagesGetData = {
          * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *

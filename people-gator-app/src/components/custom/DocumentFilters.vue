@@ -27,11 +27,17 @@ const apply = (field: string, lower: string, upper: string) =>
 </script>
 
 <template>
-  <div class="flex w-full min-w-0 flex-col items-stretch gap-2" role="group" aria-label="Filters">
-    <SharedFilterControls :controls="['libraries', 'actors', 'dates']" />
+  <div
+    class="flex w-full min-w-0 flex-row flex-wrap items-start gap-2"
+    role="group"
+    aria-label="Filters"
+  >
+    <SharedFilterControls
+      :controls="['libraries', 'creators', 'creationDates', 'actors', 'dates']"
+    />
     <FilterSingleSelect
       v-model="verification"
-      class="w-full"
+      class="max-w-full flex-none"
       label="Verification"
       :options="verificationOptions"
     />
@@ -42,14 +48,14 @@ const apply = (field: string, lower: string, upper: string) =>
       :states="DOCUMENT_COUNT_STATES"
       :field-for="(state) => `${category.value}_${state}_count`"
       :params="counts.params.value"
-      trigger-class="w-full"
+      trigger-class="max-w-full"
       @apply="apply"
     />
     <CountRangeControl
       label="People"
       :field-for="() => LINKED_PEOPLE_FIELD"
       :params="counts.params.value"
-      trigger-class="w-full"
+      trigger-class="max-w-full"
       @apply="apply"
     />
   </div>

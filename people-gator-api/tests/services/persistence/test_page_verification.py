@@ -36,11 +36,14 @@ async def _actor(db, name):
 
 async def _document(db, library, document=None, pages=0):
     document = document or uuid.uuid4()
-    parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library=library, document_id=document))
+    importer = await _actor(db, "Importer")
+    parent, _ = await db.sources.get_or_create_document(
+        DocumentCreateRequest(library=library, document_id=document), context=importer,
+    )
     created = [
         (await db.sources.get_or_create_page(PageCreateRequest(
             library=library, document_id=document, page_id=uuid.uuid4(), page_number=number,
-        )))[0]
+        ), context=importer))[0]
         for number in range(1, pages + 1)
     ]
     return parent, created

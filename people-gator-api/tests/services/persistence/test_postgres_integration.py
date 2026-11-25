@@ -100,17 +100,20 @@ async def test_postgres_contract_round_trip() -> None:
             document_id = uuid.uuid4()
             page_id = uuid.uuid4()
             document, _ = await database.sources.get_or_create_document(
-                DocumentCreateRequest(library="integration", document_id=document_id)
+                DocumentCreateRequest(library="integration", document_id=document_id),
+                context=user,
             )
             page, _ = await database.sources.get_or_create_page(
                 PageCreateRequest(
                     library="integration",
                     document_id=document_id,
                     page_id=page_id,
-                )
+                ),
+                context=user,
             )
             image, _ = await database.sources.get_or_create_image(
-                ImageCreateRequest(url=AnyUrl(f"https://example.test/{marker}.jpg"))
+                ImageCreateRequest(url=AnyUrl(f"https://example.test/{marker}.jpg")),
+                context=user,
             )
             created_source_ids.extend(
                 [document.source_id, page.source_id, image.source_id]

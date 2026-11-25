@@ -35,6 +35,7 @@ import { verifiedPercentLabel } from '@/lib/verification'
 import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import {
   documentColumnSizing,
+  documentCreator,
   annotationCount,
   annotationColumnId,
   DOCUMENT_ANNOTATION_GROUPS,
@@ -166,6 +167,20 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     ...documentColumnSizing('registered_page_count'),
     header: 'Pages',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
+  },
+  {
+    id: 'created',
+    ...documentColumnSizing('created'),
+    header: 'Created',
+    accessorFn: (d) => d.created_at,
+    cell: ({ getValue }) =>
+      getValue() ? new Date(String(getValue())).toLocaleString() : 'Unknown',
+  },
+  {
+    id: 'created_by',
+    ...documentColumnSizing('created_by'),
+    header: 'Created by',
+    accessorFn: documentCreator,
   },
   {
     id: 'last_modified',
