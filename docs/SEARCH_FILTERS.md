@@ -576,3 +576,24 @@ to the viewer while preserving selected-person, person-only and gallery sort
 settings. Compact and expanded modes use the same document-scoped query,
 face-or-mention predicate, page totals, orange highlights and automatic
 pagination described above; expansion adds no new filters or counters.
+
+## People: names and life dates (#123)
+
+Person entities store optional `first_name`, `middle_names`, `surname`,
+`birth_date` and `death_date` (full `YYYY-MM-DD` dates only; no partial or
+approximate dates). Entity list and search accept inclusive
+`filter.birth_date_from`, `filter.birth_date_to`, `filter.death_date_from` and
+`filter.death_date_to`. A range never matches an unknown date, combines with
+other filters using AND, and a reversed or invalid range returns 422.
+
+`sort=surname` orders by surname, first name and then middle names, comparing
+all three case- and accent-insensitively before their exact text;
+`sort=birth_date` and `sort=death_date` compare chronologically and default to
+ascending. Unknown values sort last in both directions and the entity UUID
+breaks ties. `sort=name` keeps ordering by the display name.
+
+People shows the ranges as **Born from**, **Born to**, **Died from** and **Died
+to** date-only pickers (URL `born_from`, `born_to`, `died_from`, `died_to`, as
+`YYYY-MM-DD`, never converted to UTC times), with removable tags, and offers
+**Surname**, **Birth date** and **Death date** sorts. Weaviate stores the fields
+but rejects the date filters and these sorts.
