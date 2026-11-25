@@ -4355,7 +4355,7 @@ async def test_people_count_ranges_order_and_person_wide_scope(seed_target):
             await db.entities.list(EntityListRequest(limit=limit, sort='annotations_total_count',
                 filter_=EntityListFilter(entity_id=ids, max_faces_total_count=100)))
             sizes.append(len(statements))
-        assert sizes[0] == sizes[1] == 4  # results, aliases, grouped face/mention stats
+        assert sizes[0] == sizes[1] == 5  # results, person fields, aliases, grouped face/mention stats
     finally:
         event.remove(seed_target[2].sync_engine, 'before_cursor_execute', record_statement)
     # Incompatible count bounds cannot reuse a cursor; exact-zero is a real bound.

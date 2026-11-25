@@ -17,7 +17,7 @@ from people_gator_api.persistence.weaviate import (
     weaviate_database,
 )
 from people_gator_api.schemas.common import GenericActor
-from people_gator_api.schemas.entities import EntityCreateRequest, EntityListRequest
+from people_gator_api.schemas.entities import EntityCreateRequest, EntityListRequest, EntityPatchRequest
 from people_gator_api.schemas.enums import EntityType, SourceKind
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.mentions import (
@@ -145,8 +145,35 @@ async def test_put_replaces_every_field_and_clears_omitted_ones() -> None:
         "short_description": None,
         "wikidata_id": None,
         "nlcr_authority_id": None,
+        "first_name": None,
+        "middle_names": None,
+        "surname": None,
+        "birth_date": None,
+        "death_date": None,
     }]
     collection.data.insert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_person_fields_round_trip_and_validate_stored_dates() -> None:
+    from people_gator_api.persistence.contracts import InvalidPersonFieldsError
+    collection = _collection()
+    stored = _stored(
+        {"name": "Ada", "entity_type": "person", "birth_date": "1890-03-01", "surname": "Novak"},
+        user=uuid.uuid4(),
+    )
+    collection.query.fetch_object_by_id.return_value = stored
+    sent: list[dict] = []
+    collection.data.update.side_effect = lambda **kwargs: sent.append(dict(kwargs["properties"]))
+    repository = WeaviateEntityRepository(_client(collection))
+    with pytest.raises(InvalidPersonFieldsError):
+        await repository.patch(stored.uuid, EntityPatchRequest(death_date="1800-01-01"), GenericActor(user_id=uuid.uuid4()))
+    assert sent == []
+    result = await repository.patch(stored.uuid, EntityPatchRequest(death_date="1962-05-04"), GenericActor(user_id=uuid.uuid4()))
+    assert sent == [{"death_date": "1962-05-04"}]
+    assert (result.surname, str(result.birth_date), str(result.death_date)) == ("Novak", "1890-03-01", "1962-05-04")
+    with pytest.raises(NotImplementedError, match="date filters require PostgreSQL"):
+        await repository.list(EntityListRequest(limit=1, filter_={"birth_date_from": "1890-01-01"}))
 
 
 @pytest.mark.asyncio

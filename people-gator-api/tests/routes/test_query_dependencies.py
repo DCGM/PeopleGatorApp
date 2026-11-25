@@ -41,6 +41,7 @@ LIST_FILTERS = {
         "mention_id",
         "has_mentions",
         "has_detections",
+        "birth_date_from", "birth_date_to", "death_date_from", "death_date_to",
         *(f"{bound}_{field}" for field in ENTITY_COUNT_FIELDS for bound in ("min", "max")),
         "last_touched_from", "last_touched_to", "document_source_id",
         "last_touched_by_user_id", "last_touched_by_api_key_id",
@@ -174,8 +175,8 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
 
 
 @pytest.mark.parametrize(("path", "values"), [
-    ("/entities", ["name", "entity_id", "last_touched_at", "created_at"]),
-    ("/search-entities", ["relevance", "name", "entity_id", "last_touched_at", "created_at"]),
+    ("/entities", ["name", "surname", "birth_date", "death_date", "entity_id", "last_touched_at", "created_at"]),
+    ("/search-entities", ["relevance", "name", "surname", "birth_date", "death_date", "entity_id", "last_touched_at", "created_at"]),
     ("/documents", ["name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
     ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
     ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at", "created_at"]),

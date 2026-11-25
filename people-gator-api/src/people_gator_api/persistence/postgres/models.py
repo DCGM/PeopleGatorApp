@@ -8,7 +8,7 @@ indexes for each registered face model.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import date, datetime
 import uuid
 from typing import Any
 
@@ -18,6 +18,7 @@ from sqlalchemy import (
     DDL,
     CheckConstraint,
     Computed,
+    Date,
     DateTime,
     Float,
     Enum,
@@ -27,6 +28,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    case,
     cast,
     event,
 )
@@ -206,6 +208,50 @@ class Entity(RecordedCreation, RecordedTouch, Base):
     image_occurrences: Mapped[list[ImageOccurrence]] = relationship(
         back_populates="entity"
     )
+
+    # Entity is the shared identity base; the API creates only subtypes. Rows
+    # of historical kinds without a subtype still load as the base, read-only.
+    # Writers set ``kind`` explicitly because the discriminator is an expression.
+    __mapper_args__ = {  # noqa: RUF012
+        "polymorphic_on": case((kind == "person", "person"), else_="entity"),
+        "polymorphic_identity": "entity",
+    }
+
+
+class Person(Entity):
+    """A person identity with optional structured names and life dates.
+
+    Subtype columns load in a separate IN query, so locking statements on the
+    entity table never outer-join this table.
+    """
+
+    __tablename__ = TABLE_NAME_FORMAT.format("persons")
+    __table_args__ = (
+        CheckConstraint(
+            "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date",
+            name="ck_pg_demo_persons_life_dates",
+        ),
+        Index(INDEX_NAME_FORMAT.format("persons_birth_date"), "birth_date"),
+        Index(INDEX_NAME_FORMAT.format("persons_death_date"), "death_date"),
+    )
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("entities.id"), ondelete="CASCADE"),
+        primary_key=True,
+    )
+    first_name: Mapped[str | None] = mapped_column(Text)
+    middle_names: Mapped[str | None] = mapped_column(Text)
+    surname: Mapped[str | None] = mapped_column(Text)
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    death_date: Mapped[date | None] = mapped_column(Date)
+
+    __mapper_args__ = {  # noqa: RUF012
+        "polymorphic_identity": "person",
+        "polymorphic_load": "selectin",
+    }
+
+
+PERSON_FIELDS = ("first_name", "middle_names", "surname", "birth_date", "death_date")
 
 
 class Alias(Base):

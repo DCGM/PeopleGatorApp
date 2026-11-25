@@ -88,6 +88,7 @@ from people_gator_api.schemas.mentions import (
 )
 from people_gator_api.schemas.missing import (
     MissingType,
+    is_missing,
     missing_to_none,
 )
 from people_gator_api.schemas.search import (
@@ -111,6 +112,8 @@ from people_gator_api.persistence.postgres.models import (
     FaceModel,
     ImageOccurrence,
     Page,
+    PERSON_FIELDS,
+    Person,
     Source,
     TextMention,
     User,
@@ -673,6 +676,7 @@ def entity_response(entity: Entity) -> EntityResponse:
         aliases=[alias.name for alias in entity.aliases],
         wikidata_id=entity.wikidata_id,
         nlcr_authority_id=entity.nlcr_authority_id,
+        **{name: getattr(entity, name) for name in PERSON_FIELDS if isinstance(entity, Person)},
     )
 
 
@@ -793,6 +797,19 @@ def entity_filters(
     if has_detections is not None:
         predicate = exists().where(ImageOccurrence.entity_id == Entity.id)
         filters.append(predicate if has_detections else ~predicate)
+    # Correlated so callers selecting only entity columns never gain a cross join.
+    # Unknown (NULL) dates fail every bound, so a range excludes them.
+    life_dates: list[ColumnElement[bool]] = []
+    for column, lower, upper in (
+        (Person.birth_date, filter_values.birth_date_from, filter_values.birth_date_to),
+        (Person.death_date, filter_values.death_date_from, filter_values.death_date_to),
+    ):
+        if not is_missing(lower):
+            life_dates.append(column >= lower)
+        if not is_missing(upper):
+            life_dates.append(column <= upper)
+    if life_dates:
+        filters.append(exists().where(Person.entity_id == Entity.id, *life_dates))
     return filters
 
 

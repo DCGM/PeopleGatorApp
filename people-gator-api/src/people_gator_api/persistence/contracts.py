@@ -147,6 +147,13 @@ class EntityTypeConflictError(ValueError):
     """A replacement tried to change an existing entity's immutable type."""
 
 
+class InvalidPersonFieldsError(ValueError):
+    """Person fields are invalid for the stored record, e.g. death before birth.
+
+    Raised after combining a partial patch or merge with stored values.
+    """
+
+
 @dataclass(frozen=True)
 class EntityPutResult:
     """The stored entity and whether the PUT created it."""

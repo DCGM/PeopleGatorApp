@@ -9,6 +9,9 @@ Text fields compare case- and accent-insensitively (lowercased, unaccented) in
 Unicode code-point order, then by the exact recorded text in code-point order.
 Counts compare numerically and times chronologically. Assignment state orders
 ``verified``, ``manual``, ``automatic``, then unassigned (unknown) last.
+Entity ``surname`` orders by surname, first name and then middle names, each
+as text; ``birth_date`` and ``death_date`` compare chronologically. Records
+without those person values sort last.
 Face and mention ``person`` order by the assigned person's name and then
 identity, so each person's annotations are contiguous; unassigned annotations
 are unknown and last.
@@ -42,6 +45,9 @@ class EntitySortField(StrEnum):
     ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
     RELEVANCE = "relevance"
     NAME = "name"
+    SURNAME = "surname"
+    BIRTH_DATE = "birth_date"
+    DEATH_DATE = "death_date"
     ENTITY_ID = "entity_id"
     LAST_TOUCHED_AT = "last_touched_at"
     CREATED_AT = "created_at"

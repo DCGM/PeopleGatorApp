@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Literal
-from datetime import timezone
+from datetime import date
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -24,7 +24,7 @@ from people_gator_api.schemas.common import (
     ListFilterBase,
 )
 from people_gator_api.schemas.enums import EntityType
-from people_gator_api.schemas.missing import MISSING, MissingType, missing_to_none
+from people_gator_api.schemas.missing import MISSING, MissingType, is_missing, missing_to_none
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -32,8 +32,60 @@ from people_gator_api.schemas.missing import MISSING, MissingType, missing_to_no
 
 MAX_ENTITY_BATCH_SIZE = settings.batch.max_entity_batch_size
 
+PERSON_NAME_FIELDS = ("first_name", "middle_names", "surname")
+PERSON_FIELDS = (*PERSON_NAME_FIELDS, "birth_date", "death_date")
+PERSON_DATES_MESSAGE = "death_date must not be earlier than birth_date"
 
-class EntityCreateRequest(BaseModel):
+
+def normalize_person_name(value: str | None | MissingType) -> str | None | MissingType:
+    """Collapse repeated and surrounding whitespace; a blank name clears the field."""
+    if isinstance(value, str):
+        return " ".join(value.split()) or None
+    return value
+
+
+def validate_life_dates(birth_date: date | None, death_date: date | None) -> None:
+    """Reject a death date before the birth date when both are known."""
+    if birth_date is not None and death_date is not None and death_date < birth_date:
+        raise ValueError(PERSON_DATES_MESSAGE)
+
+
+class PersonFields(BaseModel):
+    """Optional structured person fields; omit preserves and null clears them."""
+
+    first_name: str | None | MissingType = Field(
+        default=MISSING, description="Person only: given name."
+    )
+    middle_names: str | None | MissingType = Field(
+        default=MISSING,
+        description="Person only: space-separated middle names; repeated and surrounding whitespace is normalized.",
+    )
+    surname: str | None | MissingType = Field(
+        default=MISSING, description="Person only: family name."
+    )
+    birth_date: date | None | MissingType = Field(
+        default=MISSING, description="Person only: full date of birth (YYYY-MM-DD)."
+    )
+    death_date: date | None | MissingType = Field(
+        default=MISSING,
+        description="Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.",
+    )
+
+    _normalize_names = field_validator(*PERSON_NAME_FIELDS)(
+        classmethod(lambda cls, value: normalize_person_name(value))
+    )
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> Self:
+        validate_life_dates(missing_to_none(self.birth_date), missing_to_none(self.death_date))
+        return self
+
+    def person_values(self) -> dict[str, object]:
+        """Person fields present in the request, including explicit nulls."""
+        return {name: value for name in PERSON_FIELDS if not is_missing(value := getattr(self, name))}
+
+
+class EntityCreateRequest(PersonFields):
     """Request body for creating a new entity."""
 
     entity_type: EntityType = Field(
@@ -65,13 +117,21 @@ class EntityCreateRequest(BaseModel):
             raise ValueError("aliases must be unique")
         return aliases
 
+    @model_validator(mode="after")
+    def validate_person_fields(self) -> Self:
+        if self.entity_type != EntityType.person and any(
+            value is not None for value in self.person_values().values()
+        ):
+            raise ValueError("person fields require entity_type person")
+        return self
+
 
 type EntityBatchCreateRequest = Annotated[
     list[EntityCreateRequest], Field(max_length=MAX_ENTITY_BATCH_SIZE)
 ]
 
 
-class EntityPatchRequest(BaseModel):
+class EntityPatchRequest(PersonFields):
     """Request body for patching an existing entity."""
 
     thumbnail_face_id: uuid.UUID | None | MissingType = Field(
@@ -118,6 +178,7 @@ def entity_replacement(payload: EntityCreateRequest) -> EntityPatchRequest:
         short_description=missing_to_none(payload.short_description),
         wikidata_id=missing_to_none(payload.wikidata_id),
         nlcr_authority_id=missing_to_none(payload.nlcr_authority_id),
+        **{name: missing_to_none(getattr(payload, name)) for name in PERSON_FIELDS},
     )
 
 
@@ -158,7 +219,13 @@ class EntityResponse(CreationMetadata, TouchMetadata):
     user_id: uuid.UUID = Field(
         description="The unique identifier of the user who created or owns the entity."
     )
-
+    first_name: str | None = Field(default=None, description="Person only: given name.")
+    middle_names: str | None = Field(
+        default=None, description="Person only: space-separated middle names."
+    )
+    surname: str | None = Field(default=None, description="Person only: family name.")
+    birth_date: date | None = Field(default=None, description="Person only: date of birth.")
+    death_date: date | None = Field(default=None, description="Person only: date of death.")
 
     thumbnail_face_id: uuid.UUID | None = Field(
         default=None, description="Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.",
@@ -211,6 +278,31 @@ class EntityListFilter(ListFilterBase, SharedFilter, EntityCountFilter):
     has_detections: bool | MissingType = Field(
         default=MISSING, description="Whether the entity has detections."
     )
+    birth_date_from: date | MissingType = Field(
+        default=MISSING,
+        description="Inclusive earliest person birth date; excludes unknown birth dates.",
+    )
+    birth_date_to: date | MissingType = Field(
+        default=MISSING,
+        description="Inclusive latest person birth date; excludes unknown birth dates.",
+    )
+    death_date_from: date | MissingType = Field(
+        default=MISSING,
+        description="Inclusive earliest person death date; excludes unknown death dates.",
+    )
+    death_date_to: date | MissingType = Field(
+        default=MISSING,
+        description="Inclusive latest person death date; excludes unknown death dates.",
+    )
+
+    @model_validator(mode="after")
+    def validate_life_date_ranges(self) -> Self:
+        for prefix in ("birth_date", "death_date"):
+            lower = missing_to_none(getattr(self, f"{prefix}_from"))
+            upper = missing_to_none(getattr(self, f"{prefix}_to"))
+            if lower is not None and upper is not None and lower > upper:
+                raise ValueError(f"{prefix}_from must not be later than {prefix}_to")
+        return self
 
 
 class EntityListRequest(GenericListRequest, SortableRequest[EntitySortField]):
@@ -237,8 +329,11 @@ class EntityDeleteManyResponse(BaseModel):
     deleted_count: int = Field(ge=0)
 
 
-class EntityMergeTargetPatch(BaseModel):
-    """Optional target fields to update as part of an entity merge."""
+class EntityMergeTargetPatch(PersonFields):
+    """Optional target fields to update as part of an entity merge.
+
+    The target keeps its own person fields unless the request sets them.
+    """
 
     description: str | None | MissingType = Field(
         default=MISSING,
@@ -293,6 +388,11 @@ class EntityMergeBatchResponse(BaseModel):
 
 __all__ = [
     "MAX_ENTITY_BATCH_SIZE",
+    "PERSON_FIELDS",
+    "PERSON_DATES_MESSAGE",
+    "PersonFields",
+    "normalize_person_name",
+    "validate_life_dates",
     "EntityCreateRequest",
     "EntityBatchCreateRequest",
     "EntityPatchRequest",

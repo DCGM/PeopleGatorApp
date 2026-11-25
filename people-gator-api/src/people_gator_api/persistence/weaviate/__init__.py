@@ -34,6 +34,7 @@ from people_gator_api.persistence.contracts import (
     EntityPutResult,
     EntityRepository,
     EntityTypeConflictError,
+    InvalidPersonFieldsError,
     FaceModelRepository,
     FaceRepository,
     SourceRepository,
@@ -69,6 +70,7 @@ from people_gator_api.schemas.entities import (
     EntityPatchRequest,
     EntityResponse,
     entity_replacement,
+    validate_life_dates,
 )
 from people_gator_api.schemas.enums import SourceKind, EntityLinkState
 from people_gator_api.schemas.entity_links import EntityLinkStats
@@ -193,6 +195,18 @@ _ANNOTATION_ONLY_POSTGRES = (
     "library", "document_source_id", "page_source_id", "last_touched_from",
     "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id",
 )
+
+
+_LIFE_DATE_FILTERS = ("birth_date_from", "birth_date_to", "death_date_from", "death_date_to")
+
+
+def _check_person_dates(entity: EntityResponse, changes: dict[str, object]) -> None:
+    """Validate life dates after combining a partial change with stored values."""
+    merged = entity.model_copy(update=changes)
+    try:
+        validate_life_dates(merged.birth_date, merged.death_date)
+    except ValueError as exc:
+        raise InvalidPersonFieldsError(str(exc)) from exc
 
 
 def _require_postgres_for(f, fields):
@@ -849,6 +863,8 @@ class WeaviateEntityRepository(EntityRepository):
         if not is_missing(query.filter_) and (not is_missing(query.filter_.entity_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.entity_id))
         _require_postgres_for(query.filter_, ("library", "page_source_id", *_CREATION_ONLY_POSTGRES))
+        if not is_missing(query.filter_) and any(not is_missing(getattr(query.filter_, name)) for name in _LIFE_DATE_FILTERS):
+            raise NotImplementedError("Birth and death date filters require PostgreSQL")
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -905,6 +921,7 @@ class WeaviateEntityRepository(EntityRepository):
         old = await self.get(entity_id)
         if old is None:
             return None
+        _check_person_dates(old, payload.person_values())
         p = _props(payload)
         if p.get("aliases") is None and "aliases" in p:
             p["aliases"] = []
@@ -913,7 +930,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
         if p.get("aliases") == []:
             p["aliases"] = None
-        return old.model_copy(update=p)
+        return EntityResponse.model_validate({**old.model_dump(), **p})
 
     async def put(
         self, entity_id: uuid.UUID, payload: EntityCreateRequest, context: GenericActor
@@ -981,6 +998,9 @@ class WeaviateEntityRepository(EntityRepository):
         sources = [await self.get(item_id) for item_id in source_entity_ids]
         if target is None or any(item is None for item in sources):
             return None
+        if target_patch is not None:
+            # No transactions: reject invalid life dates before moving evidence.
+            _check_person_dates(target, target_patch.person_values())
         counts = []
         for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
             count = 0
@@ -1703,6 +1723,8 @@ async def _basic_search[F: FoundItemBase](
     elif n == ENTITY_COLLECTION and q.filter_ is not None:
         f = q.filter_
         _require_postgres_for(f, ("library", "page_source_id", *_CREATION_ONLY_POSTGRES))
+        if any(not is_missing(getattr(f, name)) for name in _LIFE_DATE_FILTERS):
+            raise NotImplementedError("Birth and death date filters require PostgreSQL")
         filters = _direct(
             f,
             {

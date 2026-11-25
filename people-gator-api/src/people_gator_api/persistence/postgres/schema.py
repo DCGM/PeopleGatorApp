@@ -67,17 +67,24 @@ def _include_name(
 
 def validate_schema(
     connection: Connection, *, check_revision: bool = True, metadata: MetaData | None = None,
+    ignored_tables: frozenset[str] = frozenset(),
 ) -> None:
     """Reject incompatible migration history and structural drift without DDL.
 
     Alembic detects table/column/type/nullability, foreign key, unique constraint
     and static index changes. It does not comprehensively compare CHECK/primary
     key constraints or arbitrary functions; migration tests remain necessary.
+    ``ignored_tables`` are left out of the comparison entirely.
     """
+    def include_name(name: str | None, type_: str, parent_names: dict[str, str | None]) -> bool:
+        return _include_name(name, type_, parent_names) and not (
+            type_ == "table" and name in ignored_tables
+        )
+
     context = MigrationContext.configure(connection, opts={
         "compare_type": True,
         "include_object": include_object,
-        "include_name": _include_name,
+        "include_name": include_name,
     })
     if check_revision:
         expected = set(ScriptDirectory.from_config(migration_config()).get_heads())
@@ -116,6 +123,12 @@ def validate_schema(
 
     if "thumbnail_face_id" in expected_metadata.tables["pg_demo_entities"].c:
         _validate_thumbnail_invariants(connection)
+
+    if "pg_demo_persons" in expected_metadata.tables and "pg_demo_persons" not in ignored_tables:
+        constraint = next((item for item in inspect(connection).get_check_constraints("pg_demo_persons") if item["name"] == "ck_pg_demo_persons_life_dates"), None)
+        expected = "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date"
+        if constraint is None or "".join(constraint["sqltext"].lower().split()).replace("(", "").replace(")", "") != "".join(expected.lower().split()):
+            raise SchemaValidationError("Missing or incompatible person life-date constraint")
 
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.

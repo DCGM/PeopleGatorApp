@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Response, status
 
-from people_gator_api.persistence.contracts import EntityTypeConflictError
+from people_gator_api.persistence.contracts import EntityTypeConflictError, InvalidPersonFieldsError
 from people_gator_api.schemas.entities import (
     EntityBatchCreateRequest,
     EntityBatchPatchRequest,
@@ -196,6 +196,8 @@ async def merge_entity_route(
         result = await database.entities.merge(
             target_entity_id, payload.source_entity_id, target_patch=payload, context=user
         )
+    except InvalidPersonFieldsError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))
     if result is None:
@@ -219,6 +221,8 @@ async def merge_entity_batch_route(
         result = await database.entities.merge_batch(
             target_entity_id, payload.source_entity_ids, target_patch=payload, context=user
         )
+    except InvalidPersonFieldsError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))
     if result is None:

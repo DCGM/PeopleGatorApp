@@ -21,6 +21,7 @@ from people_gator_api.persistence.contracts import (
     EntityPutResult,
     EntityRepository,
     EntityTypeConflictError,
+    InvalidPersonFieldsError,
 )
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.entities import (
@@ -34,6 +35,7 @@ from people_gator_api.schemas.entities import (
     EntityPatchBatchItem,
     EntityPatchRequest,
     EntityResponse,
+    PERSON_DATES_MESSAGE,
     entity_replacement,
 )
 from people_gator_api.schemas.missing import (
@@ -50,6 +52,8 @@ from people_gator_api.persistence.postgres.models import (
     Face,
     Entity,
     ImageOccurrence,
+    PERSON_FIELDS,
+    Person,
     TextMention,
     User,
 )
@@ -79,6 +83,7 @@ from .sorting import (
     build_spec,
     decode_keyset,
     keyset_page,
+    normalized_text,
     order_by,
     sort_columns,
     sort_ranked,
@@ -87,6 +92,23 @@ from .sorting import (
 )
 from .touch import creation_values, touch_values, touch_sources, lock_annotation_graph
 from .search_resolution import resolve_entity_search
+
+
+def person_sort_keys(descending: bool, *fields: str) -> list[SortKey]:
+    """Person columns through one primary-key join; unknown values sort last.
+
+    Dates compare chronologically. Name parts compare case/accent-insensitively
+    in field order, then by their exact recorded text in the same order.
+    """
+    persons = Person.__table__.alias("sort_persons")
+    joins = ((persons, persons.c.entity_id == Entity.id),)
+    columns = [persons.c[field] for field in fields]
+    if all(field.endswith("_date") for field in fields):
+        return [SortKey(column, "date", descending, joins) for column in columns]
+    return [
+        *(SortKey(normalized_text(column).collate("C"), "text", descending, joins) for column in columns),
+        *(SortKey(column.collate("C"), "text", descending, joins) for column in columns),
+    ]
 
 
 class PostgresEntityRepository(EntityRepository):
@@ -115,6 +137,9 @@ class PostgresEntityRepository(EntityRepository):
             "name": lambda desc: text_keys(Entity.name_normalized, Entity.name, desc),
             "last_touched_at": lambda desc: [SortKey(Entity.last_touched_at, "datetime", desc)],
             "created_at": lambda desc: [SortKey(Entity.created_at, "datetime", desc)],
+            "surname": lambda desc: person_sort_keys(desc, "surname", "first_name", "middle_names"),
+            "birth_date": lambda desc: person_sort_keys(desc, "birth_date"),
+            "death_date": lambda desc: person_sort_keys(desc, "death_date"),
         }
         if field in ENTITY_COUNT_FIELDS:
             from .entity_counts import entity_counts
@@ -164,7 +189,10 @@ class PostgresEntityRepository(EntityRepository):
 
     @staticmethod
     def _new(payload: EntityCreateRequest, context: GenericActor) -> Entity:
-        entity = Entity(
+        if payload.entity_type.value != "person":
+            raise ValueError(f"unsupported entity_type {payload.entity_type.value}")
+        entity = Person(
+            **{name: missing_to_none(getattr(payload, name)) for name in PERSON_FIELDS},
             user_id=context.user_id,
             **touch_values(context),
             **creation_values(context),
@@ -197,8 +225,28 @@ class PostgresEntityRepository(EntityRepository):
         return [entity_response(entity) for entity in entities]
 
     @staticmethod
-    def _apply(entity: Entity, payload: EntityPatchRequest) -> bool:
+    def _apply_person(entity: Entity, values: dict[str, object]) -> bool:
+        """Apply present person fields, then validate the combined stored state."""
+        if not isinstance(entity, Person):
+            if any(value is not None for value in values.values()):
+                raise InvalidPersonFieldsError("person fields require entity_type person")
+            return False
         changed = False
+        for name, value in values.items():
+            if getattr(entity, name) != value:
+                setattr(entity, name, value)
+                changed = True
+        if (
+            entity.birth_date is not None
+            and entity.death_date is not None
+            and entity.death_date < entity.birth_date
+        ):
+            raise InvalidPersonFieldsError(PERSON_DATES_MESSAGE)
+        return changed
+
+    @classmethod
+    def _apply(cls, entity: Entity, payload: EntityPatchRequest) -> bool:
+        changed = cls._apply_person(entity, payload.person_values())
         for name in ("name", "description", "short_description", "wikidata_id", "nlcr_authority_id"):
             value = getattr(payload, name)
             if not is_missing(value) and getattr(entity, name) != value:
@@ -373,6 +421,7 @@ class PostgresEntityRepository(EntityRepository):
                     target.description = target_patch.description
                 if not is_missing(target_patch.short_description):
                     target.short_description = target_patch.short_description
+                self._apply_person(target, target_patch.person_values())
             target_alias_names = {alias.name for alias in target.aliases}
             for source_id in source_entity_ids:
                 for alias in entities[source_id].aliases:

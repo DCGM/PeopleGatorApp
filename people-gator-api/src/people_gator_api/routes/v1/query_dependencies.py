@@ -7,7 +7,7 @@ convention: search inputs use ``query.<field>``, filters use
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -337,6 +337,10 @@ def entity_list_filter_dependency(
         bool | None,
         _model_parameter(EntityListFilter, "has_detections", "filter"),
     ] = None,
+    birth_date_from: Annotated[date | None, _model_parameter(EntityListFilter, "birth_date_from", "filter")] = None,
+    birth_date_to: Annotated[date | None, _model_parameter(EntityListFilter, "birth_date_to", "filter")] = None,
+    death_date_from: Annotated[date | None, _model_parameter(EntityListFilter, "death_date_from", "filter")] = None,
+    death_date_to: Annotated[date | None, _model_parameter(EntityListFilter, "death_date_to", "filter")] = None,
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
@@ -375,6 +379,10 @@ def entity_list_filter_dependency(
         max_annotations_automatic_count=max_annotations_automatic_count,
         has_mentions=has_mentions,
         has_detections=has_detections,
+        birth_date_from=birth_date_from,
+        birth_date_to=birth_date_to,
+        death_date_from=death_date_from,
+        death_date_to=death_date_to,
     )
 
 
