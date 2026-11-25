@@ -46,9 +46,7 @@ async function signIn(request: () => Promise<unknown>) {
     <Card class="w-full max-w-sm">
       <CardHeader class="justify-items-center text-center">
         <PeopleGatorIcon aria-hidden="true" class="size-12 text-primary" stroke-width="1" />
-        <CardTitle class="font-heading text-xl font-light">
-          <h1>Sign in to PeopleGator</h1>
-        </CardTitle>
+        <CardTitle class="font-heading text-xl font-light">Sign in to PeopleGator</CardTitle>
       </CardHeader>
       <CardContent>
         <form @submit.prevent="signIn(() => login(username, password))">
