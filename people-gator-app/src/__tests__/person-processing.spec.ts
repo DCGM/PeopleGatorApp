@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('@/client', () => ({
   getEntityRouteApiV1EntitiesEntityIdGet: mocks.entity,
+  getPersonRouteApiV1PeopleEntityIdGet: mocks.entity,
   patchEntityRouteApiV1EntitiesEntityIdPatch: mocks.patch,
+  patchPersonRouteApiV1PeopleEntityIdPatch: mocks.patch,
   listUserFilterOptionsRouteApiV1UserFilterOptionsGet: mocks.users,
   listApiKeysRouteApiV1ApiKeysGet: mocks.keys,
 }))

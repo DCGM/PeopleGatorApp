@@ -118,6 +118,8 @@ export function usePatchEntityMutation() {
     onSuccess: (entity) => {
       restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
+      // The typed person record holds more fields; refetch it rather than overwrite.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.person(entity.entity_id) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })

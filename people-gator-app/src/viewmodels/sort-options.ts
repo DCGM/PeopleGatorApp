@@ -3,6 +3,7 @@ import { PEOPLE_COUNT_OPTIONS } from './people-counts'
 import type {
   DocumentSortField,
   EntitySortField,
+  PersonSortField,
   FaceSortField,
   PageSortField,
   TextMentionGroupSortField,
@@ -16,7 +17,7 @@ import type { SortOption, SortState, SortUrlKeys } from '@/lib/sorting'
  */
 export const RELEVANCE: SortState<'relevance'> = { field: 'relevance', direction: 'desc' }
 
-export const PEOPLE_SORTS: SortOption<EntitySortField>[] = [
+export const PEOPLE_SORTS: SortOption<PersonSortField>[] = [
   ...PEOPLE_COUNT_OPTIONS,
   { value: 'relevance', label: 'Relevance', kind: 'relevance' },
   { value: 'name', label: 'Name', kind: 'text' },
@@ -27,7 +28,12 @@ export const PEOPLE_SORTS: SortOption<EntitySortField>[] = [
   { value: 'created_at', label: 'Created / imported', kind: 'time' },
   { value: 'entity_id', label: 'Person ID', kind: 'id' },
 ]
-export const PEOPLE_BROWSE_DEFAULT: SortState<EntitySortField> = { field: 'name', direction: 'asc' }
+/** Person-only sorts exist on the typed `/people` API, not on generic entity search. */
+const PERSON_ONLY_SORTS = new Set<PersonSortField>(['surname', 'birth_date', 'death_date'])
+export const SIMILAR_PEOPLE_SORTS = PEOPLE_SORTS.filter(
+  (option): option is SortOption<EntitySortField> => !PERSON_ONLY_SORTS.has(option.value),
+)
+export const PEOPLE_BROWSE_DEFAULT: SortState<PersonSortField> = { field: 'name', direction: 'asc' }
 
 export const DOCUMENT_SORTS: SortOption<DocumentSortField>[] = [
   { value: 'relevance', label: 'Relevance', kind: 'relevance' },

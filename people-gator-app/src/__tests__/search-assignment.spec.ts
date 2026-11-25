@@ -14,11 +14,16 @@ const mocks = vi.hoisted(() => ({
   fetchPageImage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 
+vi.mock('@/query/people', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/query/people')>()),
+  fetchPeople: mocks.fetchEntities,
+}))
 vi.mock('@/query/entities', () => ({ fetchEntities: mocks.fetchEntities }))
 vi.mock('@/query/faces', () => ({ fetchFaces: mocks.fetchFaces }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: mocks.fetchTextMentions }))
 vi.mock('@/client', () => ({
   searchEntitiesGetApiV1SearchEntitiesGet: mocks.searchEntities,
+  searchPeopleGetApiV1SearchPeopleGet: mocks.searchEntities,
   searchPagesGetApiV1SearchPagesGet: mocks.searchPages,
 }))
 vi.mock('@/query/media', () => ({
@@ -144,7 +149,6 @@ describe('assignment search filters', () => {
     expect(mocks.searchEntities).toHaveBeenCalledWith({
       query: {
         'query.text': ['Ada'],
-        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -200,7 +204,6 @@ describe('assignment search filters', () => {
     expect(mocks.searchEntities).toHaveBeenNthCalledWith(2, {
       query: {
         'query.text': ['Ada'],
-        'filter.entity_type': ['person'],
         'filter.has_detections': undefined,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -238,7 +241,6 @@ describe('assignment search filters', () => {
     expect(mocks.fetchEntities).toHaveBeenNthCalledWith(
       1,
       {
-        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -250,7 +252,6 @@ describe('assignment search filters', () => {
     expect(mocks.fetchEntities).toHaveBeenNthCalledWith(
       2,
       {
-        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,

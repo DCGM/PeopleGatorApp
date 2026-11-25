@@ -240,36 +240,6 @@ export type EntityAnnotation = 'faces' | 'aliases' | 'name';
  */
 export type EntityCreateRequest = {
     /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: full date of birth (YYYY-MM-DD).
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
-     */
-    death_date?: string | null;
-    /**
      * The type of the entity. Immutable after creation.
      */
     entity_type: EntityType;
@@ -614,12 +584,6 @@ export type EntityListFilter = {
      */
     entity_id?: Array<string>;
     /**
-     * Entity Type
-     *
-     * The exact type of the entity.
-     */
-    entity_type?: Array<EntityType>;
-    /**
      * Wikidata Id
      *
      * The Wikidata identifier for the entity.
@@ -662,35 +626,17 @@ export type EntityListFilter = {
      */
     has_detections?: boolean;
     /**
-     * Birth Date From
+     * Entity Type
      *
-     * Inclusive earliest person birth date; excludes unknown birth dates.
+     * The exact type of the entity.
      */
-    birth_date_from?: string;
-    /**
-     * Birth Date To
-     *
-     * Inclusive latest person birth date; excludes unknown birth dates.
-     */
-    birth_date_to?: string;
-    /**
-     * Death Date From
-     *
-     * Inclusive earliest person death date; excludes unknown death dates.
-     */
-    death_date_from?: string;
-    /**
-     * Death Date To
-     *
-     * Inclusive latest person death date; excludes unknown death dates.
-     */
-    death_date_to?: string;
+    entity_type?: Array<EntityType>;
 };
 
 /**
  * EntityListSortField
  */
-export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityMergeBatchRequest
@@ -698,36 +644,6 @@ export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' |
  * Identify the sources to merge into the entity addressed by the URL.
  */
 export type EntityMergeBatchRequest = {
-    /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: full date of birth (YYYY-MM-DD).
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
-     */
-    death_date?: string | null;
     /**
      * Description
      *
@@ -778,36 +694,6 @@ export type EntityMergeBatchResponse = {
  */
 export type EntityMergeFromRequest = {
     /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: full date of birth (YYYY-MM-DD).
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
-     */
-    death_date?: string | null;
-    /**
      * Description
      *
      * New target description; null clears it and omission preserves it.
@@ -856,36 +742,6 @@ export type EntityMergeResponse = {
  * An item representing a single entity patch operation in a batch.
  */
 export type EntityPatchBatchItem = {
-    /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: full date of birth (YYYY-MM-DD).
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
-     */
-    death_date?: string | null;
     /**
      * Thumbnail Face Id
      *
@@ -942,36 +798,6 @@ export type EntityPatchBatchItem = {
  * Request body for patching an existing entity.
  */
 export type EntityPatchRequest = {
-    /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: full date of birth (YYYY-MM-DD).
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
-     */
-    death_date?: string | null;
     /**
      * Thumbnail Face Id
      *
@@ -1099,36 +925,6 @@ export type EntityResponse = {
      */
     user_id: string;
     /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: date of birth.
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: date of death.
-     */
-    death_date?: string | null;
-    /**
      * Thumbnail Face Id
      *
      * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
@@ -1146,7 +942,7 @@ export type EntityResponse = {
 /**
  * EntitySortField
  */
-export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityType
@@ -1672,36 +1468,6 @@ export type FoundEntity = {
      */
     user_id: string;
     /**
-     * First Name
-     *
-     * Person only: given name.
-     */
-    first_name?: string | null;
-    /**
-     * Middle Names
-     *
-     * Person only: space-separated middle names.
-     */
-    middle_names?: string | null;
-    /**
-     * Surname
-     *
-     * Person only: family name.
-     */
-    surname?: string | null;
-    /**
-     * Birth Date
-     *
-     * Person only: date of birth.
-     */
-    birth_date?: string | null;
-    /**
-     * Death Date
-     *
-     * Person only: date of death.
-     */
-    death_date?: string | null;
-    /**
      * Thumbnail Face Id
      *
      * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
@@ -1937,6 +1703,157 @@ export type FoundPage = {
      * Verified By Api Key Id
      */
     verified_by_api_key_id?: string | null;
+};
+
+/**
+ * FoundPerson
+ *
+ * A single person search result.
+ */
+export type FoundPerson = {
+    /**
+     * First Name
+     *
+     * Given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Space-separated middle names.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Date of birth.
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Date of death.
+     */
+    death_date?: string | null;
+    /**
+     * Text Score
+     *
+     * Aggregated text relevance, or None when text was not requested.
+     */
+    text_score?: number | null;
+    /**
+     * Face Score
+     *
+     * Aggregated cosine similarity, or None when faces were not requested.
+     */
+    face_score?: number | null;
+    /**
+     * Score
+     *
+     * Final reciprocal-rank-fusion score. Higher values rank first.
+     */
+    score: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity.
+     */
+    entity_id: string;
+    /**
+     * The type of the entity.
+     */
+    entity_type: EntityType;
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string> | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * User Id
+     *
+     * The unique identifier of the user who created or owns the entity.
+     */
+    user_id: string;
+    /**
+     * Thumbnail Face Id
+     *
+     * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     *
+     * Selection policy. Automatic with a null thumbnail_face_id means no thumbnail. Non-person entities always have automatic/null.
+     */
+    thumbnail_mode?: 'automatic' | 'manual';
+    entity_link_stats?: EntityLinkStats;
+    /**
+     * Matched Detection Ids
+     *
+     * Actual face-similarity witnesses for this result; never an arbitrary portrait.
+     */
+    matched_detection_ids?: Array<string>;
 };
 
 /**
@@ -2192,6 +2109,34 @@ export type GenericListResponseFoundPage = {
 };
 
 /**
+ * GenericListResponse[FoundPerson]
+ */
+export type GenericListResponseFoundPerson = {
+    /**
+     * Items
+     */
+    items: Array<FoundPerson>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
  * GenericListResponse[ImageResponse]
  */
 export type GenericListResponseImageResponse = {
@@ -2227,6 +2172,34 @@ export type GenericListResponsePageResponse = {
      * Items
      */
     items: Array<PageResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[PersonResponse]
+ */
+export type GenericListResponsePersonResponse = {
+    /**
+     * Items
+     */
+    items: Array<PersonResponse>;
     /**
      * Limit
      *
@@ -2726,6 +2699,549 @@ export type PageResponse = {
  * PageSortField
  */
 export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at' | 'created_at';
+
+/**
+ * PersonCreateRequest
+ *
+ * Request body for creating or replacing a person.
+ */
+export type PersonCreateRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
+     * Entity Type
+     *
+     * Always person.
+     */
+    entity_type?: 'person';
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string>;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+};
+
+/**
+ * PersonListSortField
+ */
+export type PersonListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
+
+/**
+ * PersonMergeBatchRequest
+ *
+ * Merge people into the person in the URL; the target keeps its person fields unless set.
+ */
+export type PersonMergeBatchRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
+     * Description
+     *
+     * New target description; null clears it and omission preserves it.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * New target short description; null clears it and omission preserves it.
+     */
+    short_description?: string | null;
+    /**
+     * Source Entity Ids
+     */
+    source_entity_ids: Array<string>;
+};
+
+/**
+ * PersonMergeBatchResponse
+ *
+ * Result of merging and deleting source people.
+ */
+export type PersonMergeBatchResponse = {
+    /**
+     * Source Entity Ids
+     */
+    source_entity_ids: Array<string>;
+    /**
+     * Target Entity Id
+     */
+    target_entity_id: string;
+    /**
+     * Faces Reassigned
+     */
+    faces_reassigned: number;
+    /**
+     * Text Mentions Reassigned
+     */
+    text_mentions_reassigned: number;
+    merged_entity: PersonResponse;
+};
+
+/**
+ * PersonMergeFromRequest
+ *
+ * Merge one person into the person in the URL; the target keeps its person fields unless set.
+ */
+export type PersonMergeFromRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
+     * Description
+     *
+     * New target description; null clears it and omission preserves it.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * New target short description; null clears it and omission preserves it.
+     */
+    short_description?: string | null;
+    /**
+     * Source Entity Id
+     */
+    source_entity_id: string;
+};
+
+/**
+ * PersonMergeResponse
+ *
+ * Result of merging and deleting one source person.
+ */
+export type PersonMergeResponse = {
+    /**
+     * Source Entity Id
+     */
+    source_entity_id: string;
+    /**
+     * Target Entity Id
+     */
+    target_entity_id: string;
+    /**
+     * Faces Reassigned
+     */
+    faces_reassigned: number;
+    /**
+     * Text Mentions Reassigned
+     */
+    text_mentions_reassigned: number;
+    merged_entity: PersonResponse;
+};
+
+/**
+ * PersonPatchBatchItem
+ *
+ * A single person patch operation in a batch.
+ */
+export type PersonPatchBatchItem = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
+     * Thumbnail Face Id
+     *
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name?: string;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string>;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the person to patch.
+     */
+    entity_id: string;
+};
+
+/**
+ * PersonPatchRequest
+ *
+ * Request body for patching a person; omit preserves and null clears.
+ */
+export type PersonPatchRequest = {
+    /**
+     * First Name
+     *
+     * Person only: given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Person only: space-separated middle names; repeated and surrounding whitespace is normalized.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Person only: family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Person only: full date of birth (YYYY-MM-DD).
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.
+     */
+    death_date?: string | null;
+    /**
+     * Thumbnail Face Id
+     *
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name?: string;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string>;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+};
+
+/**
+ * PersonResponse
+ *
+ * A single person record.
+ */
+export type PersonResponse = {
+    /**
+     * First Name
+     *
+     * Given name.
+     */
+    first_name?: string | null;
+    /**
+     * Middle Names
+     *
+     * Space-separated middle names.
+     */
+    middle_names?: string | null;
+    /**
+     * Surname
+     *
+     * Family name.
+     */
+    surname?: string | null;
+    /**
+     * Birth Date
+     *
+     * Date of birth.
+     */
+    birth_date?: string | null;
+    /**
+     * Death Date
+     *
+     * Date of death.
+     */
+    death_date?: string | null;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity.
+     */
+    entity_id: string;
+    /**
+     * The type of the entity.
+     */
+    entity_type: EntityType;
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string> | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * User Id
+     *
+     * The unique identifier of the user who created or owns the entity.
+     */
+    user_id: string;
+    /**
+     * Thumbnail Face Id
+     *
+     * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     *
+     * Selection policy. Automatic with a null thumbnail_face_id means no thumbnail. Non-person entities always have automatic/null.
+     */
+    thumbnail_mode?: 'automatic' | 'manual';
+    entity_link_stats?: EntityLinkStats;
+};
+
+/**
+ * PersonSortField
+ *
+ * Entity fields plus the person subtype's names and life dates (#123).
+ */
+export type PersonSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'surname' | 'birth_date' | 'death_date' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * RefreshTokenRequest
@@ -3424,17 +3940,17 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Entity Id
-         *
-         * The unique identifiers of the entities.
-         */
-        'filter.entity_id'?: Array<string> | null;
-        /**
          * Filter.Entity Type
          *
          * The exact type of the entity.
          */
         'filter.entity_type'?: Array<EntityType> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
+         */
+        'filter.entity_id'?: Array<string> | null;
         /**
          * Filter.Wikidata Id
          *
@@ -3622,30 +4138,6 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.has_detections'?: boolean | null;
         /**
-         * Filter.Birth Date From
-         *
-         * Inclusive earliest person birth date; excludes unknown birth dates.
-         */
-        'filter.birth_date_from'?: string | null;
-        /**
-         * Filter.Birth Date To
-         *
-         * Inclusive latest person birth date; excludes unknown birth dates.
-         */
-        'filter.birth_date_to'?: string | null;
-        /**
-         * Filter.Death Date From
-         *
-         * Inclusive earliest person death date; excludes unknown death dates.
-         */
-        'filter.death_date_from'?: string | null;
-        /**
-         * Filter.Death Date To
-         *
-         * Inclusive latest person death date; excludes unknown death dates.
-         */
-        'filter.death_date_to'?: string | null;
-        /**
          * Filter.Entity Link State
          *
          * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -3768,6 +4260,394 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetResponses = {
 };
 
 export type SearchEntitiesGetApiV1SearchEntitiesGetResponse = SearchEntitiesGetApiV1SearchEntitiesGetResponses[keyof SearchEntitiesGetApiV1SearchEntitiesGetResponses];
+
+export type SearchPeopleGetApiV1SearchPeopleGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Query.Entity Id
+         *
+         * Resolve stored reference inputs from this entity. Independent of filter.entity_id. Unknown entities or no usable combined inputs produce 422 invalid_search.
+         */
+        'query.entity_id'?: string | null;
+        /**
+         * Query.Entity Annotations
+         *
+         * Reference inputs: faces, aliases, name, or any combination. Omitted means all three. Derived inputs are combined with explicit text/face inputs; incompatible entity faces are skipped.
+         */
+        'query.entity_annotations'?: Array<EntityAnnotation> | null;
+        /**
+         * Query.Text
+         *
+         * Unique, non-blank text queries. Candidate scores are aggregated across them.
+         */
+        'query.text'?: Array<string> | null;
+        /**
+         * Query.Face Id
+         *
+         * Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.
+         */
+        'query.face_id'?: Array<string> | null;
+        /**
+         * Query.Face Embedding Model
+         *
+         * The face embedding model used for the search.
+         */
+        'query.face_embedding_model'?: string;
+        /**
+         * Query.Exclude Reference Face Id
+         *
+         * Whether to exclude the reference face ID from the search results.
+         */
+        'query.exclude_reference_face_id'?: boolean;
+        /**
+         * How higher-is-better candidate scores within each modality are aggregated across query items.
+         */
+        'query.score_aggregation'?: ScoreAggregation;
+        /**
+         * How independently ranked modality result lists are fused.
+         */
+        'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Birth Date From
+         *
+         * Inclusive earliest birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_from'?: string | null;
+        /**
+         * Filter.Birth Date To
+         *
+         * Inclusive latest birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_to'?: string | null;
+        /**
+         * Filter.Death Date From
+         *
+         * Inclusive earliest death date; excludes unknown death dates.
+         */
+        'filter.death_date_from'?: string | null;
+        /**
+         * Filter.Death Date To
+         *
+         * Inclusive latest death date; excludes unknown death dates.
+         */
+        'filter.death_date_to'?: string | null;
+        /**
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Wikidata Id
+         *
+         * The Wikidata identifier for the entity.
+         */
+        'filter.wikidata_id'?: Array<string> | null;
+        /**
+         * Filter.Nlcr Authority Id
+         *
+         * The NLCR authority identifier for the entity.
+         */
+        'filter.nlcr_authority_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * The source identifiers associated with the entity.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * The detection identifiers associated with the entity.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * The mention identifiers associated with the entity.
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Has Mentions
+         *
+         * Whether the entity has mentions.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Detections
+         *
+         * Whether the entity has detections.
+         */
+        'filter.has_detections'?: boolean | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
+         * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
+         */
+        limit?: number;
+        /**
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
+         */
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: PersonSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
+    };
+    url: '/api/v1/search-people';
+};
+
+export type SearchPeopleGetApiV1SearchPeopleGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchPeopleGetApiV1SearchPeopleGetError = SearchPeopleGetApiV1SearchPeopleGetErrors[keyof SearchPeopleGetApiV1SearchPeopleGetErrors];
+
+export type SearchPeopleGetApiV1SearchPeopleGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseFoundPerson;
+};
+
+export type SearchPeopleGetApiV1SearchPeopleGetResponse = SearchPeopleGetApiV1SearchPeopleGetResponses[keyof SearchPeopleGetApiV1SearchPeopleGetResponses];
 
 export type SearchFacesGetApiV1SearchFacesGetData = {
     body?: never;
@@ -4711,17 +5591,17 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Entity Id
-         *
-         * The unique identifiers of the entities.
-         */
-        'filter.entity_id'?: Array<string> | null;
-        /**
          * Filter.Entity Type
          *
          * The exact type of the entity.
          */
         'filter.entity_type'?: Array<EntityType> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
+         */
+        'filter.entity_id'?: Array<string> | null;
         /**
          * Filter.Wikidata Id
          *
@@ -4908,30 +5788,6 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * Whether the entity has detections.
          */
         'filter.has_detections'?: boolean | null;
-        /**
-         * Filter.Birth Date From
-         *
-         * Inclusive earliest person birth date; excludes unknown birth dates.
-         */
-        'filter.birth_date_from'?: string | null;
-        /**
-         * Filter.Birth Date To
-         *
-         * Inclusive latest person birth date; excludes unknown birth dates.
-         */
-        'filter.birth_date_to'?: string | null;
-        /**
-         * Filter.Death Date From
-         *
-         * Inclusive earliest person death date; excludes unknown death dates.
-         */
-        'filter.death_date_from'?: string | null;
-        /**
-         * Filter.Death Date To
-         *
-         * Inclusive latest person death date; excludes unknown death dates.
-         */
-        'filter.death_date_to'?: string | null;
         /**
          * Filter.Entity Link State
          *
@@ -5328,6 +6184,623 @@ export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostRespon
 };
 
 export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponse = MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses[keyof MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses];
+
+export type ListPeopleRouteApiV1PeopleGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Birth Date From
+         *
+         * Inclusive earliest birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_from'?: string | null;
+        /**
+         * Filter.Birth Date To
+         *
+         * Inclusive latest birth date; excludes unknown birth dates.
+         */
+        'filter.birth_date_to'?: string | null;
+        /**
+         * Filter.Death Date From
+         *
+         * Inclusive earliest death date; excludes unknown death dates.
+         */
+        'filter.death_date_from'?: string | null;
+        /**
+         * Filter.Death Date To
+         *
+         * Inclusive latest death date; excludes unknown death dates.
+         */
+        'filter.death_date_to'?: string | null;
+        /**
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Wikidata Id
+         *
+         * The Wikidata identifier for the entity.
+         */
+        'filter.wikidata_id'?: Array<string> | null;
+        /**
+         * Filter.Nlcr Authority Id
+         *
+         * The NLCR authority identifier for the entity.
+         */
+        'filter.nlcr_authority_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * The source identifiers associated with the entity.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * The detection identifiers associated with the entity.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * The mention identifiers associated with the entity.
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Has Mentions
+         *
+         * Whether the entity has mentions.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Detections
+         *
+         * Whether the entity has detections.
+         */
+        'filter.has_detections'?: boolean | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Created From
+         *
+         * Inclusive, timezone-aware lower bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_from'?: string | null;
+        /**
+         * Filter.Created To
+         *
+         * Inclusive, timezone-aware upper bound of this record's creation time; unknown creation does not match.
+         */
+        'filter.created_to'?: string | null;
+        /**
+         * Filter.Created By User Id
+         *
+         * Users who created this record, not its source or latest editor; repeated users combine with OR.
+         */
+        'filter.created_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Created By Api Key Id
+         *
+         * API keys used to create this record; unknown creation and user-only registrations do not match.
+         */
+        'filter.created_by_api_key_id'?: Array<string> | null;
+        /**
+         * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
+         */
+        limit?: number;
+        /**
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
+         */
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: PersonListSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
+    };
+    url: '/api/v1/people';
+};
+
+export type ListPeopleRouteApiV1PeopleGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListPeopleRouteApiV1PeopleGetError = ListPeopleRouteApiV1PeopleGetErrors[keyof ListPeopleRouteApiV1PeopleGetErrors];
+
+export type ListPeopleRouteApiV1PeopleGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponsePersonResponse;
+};
+
+export type ListPeopleRouteApiV1PeopleGetResponse = ListPeopleRouteApiV1PeopleGetResponses[keyof ListPeopleRouteApiV1PeopleGetResponses];
+
+export type CreatePersonRouteApiV1PeoplePostData = {
+    body: PersonCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/people';
+};
+
+export type CreatePersonRouteApiV1PeoplePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreatePersonRouteApiV1PeoplePostError = CreatePersonRouteApiV1PeoplePostErrors[keyof CreatePersonRouteApiV1PeoplePostErrors];
+
+export type CreatePersonRouteApiV1PeoplePostResponses = {
+    /**
+     * Successful Response
+     */
+    201: PersonResponse;
+};
+
+export type CreatePersonRouteApiV1PeoplePostResponse = CreatePersonRouteApiV1PeoplePostResponses[keyof CreatePersonRouteApiV1PeoplePostResponses];
+
+export type DeletePersonRouteApiV1PeopleEntityIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Entity Id
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{entity_id}';
+};
+
+export type DeletePersonRouteApiV1PeopleEntityIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeletePersonRouteApiV1PeopleEntityIdDeleteError = DeletePersonRouteApiV1PeopleEntityIdDeleteErrors[keyof DeletePersonRouteApiV1PeopleEntityIdDeleteErrors];
+
+export type DeletePersonRouteApiV1PeopleEntityIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeletePersonRouteApiV1PeopleEntityIdDeleteResponse = DeletePersonRouteApiV1PeopleEntityIdDeleteResponses[keyof DeletePersonRouteApiV1PeopleEntityIdDeleteResponses];
+
+export type GetPersonRouteApiV1PeopleEntityIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Entity Id
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{entity_id}';
+};
+
+export type GetPersonRouteApiV1PeopleEntityIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPersonRouteApiV1PeopleEntityIdGetError = GetPersonRouteApiV1PeopleEntityIdGetErrors[keyof GetPersonRouteApiV1PeopleEntityIdGetErrors];
+
+export type GetPersonRouteApiV1PeopleEntityIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonResponse;
+};
+
+export type GetPersonRouteApiV1PeopleEntityIdGetResponse = GetPersonRouteApiV1PeopleEntityIdGetResponses[keyof GetPersonRouteApiV1PeopleEntityIdGetResponses];
+
+export type PatchPersonRouteApiV1PeopleEntityIdPatchData = {
+    body: PersonPatchRequest;
+    path: {
+        /**
+         * Entity Id
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{entity_id}';
+};
+
+export type PatchPersonRouteApiV1PeopleEntityIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchPersonRouteApiV1PeopleEntityIdPatchError = PatchPersonRouteApiV1PeopleEntityIdPatchErrors[keyof PatchPersonRouteApiV1PeopleEntityIdPatchErrors];
+
+export type PatchPersonRouteApiV1PeopleEntityIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonResponse;
+};
+
+export type PatchPersonRouteApiV1PeopleEntityIdPatchResponse = PatchPersonRouteApiV1PeopleEntityIdPatchResponses[keyof PatchPersonRouteApiV1PeopleEntityIdPatchResponses];
+
+export type PutPersonRouteApiV1PeopleEntityIdPutData = {
+    body: PersonCreateRequest;
+    path: {
+        /**
+         * Entity Id
+         */
+        entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{entity_id}';
+};
+
+export type PutPersonRouteApiV1PeopleEntityIdPutErrors = {
+    /**
+     * The UUID belongs to another entity type.
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutPersonRouteApiV1PeopleEntityIdPutError = PutPersonRouteApiV1PeopleEntityIdPutErrors[keyof PutPersonRouteApiV1PeopleEntityIdPutErrors];
+
+export type PutPersonRouteApiV1PeopleEntityIdPutResponses = {
+    /**
+     * The existing person was replaced.
+     */
+    200: PersonResponse;
+    /**
+     * The person was created with this UUID.
+     */
+    201: PersonResponse;
+};
+
+export type PutPersonRouteApiV1PeopleEntityIdPutResponse = PutPersonRouteApiV1PeopleEntityIdPutResponses[keyof PutPersonRouteApiV1PeopleEntityIdPutResponses];
+
+export type PatchPersonBatchRouteApiV1PeopleBatchPatchData = {
+    /**
+     * Payload
+     */
+    body: Array<PersonPatchBatchItem>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/people:batch';
+};
+
+export type PatchPersonBatchRouteApiV1PeopleBatchPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchPersonBatchRouteApiV1PeopleBatchPatchError = PatchPersonBatchRouteApiV1PeopleBatchPatchErrors[keyof PatchPersonBatchRouteApiV1PeopleBatchPatchErrors];
+
+export type PatchPersonBatchRouteApiV1PeopleBatchPatchResponses = {
+    /**
+     * Response Patch Person Batch Route Api V1 People Batch Patch
+     *
+     * Successful Response
+     */
+    200: Array<PersonResponse | null>;
+};
+
+export type PatchPersonBatchRouteApiV1PeopleBatchPatchResponse = PatchPersonBatchRouteApiV1PeopleBatchPatchResponses[keyof PatchPersonBatchRouteApiV1PeopleBatchPatchResponses];
+
+export type CreatePersonBatchRouteApiV1PeopleBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<PersonCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/people:batch';
+};
+
+export type CreatePersonBatchRouteApiV1PeopleBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreatePersonBatchRouteApiV1PeopleBatchPostError = CreatePersonBatchRouteApiV1PeopleBatchPostErrors[keyof CreatePersonBatchRouteApiV1PeopleBatchPostErrors];
+
+export type CreatePersonBatchRouteApiV1PeopleBatchPostResponses = {
+    /**
+     * Response Create Person Batch Route Api V1 People Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<PersonResponse>;
+};
+
+export type CreatePersonBatchRouteApiV1PeopleBatchPostResponse = CreatePersonBatchRouteApiV1PeopleBatchPostResponses[keyof CreatePersonBatchRouteApiV1PeopleBatchPostResponses];
+
+export type MergePersonRouteApiV1PeopleTargetEntityIdMergePostData = {
+    body: PersonMergeFromRequest;
+    path: {
+        /**
+         * Target Entity Id
+         */
+        target_entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{target_entity_id}:merge';
+};
+
+export type MergePersonRouteApiV1PeopleTargetEntityIdMergePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MergePersonRouteApiV1PeopleTargetEntityIdMergePostError = MergePersonRouteApiV1PeopleTargetEntityIdMergePostErrors[keyof MergePersonRouteApiV1PeopleTargetEntityIdMergePostErrors];
+
+export type MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonMergeResponse;
+};
+
+export type MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponse = MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponses[keyof MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponses];
+
+export type MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostData = {
+    body: PersonMergeBatchRequest;
+    path: {
+        /**
+         * Target Entity Id
+         */
+        target_entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/people/{target_entity_id}:merge-batch';
+};
+
+export type MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostError = MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostErrors[keyof MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostErrors];
+
+export type MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonMergeBatchResponse;
+};
+
+export type MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponse = MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponses[keyof MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponses];
 
 export type ListFacesRouteApiV1FacesGetData = {
     body?: never;

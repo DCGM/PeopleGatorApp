@@ -16,6 +16,7 @@ vi.mock('@/client', () => ({
   listFacesRouteApiV1FacesGet: api.faces,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
+  getPersonRouteApiV1PeopleEntityIdGet: api.entity,
 }))
 import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { usePersonDetail } from '@/viewmodels/person-detail'

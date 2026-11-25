@@ -4,8 +4,15 @@ import { computed, defineComponent, h, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn() }))
+vi.mock('@/query/people', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/query/people')>()),
+  fetchPeople: mocks.list,
+}))
 vi.mock('@/query/entities', () => ({ fetchEntities: mocks.list }))
-vi.mock('@/client', () => ({ searchEntitiesGetApiV1SearchEntitiesGet: mocks.search }))
+vi.mock('@/client', () => ({
+  searchEntitiesGetApiV1SearchEntitiesGet: mocks.search,
+  searchPeopleGetApiV1SearchPeopleGet: mocks.search,
+}))
 vi.mock('@/query/faces', () => ({ fetchFaces: vi.fn() }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: vi.fn() }))
 import { usePeopleSearch } from '@/viewmodels/people-search'
@@ -166,7 +173,6 @@ it('sends count bounds to browse/search and restarts at the first cursor', async
     ...counts.value,
     cursor: 'old-count-cursor',
     sort: 'mentions_total_count',
-    'filter.entity_type': ['person'],
   })
   counts.value = { 'filter.max_faces_total_count': 1, 'filter.min_mentions_total_count': 3 }
   await flushPromises()

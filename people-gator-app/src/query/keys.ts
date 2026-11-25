@@ -17,6 +17,11 @@ export const queryKeys = {
     infinite: (params?: QueryParams) => ['entities', 'list', 'infinite', params ?? {}] as const,
     details: () => ['entities', 'detail'] as const,
     detail: (entityId: string) => ['entities', 'detail', entityId] as const,
+    // Typed person resources (#123) stay under `entities`, so every entity
+    // invalidation and page restart also refreshes them.
+    people: (params?: QueryParams) =>
+      ['entities', 'list', 'infinite', 'people', params ?? {}] as const,
+    person: (entityId: string) => ['entities', 'detail', entityId, 'person'] as const,
   },
   faces: {
     all: ['faces'] as const,
@@ -90,6 +95,8 @@ export const queryKeys = {
     entities: (params?: QueryParams) => ['search', 'entities', params ?? {}] as const,
     infiniteEntities: (params?: QueryParams) =>
       ['search', 'entities', 'infinite', params ?? {}] as const,
+    infinitePeople: (params?: QueryParams) =>
+      ['search', 'entities', 'infinite', 'people', params ?? {}] as const,
     faces: (params?: QueryParams) => ['search', 'faces', params ?? {}] as const,
     infiniteFaces: (params?: QueryParams) => ['search', 'faces', 'infinite', params ?? {}] as const,
     pages: (params?: QueryParams) => ['search', 'pages', params ?? {}] as const,

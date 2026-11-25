@@ -12,7 +12,7 @@ import type {
   PersonProfile,
   PersonProcessingInfo,
 } from '@/viewmodels/person-detail.types'
-import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
+import { usePatchPersonMutation, usePersonQuery } from '@/query/people'
 import { fetchFaceAlignedCrop, useFaceListQuery } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
@@ -39,8 +39,9 @@ export function usePersonDetail(
   mentionSort: MaybeRefOrGetter<SortState<TextMentionSortField>> = MENTION_DEFAULT,
   mentionsEnabled: MaybeRefOrGetter<boolean> = true,
 ) {
-  const entityQuery = useEntityQuery(personId)
-  const patchEntity = usePatchEntityMutation()
+  // The person page reads and writes through the typed person API (#123).
+  const entityQuery = usePersonQuery(personId)
+  const patchEntity = usePatchPersonMutation()
   const touchedUserId = computed(() => entityQuery.data.value?.last_touched_by_user_id ?? '')
   const touchedApiKeyId = computed(() => entityQuery.data.value?.last_touched_by_api_key_id ?? '')
   const processingUsers = usePeopleFilterOptions('user', touchedUserId, () =>

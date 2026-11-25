@@ -19,8 +19,11 @@ vi.mock('@/client', () => ({
   mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost: api.single,
   mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost: api.batch,
   getEntityRouteApiV1EntitiesEntityIdGet: api.get,
+  getPersonRouteApiV1PeopleEntityIdGet: api.get,
   listEntitiesRouteApiV1EntitiesGet: api.list,
+  listPeopleRouteApiV1PeopleGet: api.list,
   searchEntitiesGetApiV1SearchEntitiesGet: api.search,
+  searchPeopleGetApiV1SearchPeopleGet: api.search,
 }))
 vi.mock('@/composables/can-annotate', () => ({ useHasScope: () => permission }))
 const permission = ref(true)

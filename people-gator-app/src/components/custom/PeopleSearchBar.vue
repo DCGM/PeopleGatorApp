@@ -18,16 +18,16 @@ import {
   usePeopleLifeDates,
 } from '@/viewmodels/people-life-dates'
 import type { ActiveFilter } from './ActiveFilters.vue'
-import type { EntitySortField } from '@/client'
+import type { PersonSortField } from '@/client'
 import type { SortOption, SortState } from '@/lib/sorting'
 import type { AssignmentFilter } from '@/viewmodels/assignment'
 
 defineProps<{
   resultCount: number
   hasMoreResults?: boolean
-  sortOptions?: SortOption<EntitySortField>[]
+  sortOptions?: SortOption<PersonSortField>[]
 }>()
-const sort = defineModel<SortState<EntitySortField>>('sort')
+const sort = defineModel<SortState<PersonSortField>>('sort')
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
 const counts = usePeopleCounts()

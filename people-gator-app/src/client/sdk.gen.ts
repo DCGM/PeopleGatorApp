@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { CreateDocumentBatchRouteApiV1DocumentsBatchPostData, CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors, CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses, CreateDocumentRouteApiV1DocumentsPostData, CreateDocumentRouteApiV1DocumentsPostErrors, CreateDocumentRouteApiV1DocumentsPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostData, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityRouteApiV1EntitiesPostData, CreateEntityRouteApiV1EntitiesPostErrors, CreateEntityRouteApiV1EntitiesPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostData, CreateFaceBatchRouteApiV1FacesBatchPostErrors, CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceRouteApiV1FacesPostData, CreateFaceRouteApiV1FacesPostErrors, CreateFaceRouteApiV1FacesPostResponses, CreateImageBatchRouteApiV1ImagesBatchPostData, CreateImageBatchRouteApiV1ImagesBatchPostErrors, CreateImageBatchRouteApiV1ImagesBatchPostResponses, CreateImageRouteApiV1ImagesPostData, CreateImageRouteApiV1ImagesPostErrors, CreateImageRouteApiV1ImagesPostResponses, CreatePageBatchRouteApiV1PagesBatchPostData, CreatePageBatchRouteApiV1PagesBatchPostErrors, CreatePageBatchRouteApiV1PagesBatchPostResponses, CreatePageRouteApiV1PagesPostData, CreatePageRouteApiV1PagesPostErrors, CreatePageRouteApiV1PagesPostResponses, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses, CreateTextMentionRouteApiV1TextMentionsPostData, CreateTextMentionRouteApiV1TextMentionsPostErrors, CreateTextMentionRouteApiV1TextMentionsPostResponses, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses, DeleteEntitiesRouteApiV1EntitiesDeleteData, DeleteEntitiesRouteApiV1EntitiesDeleteErrors, DeleteEntitiesRouteApiV1EntitiesDeleteResponses, DeleteEntityRouteApiV1EntitiesEntityIdDeleteData, DeleteEntityRouteApiV1EntitiesEntityIdDeleteErrors, DeleteEntityRouteApiV1EntitiesEntityIdDeleteResponses, DeleteFaceBatchRouteApiV1FacesBatchDeleteData, DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors, DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses, DeleteFaceRouteApiV1FacesDetectionIdDeleteData, DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors, DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses, DeleteImageRouteApiV1ImagesImageIdDeleteData, DeleteImageRouteApiV1ImagesImageIdDeleteErrors, DeleteImageRouteApiV1ImagesImageIdDeleteResponses, DeletePageRouteApiV1PagesPageSourceIdDeleteData, DeletePageRouteApiV1PagesPageSourceIdDeleteErrors, DeletePageRouteApiV1PagesPageSourceIdDeleteResponses, DeleteSourceRouteApiV1SourcesSourceIdDeleteData, DeleteSourceRouteApiV1SourcesSourceIdDeleteErrors, DeleteSourceRouteApiV1SourcesSourceIdDeleteResponses, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses, DeleteUserBatchRouteApiV1UsersBatchDeleteData, DeleteUserBatchRouteApiV1UsersBatchDeleteErrors, DeleteUserBatchRouteApiV1UsersBatchDeleteResponses, DeleteUserRouteApiV1UsersUserIdDeleteData, DeleteUserRouteApiV1UsersUserIdDeleteErrors, DeleteUserRouteApiV1UsersUserIdDeleteResponses, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetData, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetErrors, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponses, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetData, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses, GetEntityRouteApiV1EntitiesEntityIdGetData, GetEntityRouteApiV1EntitiesEntityIdGetErrors, GetEntityRouteApiV1EntitiesEntityIdGetResponses, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses, GetFaceRouteApiV1FacesDetectionIdGetData, GetFaceRouteApiV1FacesDetectionIdGetErrors, GetFaceRouteApiV1FacesDetectionIdGetResponses, GetImageContentByIdRouteApiV1ImagesImageIdContentGetData, GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors, GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses, GetImageRouteApiV1ImagesImageIdGetData, GetImageRouteApiV1ImagesImageIdGetErrors, GetImageRouteApiV1ImagesImageIdGetResponses, GetJwksWellKnownJwksJsonGetData, GetJwksWellKnownJwksJsonGetResponses, GetMeRouteApiV1MeGetData, GetMeRouteApiV1MeGetResponses, GetOpenidConfigurationWellKnownOpenidConfigurationGetData, GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetResponses, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetData, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses, GetPageRouteApiV1PagesPageSourceIdGetData, GetPageRouteApiV1PagesPageSourceIdGetErrors, GetPageRouteApiV1PagesPageSourceIdGetResponses, GetSourceRouteApiV1SourcesSourceIdGetData, GetSourceRouteApiV1SourcesSourceIdGetErrors, GetSourceRouteApiV1SourcesSourceIdGetResponses, GetTextMentionRouteApiV1TextMentionsMentionIdGetData, GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors, GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetData, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses, GetTokenTokenLoginPostData, GetTokenTokenLoginPostErrors, GetTokenTokenLoginPostResponses, GetUserRouteApiV1UsersUserIdGetData, GetUserRouteApiV1UsersUserIdGetErrors, GetUserRouteApiV1UsersUserIdGetResponses, HealthApiV1HealthGetData, HealthApiV1HealthGetResponses, HomeApiV1GetData, HomeApiV1GetResponses, ListApiKeysRouteApiV1ApiKeysGetData, ListApiKeysRouteApiV1ApiKeysGetErrors, ListApiKeysRouteApiV1ApiKeysGetResponses, ListDocumentsRouteApiV1DocumentsGetData, ListDocumentsRouteApiV1DocumentsGetErrors, ListDocumentsRouteApiV1DocumentsGetResponses, ListEntitiesRouteApiV1EntitiesGetData, ListEntitiesRouteApiV1EntitiesGetErrors, ListEntitiesRouteApiV1EntitiesGetResponses, ListFaceModelsRouteApiV1FaceModelsGetData, ListFaceModelsRouteApiV1FaceModelsGetResponses, ListFacesRouteApiV1FacesGetData, ListFacesRouteApiV1FacesGetErrors, ListFacesRouteApiV1FacesGetResponses, ListImagesRouteApiV1ImagesGetData, ListImagesRouteApiV1ImagesGetErrors, ListImagesRouteApiV1ImagesGetResponses, ListPagesRouteApiV1PagesGetData, ListPagesRouteApiV1PagesGetErrors, ListPagesRouteApiV1PagesGetResponses, ListSourcesRouteApiV1SourcesGetData, ListSourcesRouteApiV1SourcesGetErrors, ListSourcesRouteApiV1SourcesGetResponses, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses, ListTextMentionsRouteApiV1TextMentionsGetData, ListTextMentionsRouteApiV1TextMentionsGetErrors, ListTextMentionsRouteApiV1TextMentionsGetResponses, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetData, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetErrors, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetResponses, ListUsersRouteApiV1UsersGetData, ListUsersRouteApiV1UsersGetErrors, ListUsersRouteApiV1UsersGetResponses, LookupDocumentRouteApiV1DocumentsLookupGetData, LookupDocumentRouteApiV1DocumentsLookupGetErrors, LookupDocumentRouteApiV1DocumentsLookupGetResponses, LookupImageRouteApiV1ImagesLookupGetData, LookupImageRouteApiV1ImagesLookupGetErrors, LookupImageRouteApiV1ImagesLookupGetResponses, LookupPageRouteApiV1PagesLookupGetData, LookupPageRouteApiV1PagesLookupGetErrors, LookupPageRouteApiV1PagesLookupGetResponses, LookupSourceRouteApiV1SourcesLookupGetData, LookupSourceRouteApiV1SourcesLookupGetErrors, LookupSourceRouteApiV1SourcesLookupGetResponses, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostData, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostErrors, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostData, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostErrors, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponses, PatchEntityBatchRouteApiV1EntitiesBatchPatchData, PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors, PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses, PatchEntityRouteApiV1EntitiesEntityIdPatchData, PatchEntityRouteApiV1EntitiesEntityIdPatchErrors, PatchEntityRouteApiV1EntitiesEntityIdPatchResponses, PatchFaceBatchRouteApiV1FacesBatchPatchData, PatchFaceBatchRouteApiV1FacesBatchPatchErrors, PatchFaceBatchRouteApiV1FacesBatchPatchResponses, PatchFaceRouteApiV1FacesDetectionIdPatchData, PatchFaceRouteApiV1FacesDetectionIdPatchErrors, PatchFaceRouteApiV1FacesDetectionIdPatchResponses, PatchPageRouteApiV1PagesPageSourceIdPatchData, PatchPageRouteApiV1PagesPageSourceIdPatchErrors, PatchPageRouteApiV1PagesPageSourceIdPatchResponses, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchData, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchData, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses, PatchUserRouteApiV1UsersUserIdPatchData, PatchUserRouteApiV1UsersUserIdPatchErrors, PatchUserRouteApiV1UsersUserIdPatchResponses, PutEntityRouteApiV1EntitiesEntityIdPutData, PutEntityRouteApiV1EntitiesEntityIdPutErrors, PutEntityRouteApiV1EntitiesEntityIdPutResponses, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutData, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutErrors, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutResponses, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutData, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutErrors, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutResponses, RefreshTokenTokenRefreshPostData, RefreshTokenTokenRefreshPostErrors, RefreshTokenTokenRefreshPostResponses, RegisterFaceModelRouteApiV1FaceModelsPostData, RegisterFaceModelRouteApiV1FaceModelsPostErrors, RegisterFaceModelRouteApiV1FaceModelsPostResponses, SearchDocumentsGetApiV1SearchDocumentsGetData, SearchDocumentsGetApiV1SearchDocumentsGetErrors, SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchEntitiesGetApiV1SearchEntitiesGetData, SearchEntitiesGetApiV1SearchEntitiesGetErrors, SearchEntitiesGetApiV1SearchEntitiesGetResponses, SearchFacesGetApiV1SearchFacesGetData, SearchFacesGetApiV1SearchFacesGetErrors, SearchFacesGetApiV1SearchFacesGetResponses, SearchPagesGetApiV1SearchPagesGetData, SearchPagesGetApiV1SearchPagesGetErrors, SearchPagesGetApiV1SearchPagesGetResponses, TranslateRouteApiV1TranslatePostData, TranslateRouteApiV1TranslatePostErrors, TranslateRouteApiV1TranslatePostResponses } from './types.gen';
+import type { CreateDocumentBatchRouteApiV1DocumentsBatchPostData, CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors, CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses, CreateDocumentRouteApiV1DocumentsPostData, CreateDocumentRouteApiV1DocumentsPostErrors, CreateDocumentRouteApiV1DocumentsPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostData, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityRouteApiV1EntitiesPostData, CreateEntityRouteApiV1EntitiesPostErrors, CreateEntityRouteApiV1EntitiesPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostData, CreateFaceBatchRouteApiV1FacesBatchPostErrors, CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceRouteApiV1FacesPostData, CreateFaceRouteApiV1FacesPostErrors, CreateFaceRouteApiV1FacesPostResponses, CreateImageBatchRouteApiV1ImagesBatchPostData, CreateImageBatchRouteApiV1ImagesBatchPostErrors, CreateImageBatchRouteApiV1ImagesBatchPostResponses, CreateImageRouteApiV1ImagesPostData, CreateImageRouteApiV1ImagesPostErrors, CreateImageRouteApiV1ImagesPostResponses, CreatePageBatchRouteApiV1PagesBatchPostData, CreatePageBatchRouteApiV1PagesBatchPostErrors, CreatePageBatchRouteApiV1PagesBatchPostResponses, CreatePageRouteApiV1PagesPostData, CreatePageRouteApiV1PagesPostErrors, CreatePageRouteApiV1PagesPostResponses, CreatePersonBatchRouteApiV1PeopleBatchPostData, CreatePersonBatchRouteApiV1PeopleBatchPostErrors, CreatePersonBatchRouteApiV1PeopleBatchPostResponses, CreatePersonRouteApiV1PeoplePostData, CreatePersonRouteApiV1PeoplePostErrors, CreatePersonRouteApiV1PeoplePostResponses, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses, CreateTextMentionRouteApiV1TextMentionsPostData, CreateTextMentionRouteApiV1TextMentionsPostErrors, CreateTextMentionRouteApiV1TextMentionsPostResponses, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses, DeleteEntitiesRouteApiV1EntitiesDeleteData, DeleteEntitiesRouteApiV1EntitiesDeleteErrors, DeleteEntitiesRouteApiV1EntitiesDeleteResponses, DeleteEntityRouteApiV1EntitiesEntityIdDeleteData, DeleteEntityRouteApiV1EntitiesEntityIdDeleteErrors, DeleteEntityRouteApiV1EntitiesEntityIdDeleteResponses, DeleteFaceBatchRouteApiV1FacesBatchDeleteData, DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors, DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses, DeleteFaceRouteApiV1FacesDetectionIdDeleteData, DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors, DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses, DeleteImageRouteApiV1ImagesImageIdDeleteData, DeleteImageRouteApiV1ImagesImageIdDeleteErrors, DeleteImageRouteApiV1ImagesImageIdDeleteResponses, DeletePageRouteApiV1PagesPageSourceIdDeleteData, DeletePageRouteApiV1PagesPageSourceIdDeleteErrors, DeletePageRouteApiV1PagesPageSourceIdDeleteResponses, DeletePersonRouteApiV1PeopleEntityIdDeleteData, DeletePersonRouteApiV1PeopleEntityIdDeleteErrors, DeletePersonRouteApiV1PeopleEntityIdDeleteResponses, DeleteSourceRouteApiV1SourcesSourceIdDeleteData, DeleteSourceRouteApiV1SourcesSourceIdDeleteErrors, DeleteSourceRouteApiV1SourcesSourceIdDeleteResponses, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses, DeleteUserBatchRouteApiV1UsersBatchDeleteData, DeleteUserBatchRouteApiV1UsersBatchDeleteErrors, DeleteUserBatchRouteApiV1UsersBatchDeleteResponses, DeleteUserRouteApiV1UsersUserIdDeleteData, DeleteUserRouteApiV1UsersUserIdDeleteErrors, DeleteUserRouteApiV1UsersUserIdDeleteResponses, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetData, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetErrors, DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponses, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetData, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses, GetEntityRouteApiV1EntitiesEntityIdGetData, GetEntityRouteApiV1EntitiesEntityIdGetErrors, GetEntityRouteApiV1EntitiesEntityIdGetResponses, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses, GetFaceRouteApiV1FacesDetectionIdGetData, GetFaceRouteApiV1FacesDetectionIdGetErrors, GetFaceRouteApiV1FacesDetectionIdGetResponses, GetImageContentByIdRouteApiV1ImagesImageIdContentGetData, GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors, GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses, GetImageRouteApiV1ImagesImageIdGetData, GetImageRouteApiV1ImagesImageIdGetErrors, GetImageRouteApiV1ImagesImageIdGetResponses, GetJwksWellKnownJwksJsonGetData, GetJwksWellKnownJwksJsonGetResponses, GetMeRouteApiV1MeGetData, GetMeRouteApiV1MeGetResponses, GetOpenidConfigurationWellKnownOpenidConfigurationGetData, GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetResponses, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetData, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses, GetPageRouteApiV1PagesPageSourceIdGetData, GetPageRouteApiV1PagesPageSourceIdGetErrors, GetPageRouteApiV1PagesPageSourceIdGetResponses, GetPersonRouteApiV1PeopleEntityIdGetData, GetPersonRouteApiV1PeopleEntityIdGetErrors, GetPersonRouteApiV1PeopleEntityIdGetResponses, GetSourceRouteApiV1SourcesSourceIdGetData, GetSourceRouteApiV1SourcesSourceIdGetErrors, GetSourceRouteApiV1SourcesSourceIdGetResponses, GetTextMentionRouteApiV1TextMentionsMentionIdGetData, GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors, GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetData, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses, GetTokenTokenLoginPostData, GetTokenTokenLoginPostErrors, GetTokenTokenLoginPostResponses, GetUserRouteApiV1UsersUserIdGetData, GetUserRouteApiV1UsersUserIdGetErrors, GetUserRouteApiV1UsersUserIdGetResponses, HealthApiV1HealthGetData, HealthApiV1HealthGetResponses, HomeApiV1GetData, HomeApiV1GetResponses, ListApiKeysRouteApiV1ApiKeysGetData, ListApiKeysRouteApiV1ApiKeysGetErrors, ListApiKeysRouteApiV1ApiKeysGetResponses, ListDocumentsRouteApiV1DocumentsGetData, ListDocumentsRouteApiV1DocumentsGetErrors, ListDocumentsRouteApiV1DocumentsGetResponses, ListEntitiesRouteApiV1EntitiesGetData, ListEntitiesRouteApiV1EntitiesGetErrors, ListEntitiesRouteApiV1EntitiesGetResponses, ListFaceModelsRouteApiV1FaceModelsGetData, ListFaceModelsRouteApiV1FaceModelsGetResponses, ListFacesRouteApiV1FacesGetData, ListFacesRouteApiV1FacesGetErrors, ListFacesRouteApiV1FacesGetResponses, ListImagesRouteApiV1ImagesGetData, ListImagesRouteApiV1ImagesGetErrors, ListImagesRouteApiV1ImagesGetResponses, ListPagesRouteApiV1PagesGetData, ListPagesRouteApiV1PagesGetErrors, ListPagesRouteApiV1PagesGetResponses, ListPeopleRouteApiV1PeopleGetData, ListPeopleRouteApiV1PeopleGetErrors, ListPeopleRouteApiV1PeopleGetResponses, ListSourcesRouteApiV1SourcesGetData, ListSourcesRouteApiV1SourcesGetErrors, ListSourcesRouteApiV1SourcesGetResponses, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses, ListTextMentionsRouteApiV1TextMentionsGetData, ListTextMentionsRouteApiV1TextMentionsGetErrors, ListTextMentionsRouteApiV1TextMentionsGetResponses, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetData, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetErrors, ListUserFilterOptionsRouteApiV1UserFilterOptionsGetResponses, ListUsersRouteApiV1UsersGetData, ListUsersRouteApiV1UsersGetErrors, ListUsersRouteApiV1UsersGetResponses, LookupDocumentRouteApiV1DocumentsLookupGetData, LookupDocumentRouteApiV1DocumentsLookupGetErrors, LookupDocumentRouteApiV1DocumentsLookupGetResponses, LookupImageRouteApiV1ImagesLookupGetData, LookupImageRouteApiV1ImagesLookupGetErrors, LookupImageRouteApiV1ImagesLookupGetResponses, LookupPageRouteApiV1PagesLookupGetData, LookupPageRouteApiV1PagesLookupGetErrors, LookupPageRouteApiV1PagesLookupGetResponses, LookupSourceRouteApiV1SourcesLookupGetData, LookupSourceRouteApiV1SourcesLookupGetErrors, LookupSourceRouteApiV1SourcesLookupGetResponses, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostData, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostErrors, MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostData, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostErrors, MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponses, MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostData, MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostErrors, MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponses, MergePersonRouteApiV1PeopleTargetEntityIdMergePostData, MergePersonRouteApiV1PeopleTargetEntityIdMergePostErrors, MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponses, PatchEntityBatchRouteApiV1EntitiesBatchPatchData, PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors, PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses, PatchEntityRouteApiV1EntitiesEntityIdPatchData, PatchEntityRouteApiV1EntitiesEntityIdPatchErrors, PatchEntityRouteApiV1EntitiesEntityIdPatchResponses, PatchFaceBatchRouteApiV1FacesBatchPatchData, PatchFaceBatchRouteApiV1FacesBatchPatchErrors, PatchFaceBatchRouteApiV1FacesBatchPatchResponses, PatchFaceRouteApiV1FacesDetectionIdPatchData, PatchFaceRouteApiV1FacesDetectionIdPatchErrors, PatchFaceRouteApiV1FacesDetectionIdPatchResponses, PatchPageRouteApiV1PagesPageSourceIdPatchData, PatchPageRouteApiV1PagesPageSourceIdPatchErrors, PatchPageRouteApiV1PagesPageSourceIdPatchResponses, PatchPersonBatchRouteApiV1PeopleBatchPatchData, PatchPersonBatchRouteApiV1PeopleBatchPatchErrors, PatchPersonBatchRouteApiV1PeopleBatchPatchResponses, PatchPersonRouteApiV1PeopleEntityIdPatchData, PatchPersonRouteApiV1PeopleEntityIdPatchErrors, PatchPersonRouteApiV1PeopleEntityIdPatchResponses, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchData, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchData, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses, PatchUserRouteApiV1UsersUserIdPatchData, PatchUserRouteApiV1UsersUserIdPatchErrors, PatchUserRouteApiV1UsersUserIdPatchResponses, PutEntityRouteApiV1EntitiesEntityIdPutData, PutEntityRouteApiV1EntitiesEntityIdPutErrors, PutEntityRouteApiV1EntitiesEntityIdPutResponses, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutData, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutErrors, PutPageImageByIdRouteApiV1PagesPageSourceIdImagePutResponses, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutData, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutErrors, PutPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutPutResponses, PutPersonRouteApiV1PeopleEntityIdPutData, PutPersonRouteApiV1PeopleEntityIdPutErrors, PutPersonRouteApiV1PeopleEntityIdPutResponses, RefreshTokenTokenRefreshPostData, RefreshTokenTokenRefreshPostErrors, RefreshTokenTokenRefreshPostResponses, RegisterFaceModelRouteApiV1FaceModelsPostData, RegisterFaceModelRouteApiV1FaceModelsPostErrors, RegisterFaceModelRouteApiV1FaceModelsPostResponses, SearchDocumentsGetApiV1SearchDocumentsGetData, SearchDocumentsGetApiV1SearchDocumentsGetErrors, SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchEntitiesGetApiV1SearchEntitiesGetData, SearchEntitiesGetApiV1SearchEntitiesGetErrors, SearchEntitiesGetApiV1SearchEntitiesGetResponses, SearchFacesGetApiV1SearchFacesGetData, SearchFacesGetApiV1SearchFacesGetErrors, SearchFacesGetApiV1SearchFacesGetResponses, SearchPagesGetApiV1SearchPagesGetData, SearchPagesGetApiV1SearchPagesGetErrors, SearchPagesGetApiV1SearchPagesGetResponses, SearchPeopleGetApiV1SearchPeopleGetData, SearchPeopleGetApiV1SearchPeopleGetErrors, SearchPeopleGetApiV1SearchPeopleGetResponses, TranslateRouteApiV1TranslatePostData, TranslateRouteApiV1TranslatePostErrors, TranslateRouteApiV1TranslatePostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -25,6 +25,18 @@ export const searchEntitiesGetApiV1SearchEntitiesGet = <ThrowOnError extends boo
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/search-entities',
+    ...options
+});
+
+/**
+ * Search People Get
+ *
+ * Search people with person filters (life-date ranges) and sorts (surname, life dates).
+ */
+export const searchPeopleGetApiV1SearchPeopleGet = <ThrowOnError extends boolean = false>(options?: Options<SearchPeopleGetApiV1SearchPeopleGetData, ThrowOnError>) => (options?.client ?? client).get<SearchPeopleGetApiV1SearchPeopleGetResponses, SearchPeopleGetApiV1SearchPeopleGetErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/search-people',
     ...options
 });
 
@@ -198,6 +210,143 @@ export const mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost = <T
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/entities/{target_entity_id}:merge-batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List People Route
+ */
+export const listPeopleRouteApiV1PeopleGet = <ThrowOnError extends boolean = false>(options?: Options<ListPeopleRouteApiV1PeopleGetData, ThrowOnError>) => (options?.client ?? client).get<ListPeopleRouteApiV1PeopleGetResponses, ListPeopleRouteApiV1PeopleGetErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people',
+    ...options
+});
+
+/**
+ * Create Person Route
+ */
+export const createPersonRouteApiV1PeoplePost = <ThrowOnError extends boolean = false>(options: Options<CreatePersonRouteApiV1PeoplePostData, ThrowOnError>) => (options.client ?? client).post<CreatePersonRouteApiV1PeoplePostResponses, CreatePersonRouteApiV1PeoplePostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete Person Route
+ */
+export const deletePersonRouteApiV1PeopleEntityIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeletePersonRouteApiV1PeopleEntityIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeletePersonRouteApiV1PeopleEntityIdDeleteResponses, DeletePersonRouteApiV1PeopleEntityIdDeleteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{entity_id}',
+    ...options
+});
+
+/**
+ * Get Person Route
+ */
+export const getPersonRouteApiV1PeopleEntityIdGet = <ThrowOnError extends boolean = false>(options: Options<GetPersonRouteApiV1PeopleEntityIdGetData, ThrowOnError>) => (options.client ?? client).get<GetPersonRouteApiV1PeopleEntityIdGetResponses, GetPersonRouteApiV1PeopleEntityIdGetErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{entity_id}',
+    ...options
+});
+
+/**
+ * Patch Person Route
+ *
+ * Patch a person; omitted fields are preserved and null clears. A death date before the birth date, including the stored one, returns 422.
+ */
+export const patchPersonRouteApiV1PeopleEntityIdPatch = <ThrowOnError extends boolean = false>(options: Options<PatchPersonRouteApiV1PeopleEntityIdPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchPersonRouteApiV1PeopleEntityIdPatchResponses, PatchPersonRouteApiV1PeopleEntityIdPatchErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{entity_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create or replace a person
+ *
+ * Create the person with this UUID if it does not exist (201), otherwise replace its fields (200). Omitted optional fields, including names and life dates, are cleared on replace. Linked faces, text mentions and the portrait selection are kept. A UUID of another entity type returns 409.
+ */
+export const putPersonRouteApiV1PeopleEntityIdPut = <ThrowOnError extends boolean = false>(options: Options<PutPersonRouteApiV1PeopleEntityIdPutData, ThrowOnError>) => (options.client ?? client).put<PutPersonRouteApiV1PeopleEntityIdPutResponses, PutPersonRouteApiV1PeopleEntityIdPutErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{entity_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Patch Person Batch Route
+ *
+ * Patch people; omitted fields are preserved and null clears. Missing IDs and non-person entities return null.
+ */
+export const patchPersonBatchRouteApiV1PeopleBatchPatch = <ThrowOnError extends boolean = false>(options: Options<PatchPersonBatchRouteApiV1PeopleBatchPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchPersonBatchRouteApiV1PeopleBatchPatchResponses, PatchPersonBatchRouteApiV1PeopleBatchPatchErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create Person Batch Route
+ */
+export const createPersonBatchRouteApiV1PeopleBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreatePersonBatchRouteApiV1PeopleBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreatePersonBatchRouteApiV1PeopleBatchPostResponses, CreatePersonBatchRouteApiV1PeopleBatchPostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Merge one person into this target
+ *
+ * Reassign the source person's faces and text mentions to the target in the URL, add its aliases without duplicates, then delete the source. Optional description, name and life-date fields update the target; null clears them and omission preserves the target's values.
+ */
+export const mergePersonRouteApiV1PeopleTargetEntityIdMergePost = <ThrowOnError extends boolean = false>(options: Options<MergePersonRouteApiV1PeopleTargetEntityIdMergePostData, ThrowOnError>) => (options.client ?? client).post<MergePersonRouteApiV1PeopleTargetEntityIdMergePostResponses, MergePersonRouteApiV1PeopleTargetEntityIdMergePostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{target_entity_id}:merge',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Merge multiple people into this target
+ *
+ * Atomically reassign every source person's faces and text mentions to the target in the URL, add their aliases without duplicates, then delete all sources. Optional description, name and life-date fields update the target; null clears them and omission preserves the target's values.
+ */
+export const mergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPost = <ThrowOnError extends boolean = false>(options: Options<MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostData, ThrowOnError>) => (options.client ?? client).post<MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostResponses, MergePersonBatchRouteApiV1PeopleTargetEntityIdMergeBatchPostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/people/{target_entity_id}:merge-batch',
     ...options,
     headers: {
         'Content-Type': 'application/json',
