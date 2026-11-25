@@ -90,8 +90,6 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE:?required}
-    volumes:
-      - ./staging-login.html:/usr/share/nginx/html/staging-login.html:ro
     logging: *staging-logging
     restart: unless-stopped
     init: true

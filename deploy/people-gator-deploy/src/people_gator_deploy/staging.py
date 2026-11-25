@@ -211,7 +211,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         write_private(directory / "provenance.json", json.dumps(generation["provenance"]))
 
     def readiness(self, attempts=30):
-        routed_readiness(self.host, extra={"/staging-login.html": b"<form>"}, attempts=attempts)
+        routed_readiness(self.host, attempts=attempts)
 
     def recover_activation(self, *, refresh_requested=False):
         journal = self.staging_root / "activation.json"

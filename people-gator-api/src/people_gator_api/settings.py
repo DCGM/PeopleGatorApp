@@ -280,6 +280,13 @@ class JwkSettings(BaseModel):
     audience: str = "preview.peoplegator.dev"
     
 
+class PublicLoginSettings(BaseModel):
+    """Account the browser app signs in with by itself. Published to every browser."""
+
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
 # --------------------------------------------------------------------------------------
 # Full application settings
 # --------------------------------------------------------------------------------------
@@ -307,6 +314,8 @@ class Settings(BaseSettings):
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     jwk: JwkSettings = Field(default_factory=JwkSettings)
+    # Unset: the browser app shows its login page instead of opening as a public account.
+    public_login: PublicLoginSettings | None = None
     api_keys: APIKeySettings = Field(default_factory=APIKeySettings)
     embedding_service: EmbeddingServiceSettings | None = None
     openrouter: OpenRouterSettings | None = None

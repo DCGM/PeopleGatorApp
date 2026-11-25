@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock
 import argon2
 import pytest
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from httpx import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 
@@ -14,7 +16,9 @@ from auth_doubles import IdentityStore
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserResponse
+from people_gator_api.routes import jwks
 from people_gator_api.services import auth_service, jwk_service
+from people_gator_api.services.database_service import get_database_context
 from people_gator_api.settings import (
     JwkSettings, LocalStorageSettings, Settings, StorageSettings, settings,
 )
@@ -431,3 +435,43 @@ async def test_access_token_lifetime_is_configurable(
     with pytest.raises(HTTPException) as expired:
         await jwk_service.verify_access_token(token.access_token)
     assert expired.value.status_code == 401
+
+
+@pytest.fixture
+def token_client(users_file: Path) -> TestClient:
+    app = FastAPI()
+    app.include_router(jwks.router)
+    app.dependency_overrides[get_database_context] = identity_store.context
+    return TestClient(app)
+
+
+def scopes_of(response: Response) -> list[str]:
+    token = TokenResponse.model_validate(response.json())
+    return asyncio.run(jwk_service.verify_access_token(token.access_token))["scopes"]
+
+
+def test_login_without_a_scope_grants_the_accounts_scopes(token_client: TestClient) -> None:
+    credentials = {"username": "alice", "password": "secret"}
+    response = token_client.post("/token/login", data=credentials)
+    assert response.status_code == 200
+    assert scopes_of(response) == sorted([auth_service.BROWSE_SCOPE, auth_service.ANNOTATE_SCOPE])
+    # A requested scope the account lacks is still refused, not silently dropped.
+    response = token_client.post("/token/login", data={**credentials, "scope": auth_service.ADMIN_SCOPE})
+    assert response.status_code == 403
+
+
+def test_login_rejects_accounts_without_permissions(token_client: TestClient, users_file: Path) -> None:
+    users = json.loads(users_file.read_text())
+    users["bob"]["hash"] = argon2.PasswordHasher().hash("secret")
+    users_file.write_text(json.dumps(users))
+    response = token_client.post("/token/login", data={"username": "bob", "password": "secret"})
+    assert response.status_code == 403
+    assert identity_store.users.by_subject(settings.jwk.issuer, "bob") is None
+
+
+def test_login_rejection_does_not_open_the_browser_dialog(token_client: TestClient) -> None:
+    for data in ({"username": "alice", "password": "wrong"}, {"username": "nobody", "password": "secret"}):
+        response = token_client.post("/token/login", data=data)
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
+    assert "/token/basic" not in token_client.app.openapi()["paths"]

@@ -130,16 +130,9 @@ async def resolve_active_user(
 
 
 
-async def get_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    database_context: IdentityContextDependency,
-) -> TokenResponse:
-    """Get the raw access token and refresh token from the request context."""
-    username = form_data.username
-    password = form_data.password
-    scopes = form_data.scopes
-    users = await get_users()
-    user_record = users.get(username)
+async def _verify_password(username: str, password: str, challenge: str) -> UserRecord:
+    """Return the user's record when the password matches its Argon2 hash."""
+    user_record = (await get_users()).get(username)
     valid_password = False
     if user_record is not None:
         try:
@@ -150,9 +143,15 @@ async def get_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Basic"},
+            headers={"WWW-Authenticate": challenge},
         )
-    _check_scopes(scopes, user_record["scopes"])
+    return user_record
+
+
+async def _issue_session(
+    username: str, scopes: list[str], database_context: IdentityContext,
+) -> TokenResponse:
+    """Issue an access token and a refresh token tracked as an in-memory session."""
     user = await resolve_active_user(database_context, username)
 
     access_token = await issue_access_token(subject=username, scopes=scopes, user_id=user.user_id)
@@ -167,9 +166,26 @@ async def get_token(
         if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
             oldest_session_id = next(iter(refresh_sessions))
             del refresh_sessions[oldest_session_id]
-    
+
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
-    
+
+
+async def get_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    database_context: IdentityContextDependency,
+) -> TokenResponse:
+    """Issue tokens for a username and password posted as an OAuth2 password form.
+
+    Without a requested scope the token carries every scope the account holds.
+    """
+    # Not "Basic": a Basic challenge makes browsers open their own credentials dialog.
+    user_record = await _verify_password(form_data.username, form_data.password, "Bearer")
+    scopes = form_data.scopes or sorted(set(user_record["scopes"]) & KNOWN_SCOPES)
+    if not scopes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permitted scopes")
+    _check_scopes(scopes, user_record["scopes"])
+    return await _issue_session(form_data.username, scopes, database_context)
+
 
 api_key_security = APIKeyHeader(name="X-API-Key", scheme_name="PeopleGatorAPIKey", auto_error=False)
 

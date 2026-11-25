@@ -34,7 +34,7 @@ load `.env` relative to this working directory. Local storage needs no S3 keys.
 to `peoplegator_api/users.json` inside the selected storage root without replacing
 existing accounts. A missing users file creates an empty object, not a built-in
 account. See [Architecture](../docs/ARCHITECTURE.md#access-rules) for JWT scopes,
-refresh behavior and the browser's automatic demo login.
+refresh behavior and the browser's sign-in.
 
 Run `uv run --locked pytest tests`. The
 [test-store instructions](../docs/DEVELOPMENT.md#test-stores-and-validation) enable

@@ -943,7 +943,7 @@ export const getOpenidConfigurationWellKnownOpenidConfigurationGet = <ThrowOnErr
 /**
  * Get Token
  *
- * Return a signed JWT token for testing purposes.
+ * Sign in with a username and password; the token carries the requested or all held scopes.
  */
 export const getTokenTokenLoginPost = <ThrowOnError extends boolean = false>(options: Options<GetTokenTokenLoginPostData, ThrowOnError>) => (options.client ?? client).post<GetTokenTokenLoginPostResponses, GetTokenTokenLoginPostErrors, ThrowOnError>({
     ...urlSearchParamsBodySerializer,

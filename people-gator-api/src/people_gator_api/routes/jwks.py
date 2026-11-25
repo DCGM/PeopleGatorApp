@@ -47,7 +47,7 @@ async def get_openid_configuration() -> OpenIDConfigurationResponse:
 
 @router.post("/token/login", response_model=TokenResponse)
 async def get_token(token: TokenDependency) -> TokenResponse:
-    """Return a signed JWT token for testing purposes."""
+    """Sign in with a username and password; the token carries the requested or all held scopes."""
     return token
 
 

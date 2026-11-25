@@ -64,7 +64,7 @@ The database sits on an internal network reachable only by `migrate` and
 restricted runtime role, use [`compose.release.yaml`](#choose-a-deployment-workflow)
 or the [production startup guide](../people-gator-api/docs/PRODUCTION-STARTUP.md).
 Back up both volumes as described in [Data maintenance](DATA_MAINTENANCE.md). The
-browser login limitation below applies to this stack too.
+browser sign-in below applies to this stack too.
 
 ## Production-format images
 
@@ -110,10 +110,13 @@ demo/preview stores, not a real release database. Follow the
 privileges and exact validation limits and [Data maintenance](DATA_MAINTENANCE.md)
 for backup/restore review.
 
-The current browser embeds automatic demo login credentials and requests all
-scopes. Replacing this with a reviewed user login flow is required before treating
-the application as a production access-controlled UI. Changing `VITE_*` values
-cannot make embedded credentials secret.
+The app signs users in on its login page (`/login`) with an account from the
+users file and keeps the tokens for the browser tab. An API restart ends the
+session, and the user signs in again. Serve the app over HTTPS only. To let
+anyone browse without the login page, set `PUBLIC_LOGIN` to an account from the
+users file: the app signs in as it by itself and offers **Sign in** for personal
+accounts. That username and password are served to every browser, so the account
+is public; give it browse-only scopes where data must not be edited.
 
 ## Configuration reference
 
@@ -134,6 +137,7 @@ explicitly set the unused object to null, as in [Development](DEVELOPMENT.md).
 | `STORAGE__S3__ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/REGION/ENDPOINT_URL` | S3 backend, mutually exclusive with local configuration |
 | `JWK__USERS_PATH`, `JWK__KEY_PATH` | Relative storage keys `peoplegator_api/users.json`, `peoplegator_api/jwks.json` |
 | `JWK__ISSUER`, `JWK__AUDIENCE` | Match the intended application origin/identity namespace; defaults target the historical preview host |
+| `PUBLIC_LOGIN__USERNAME`, `PUBLIC_LOGIN__PASSWORD` | One setting, unset by default: the account the browser app opens as without its login page. Served publicly by `/api/v1/app-config`; PR previews and development Compose set `test` / `test`. Never set it where data is private |
 | `JWK__ACCESS_TOKEN_LIFETIME_SECONDS` | Access-token lifetime, default 7200; also the longest a disabled user's issued token stays usable |
 | `API_KEYS__KEYS_PATH` | API-key credential file key, default `peoplegator_api/api-keys.json` |
 | `CORS__ALLOW_ORIGINS`, `CORS__ALLOW_ORIGIN_REGEX` | JSON list and regex; default regex permits loopback HTTP(S) |
@@ -156,8 +160,8 @@ account. The shipped example supplies demo `test` / `test`. Refresh sessions liv
 in memory and do not survive API restarts. See
 [API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
-Frontend `VITE_API_BASE_URL`, `VITE_API_USERNAME` and `VITE_API_PASSWORD` are
-browser-visible build-time variables. `ALLOWED_VITE_HOSTS` affects the development
+Frontend `VITE_API_BASE_URL` is a
+browser-visible build-time variable. `ALLOWED_VITE_HOSTS` affects the development
 server only. Development Compose uses root `.env` values `POSTGRES_*`,
 `HTTP_HOST`, `HTTP_PORT`, `PUBLIC_ORIGIN`, `HTTP_API_BASE_URL`, `DOCKER_SOCKET` and
 optional `OPENROUTER_API_KEY`; it maps them to container settings.
