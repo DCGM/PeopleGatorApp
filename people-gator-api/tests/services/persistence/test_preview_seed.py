@@ -188,7 +188,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (48, 170, 124)
+    assert await counts(database) == (52, 170, 124)
     assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
     assert result.pages.keys() == {page.key for page in PAGES}
 
@@ -256,7 +256,9 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas", "sidebar-direct",
                                                                        *(f"pagination-{i}" for i in range(1, 15))}),
-        (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
+        # Life-date examples (#123) are evidence-free, like Lenka.
+        (EntityListFilter(has_detections=False, has_mentions=False),
+         {"lenka", "life-full", "life-living", "life-surname", "life-first"}),
         (
             EntityListFilter(document_source_id=[result.documents["album"]]),
             {"ada", "emil", "ada-candidate"},
@@ -373,7 +375,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         # Database-generated identities differ; fixture keys, counts and media do not.
         for field in type(fresh).model_fields:
             assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
-        assert await counts(copy) == await counts(database) == (48, 170, 124)
+        assert await counts(copy) == await counts(database) == (52, 170, 124)
 
         def files(root: Path) -> dict[Path, bytes]:
             return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
@@ -387,7 +389,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         }
         # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
         assert await preview.seed_preview(copy, storage) == copied
-        assert await counts(copy) == (48, 170, 124)
+        assert await counts(copy) == (52, 170, 124)
 
 
 @pytest.mark.asyncio
@@ -508,7 +510,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (48, 170, 124)
+    assert await counts(database) == (52, 170, 124)
 
 
 
@@ -529,7 +531,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (48, 170, 124)
+    assert await counts(database) == (52, 170, 124)
 
 
     stored = await database.entities.get(first.entities["ada"])
@@ -553,7 +555,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (49, 170, 124)
+    assert await counts(database) == (53, 170, 124)
 
 
 
@@ -579,8 +581,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 48 and len(result.faces) == 170
-    assert await counts(database) == (48, 170, 124)
+    assert len(result.entities) == 52 and len(result.faces) == 170
+    assert await counts(database) == (52, 170, 124)
 
 
 
@@ -3735,7 +3737,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (48, 170, 124)
+    assert await counts(db) == (52, 170, 124)
 
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
@@ -5730,3 +5732,93 @@ async def test_put_created_person_keeps_evidence_when_replaced_and_reruns_keep_i
     repeated = await preview.seed_preview(database, filesystem)
     assert repeated.entities["put-replace"] == entity_id
     assert await database.entities.get(entity_id) == after
+
+
+LIFE_DATE_KEYS = ("ada", "emil", "life-full", "life-living", "life-surname", "life-first")
+
+
+@pytest.mark.asyncio
+async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
+    """#123: names and life dates make the display-name, surname, birth and death orders differ."""
+    from datetime import date
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    ids = [seed.entities[key] for key in LIFE_DATE_KEYS]
+    by_id = {value: key for key, value in seed.entities.items()}
+
+    async def order(sort, direction="asc", **bounds):
+        result = await db.entities.list(EntityListRequest(
+            limit=100, sort=sort, sort_direction=direction, return_total_count=True,
+            filter_=EntityListFilter(entity_id=ids, **bounds),
+        ))
+        return [by_id[item.entity_id] for item in result.items]
+
+    assert await order("name") == ["ada", "life-living", "emil", "life-full", "life-surname", "life-first"]
+    # Accent-insensitive surnames, then first names; no surname sorts last.
+    assert await order("surname") == ["life-living", "emil", "life-surname", "ada", "life-full", "life-first"]
+    assert await order("birth_date") == ["life-first", "life-full", "emil", "ada", "life-living", "life-surname"]
+    # A living person and Emil have no death date and stay last when descending.
+    assert await order("death_date", "desc") == ["ada", "life-full", "life-first", "life-surname", "emil", "life-living"]
+    # Inclusive ranges exclude unknown dates and combine with AND.
+    assert await order("birth_date", birth_date_from=date(1870, 1, 1), birth_date_to=date(1910, 12, 31)) == [
+        "life-first", "life-full", "emil", "ada"]
+    assert await order("death_date", death_date_to=date(1949, 12, 31)) == ["life-surname", "life-first"]
+    assert await order("name", birth_date_from=date(1875, 1, 9), death_date_to=date(1940, 9, 30)) == ["life-first"]
+
+    full = await db.entities.get(seed.entities["life-full"])
+    assert (full.first_name, full.middle_names, full.surname) == ("Karel", "Jan Maria", "Vrba")
+    assert (full.birth_date, full.death_date) == (date(1890, 3, 14), date(1962, 11, 2))
+    living = await db.entities.get(seed.entities["life-living"])
+    assert living.birth_date == date(1948, 6, 1) and living.death_date is None
+    # Every example link resolves to a seeded person or the people search.
+    assert urlsplit(seed.filter_examples["person-life-dates"]).path == f"/people/{seed.entities['life-full']}"
+    born = parse_qs(urlsplit(seed.filter_examples["people-born-1870-1910"]).query)
+    assert born == {"born_from": ["1870-01-01"], "born_to": ["1910-12-31"], "sort": ["birth_date"], "dir": ["asc"]}
+    assert parse_qs(urlsplit(seed.filter_examples["people-died-before-1950"]).query)["died_to"] == ["1949-12-31"]
+    assert parse_qs(urlsplit(seed.filter_examples["people-surname-sort"]).query)["sort"] == ["surname"]
+
+
+@pytest.mark.asyncio
+async def test_life_date_upgrade_fills_older_people_once_and_keeps_review_edits(seed_target, monkeypatch):
+    """A preview seeded before #123 gains names/dates; edited or cleared records stay as reviewed."""
+    from datetime import date
+
+    db, filesystem, _ = seed_target
+    with monkeypatch.context() as legacy:
+        legacy.setattr(preview, "PEOPLE", tuple(replace(person, details=None) for person in preview.PEOPLE))
+        old = await preview.seed_preview(db, filesystem)
+    assert (await db.entities.get(old.entities["ada"])).birth_date is None
+    actor = GenericActor(user_id=old.users["reviewer"])
+    reviewed = await db.entities.patch(old.entities["life-full"], EntityPatchRequest(first_name="Karl"), actor)
+    untouched = await db.entities.get(old.entities["lenka"])
+
+    upgraded = await preview.seed_preview(db, filesystem)
+    assert upgraded.entities.items() >= old.entities.items()
+    ada = await db.entities.get(old.entities["ada"])
+    assert (ada.first_name, ada.surname, ada.birth_date) == ("Ada", "Novak", date(1902, 4, 17))
+    assert (await db.entities.get(old.entities["life-living"])).surname == "Bartošová"
+    # The reviewer's partial edit is preserved rather than completed or overwritten.
+    full = await db.entities.get(old.entities["life-full"])
+    assert (full.first_name, full.surname, full.last_touched_at) == ("Karl", None, reviewed.last_touched_at)
+    assert await db.entities.get(old.entities["lenka"]) == untouched
+
+    # A cleared value stays cleared; reruns and interrupted checkpoints never repeat a patch.
+    cleared = await db.entities.patch(old.entities["ada"], EntityPatchRequest(
+        first_name=None, surname=None, birth_date=None, death_date=None), actor)
+    upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    upgrades.person_details["person-details-v1/emil"].complete = False
+    await filesystem.write_bytes(preview.UPGRADES_KEY, upgrades.model_dump_json().encode())
+    patches = []
+    original = db.entities.patch
+
+    async def recording_patch(*args, **kwargs):
+        patches.append(args[0])
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(db.entities, "patch", recording_patch)
+    assert await preview.seed_preview(db, filesystem) == upgraded
+    assert old.entities["ada"] not in patches and old.entities["emil"] not in patches
+    assert await db.entities.get(old.entities["ada"]) == cleared
+    upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    assert all(edit.complete for edit in upgrades.person_details.values())

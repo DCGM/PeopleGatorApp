@@ -1698,3 +1698,43 @@ Changing `entity_type` returns `409`.
 Reruns find her through the seed manifest, then by name, then by that UUID, and
 never PUT over an existing record, so replacements and other review edits survive. Integration tests check the UUID,
 linked evidence, portrait, a replacement and rerun preservation.
+
+## Person names and life dates (#123)
+
+Six people carry structured names and life dates; every other person has none,
+so they sort last and fall outside date ranges:
+
+| Person | First / middle / surname | Born | Died |
+| --- | --- | --- | --- |
+| Karel Vrba (`life-full`) | Karel / Jan Maria / Vrba | 1890-03-14 | 1962-11-02 |
+| Alena Bartošová (`life-living`) | Alena / — / Bartošová | 1948-06-01 | — (living) |
+| Photographer Hrubý (`life-surname`) | — / — / Hrubý | — | 1931-05-20 |
+| Zdeněk of Kladno (`life-first`) | Zdeněk / — / — | 1875-01-09 | 1940-09-30 |
+| Ada Novak (`ada`) | Ada / — / Novak | 1902-04-17 | 1979-08-30 |
+| Emil Dvorak (`emil`) | Emil / — / Dvorak | 1898-12-05 | — |
+
+- `person-life-dates` opens Karel's **Details** tab. Edit first name, middle
+  names, surname and both dates; clearing a field stores it as unknown, and a
+  death date before the birth date is rejected. People cards show life dates,
+  for example `1890–1962`, or `b. 1948` and `d. 1931` when one date is known.
+- `people-surname-sort` sorts People by **Surname** (then first and middle
+  names): Bartošová, Dvorak, Hrubý, Novak, Vrba, then Zdeněk and everyone
+  without a surname. **Name** keeps the display-name order (Ada, Alena, Emil,
+  Karel, Photographer, Zdeněk).
+- `people-born-1870-1910` applies **Born from** / **Born to** and sorts by
+  **Birth date** (Zdeněk, Karel, Emil, Ada). `people-died-before-1950` applies
+  **Died to** with **Death date** newest first (Zdeněk, Hrubý). Remove a range
+  from its tag; both bounds are inclusive and the URL keeps `born_from`,
+  `born_to`, `died_from` and `died_to` as `YYYY-MM-DD`.
+- The API exposes the same ranges as `filter.birth_date_from`,
+  `filter.birth_date_to`, `filter.death_date_from` and `filter.death_date_to`
+  and the sorts as `sort=surname|birth_date|death_date` on `/api/v1/entities`
+  and `/api/v1/search-entities`.
+
+Previews seeded before #123 receive Ada's and Emil's values through the
+`person-details-v1/<fixture>` upgrade (`peoplegator_api/preview-seed-upgrades.json`).
+It records each record's last change first and patches only a record unchanged
+since then whose person fields are all still unknown, so review edits and
+cleared values survive and an interrupted run never repeats a write. The four
+new people are created with their values. Integration tests check the orders,
+ranges, example links, the upgrade, review-edit preservation and checkpoint recovery.
