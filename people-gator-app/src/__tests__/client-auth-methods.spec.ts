@@ -3,16 +3,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
 import { retryUnlessClientError } from '@/query/api'
-import { apiClient, getAccessToken, signIn, signInProblem } from '@/query/client'
+import { appConfig } from '@/app-config'
+import {
+  apiClient,
+  currentUser,
+  getAccessToken,
+  isPublicSession,
+  login,
+  loginAsPublic,
+  signInRequired,
+  signOut,
+} from '@/query/client'
 
 afterEach(() => {
+  signOut()
   sessionStorage.clear()
-  signInProblem.value = undefined
-  vi.unstubAllEnvs()
+  signInRequired.value = false
+  appConfig.publicLogin = null
 })
 
-const freshToken = () =>
-  `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
+const freshToken = (sub = 'alice') =>
+  `header.${btoa(JSON.stringify({ exp: 4102444800, uid: 'u', sub }))}.signature`
+const tokens = (sub?: string) => ({
+  status: 200,
+  data: { access_token: freshToken(sub), refresh_token: 'r', token_type: 'bearer' },
+})
+const guest = { username: 'guest', password: 'open' }
 
 type Reply = { status: number; data?: unknown }
 
@@ -104,68 +120,89 @@ describe('generated client authentication alternatives', () => {
     }
   })
 
-  it('signs in through the browser dialog endpoint without sending credentials', async () => {
-    const token = freshToken()
-    await withReplies(
-      [{ status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } }],
-      async (calls) => {
-        expect(await getAccessToken()).toBe(token)
-        expect(calls).toHaveLength(1)
-        const url = new URL(calls[0]!.url!)
-        expect(url.pathname).toBe('/token/basic')
-        expect(calls[0]!.method).toBe('post')
-        expect(url.searchParams.get('scope')).toContain('people-gator:browse')
-        expect(AxiosHeaders.from(calls[0]!.headers).get('Authorization')).toBeUndefined()
-        expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('r')
-      },
-    )
+  it('opens as the configured public account without a login page', async () => {
+    appConfig.publicLogin = guest
+    await withReplies([tokens('guest')], async (calls) => {
+      expect(await getAccessToken()).toBe(freshToken('guest'))
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.url).toMatch(/\/token\/login$/)
+      // No scope: the API grants what the account holds, so a browse-only guest is not refused.
+      expect(String(calls[0]!.data)).toBe('username=guest&password=open')
+      expect(currentUser.value).toBe('guest')
+      expect(isPublicSession.value).toBe(true)
+      expect(signInRequired.value).toBe(false)
+    })
   })
 
-  it('stays signed out after the dialog is dismissed until the user signs in again', async () => {
-    const token = freshToken()
-    await withReplies(
-      [
-        { status: 401 },
-        { status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } },
-      ],
-      async (calls) => {
-        await expect(getAccessToken()).rejects.toThrow()
-        expect(signInProblem.value).toBe('signed-out')
-        const waiting = await getAccessToken().catch((error: unknown) => error)
-        expect(calls).toHaveLength(1)
-        expect(retryUnlessClientError(0, waiting)).toBe(false)
-        await signIn()
-        expect(signInProblem.value).toBeUndefined()
-        expect(await getAccessToken()).toBe(token)
-        expect(calls).toHaveLength(2)
-      },
-    )
+  it('requires the login page without a public account, asking the API only once', async () => {
+    await withReplies([], async (calls) => {
+      const error = await getAccessToken().catch((cause: unknown) => cause)
+      expect(retryUnlessClientError(0, error)).toBe(false)
+      expect(signInRequired.value).toBe(true)
+      await expect(getAccessToken()).rejects.toThrow('Sign in required')
+      expect(calls).toHaveLength(0)
+    })
   })
 
-  it('reports an account without access', async () => {
-    await withReplies([{ status: 403 }], async () => {
-      await expect(getAccessToken()).rejects.toThrow()
-      expect(signInProblem.value).toBe('forbidden')
+  it('requires the login page when the public account is refused', async () => {
+    appConfig.publicLogin = guest
+    await withReplies([{ status: 401 }], async () => {
+      await expect(getAccessToken()).rejects.toThrow('Sign in required')
+      expect(signInRequired.value).toBe(true)
     })
   })
 
   it('does not treat an unreachable API as signed out', async () => {
+    appConfig.publicLogin = guest
     await withReplies([{ status: 503 }], async () => {
-      await expect(getAccessToken()).rejects.toThrow()
-      expect(signInProblem.value).toBeUndefined()
+      await expect(getAccessToken()).rejects.toThrow('failed')
+      expect(signInRequired.value).toBe(false)
     })
   })
 
-  it('signs in automatically with a configured development account', async () => {
-    vi.stubEnv('VITE_API_USERNAME', 'test')
-    vi.stubEnv('VITE_API_PASSWORD', 'test')
-    const token = freshToken()
-    await withReplies(
-      [{ status: 200, data: { access_token: token, refresh_token: 'r', token_type: 'bearer' } }],
-      async (calls) => {
-        expect(await getAccessToken()).toBe(token)
-        expect(calls[0]!.url).toMatch(/\/token\/login$/)
-      },
-    )
+  it('signs a person in from the login page and out again', async () => {
+    appConfig.publicLogin = guest
+    await withReplies([tokens('alice'), tokens('guest')], async (calls) => {
+      await login('alice', 'secret')
+      expect(String(calls[0]!.data)).toBe('username=alice&password=secret')
+      expect(currentUser.value).toBe('alice')
+      expect(isPublicSession.value).toBe(false)
+      expect(await getAccessToken()).toBe(freshToken('alice'))
+
+      signOut()
+      expect(currentUser.value).toBeUndefined()
+      expect(sessionStorage.getItem('people-gator.access-token')).toBeNull()
+      expect(sessionStorage.getItem('people-gator.refresh-token')).toBeNull()
+      // Signing out does not fall back to the public account by itself.
+      signInRequired.value = false
+      await expect(getAccessToken()).rejects.toThrow('Sign in required')
+      expect(calls).toHaveLength(1)
+
+      await loginAsPublic()
+      expect(isPublicSession.value).toBe(true)
+      expect(await getAccessToken()).toBe(freshToken('guest'))
+    })
+  })
+
+  it('asks a person to sign in again when their session ends, not the public account', async () => {
+    appConfig.publicLogin = guest
+    await withReplies([tokens('alice'), { status: 401 }], async (calls) => {
+      await login('alice', 'secret')
+      sessionStorage.setItem('people-gator.access-token', 'expired')
+      await expect(getAccessToken()).rejects.toThrow('Sign in required')
+      expect(calls).toHaveLength(2)
+      expect(calls[1]!.url).toMatch(/\/token\/refresh$/)
+      expect(currentUser.value).toBeUndefined()
+    })
+  })
+
+  it('renews an ended public session by itself', async () => {
+    appConfig.publicLogin = guest
+    await withReplies([tokens('guest'), { status: 401 }, tokens('guest')], async (calls) => {
+      await getAccessToken()
+      sessionStorage.setItem('people-gator.access-token', 'expired')
+      expect(await getAccessToken()).toBe(freshToken('guest'))
+      expect(calls[2]!.url).toMatch(/\/token\/login$/)
+    })
   })
 })

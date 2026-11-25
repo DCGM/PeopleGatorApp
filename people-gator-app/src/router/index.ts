@@ -8,6 +8,7 @@ import { legacyScanLocation } from '@/viewmodels/document-navigation'
 import DocumentListView from '@/views/DocumentListView.vue'
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
 import PersonDetailView from '@/views/PersonDetailView.vue'
+import LoginView from '@/views/LoginView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -59,6 +60,7 @@ const router = createRouter({
       component: PersonDetailView,
       meta: { title: 'Person detail' },
     },
+    { path: '/login', name: 'login', component: LoginView, meta: { title: 'Sign in' } },
     { path: '/:pathMatch(.*)*', redirect: { name: 'document-list' } },
   ],
 })

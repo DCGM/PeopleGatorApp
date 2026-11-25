@@ -2,11 +2,21 @@
 import ArchiveLink from './ArchiveLink.vue'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
-import { FileText, User } from '@lucide/vue'
+import { CircleUser, FileText, LogIn, LogOut, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
 
 import PeopleGatorIcon from '@/components/custom/PeopleGatorIcon'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { currentUser, isPublicSession, signOut } from '@/query/client'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -205,6 +215,34 @@ const isPeopleRoute = computed(
           </span>
         </RouterLink>
       </slot>
+
+      <!-- Leaving the public account opens the login page. -->
+      <Button
+        v-if="isPublicSession"
+        variant="outline"
+        size="sm"
+        aria-label="Sign in"
+        @click="signOut"
+      >
+        <LogIn aria-hidden="true" />
+        <span class="hidden sm:inline">Sign in</span>
+      </Button>
+      <DropdownMenu v-else-if="currentUser">
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" :aria-label="`Account ${currentUser}`">
+            <CircleUser aria-hidden="true" />
+            <span class="hidden max-w-32 truncate sm:inline">{{ currentUser }}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel class="max-w-48 truncate">{{ currentUser }}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @select="signOut">
+            <LogOut aria-hidden="true" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   </nav>
 </template>
