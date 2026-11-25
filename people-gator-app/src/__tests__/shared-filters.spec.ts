@@ -183,3 +183,44 @@ describe('shared configuration edits', () => {
     expect(readSharedFilters({ touched_from: ['2026-01-01T00:00:00Z'] }).touchedFrom).not.toBe('')
   })
 })
+
+describe('creation filters across resource panels', () => {
+  it('round-trips distinct creator and modification criteria without losing microseconds', () => {
+    const query = {
+      created_by: [actor, actor],
+      created_key: key,
+      created_from: '2026-01-01T12:00:00.123456+02:00',
+      created_to: '2026-01-01T10:00:00.123456Z',
+      touched_by: key,
+    }
+    const filters = readSharedFilters(query)
+    expect(filters.creatorIds).toEqual([actor])
+    expect(sharedFiltersQuery(filters)).toEqual({
+      'filter.created_by_user_id': [actor],
+      'filter.created_by_api_key_id': [key],
+      'filter.created_from': '2026-01-01T10:00:00.123456Z',
+      'filter.created_to': '2026-01-01T10:00:00.123456Z',
+      'filter.last_touched_by_user_id': [key],
+    })
+    expect(readSharedFilters(sharedFiltersUrl(filters) as LocationQuery)).toEqual(filters)
+    expect(sharedUrlError(query)).toBeUndefined()
+  })
+  const invalidCreationCases: LocationQuery[] = [
+    { created_by: 'not-a-user' },
+    { created_key: 'not-a-key' },
+    { created_from: '2026-02-30T00:00:00Z' },
+    { created_to: '2026-01-01T00:00' },
+    { created_from: ['2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'] },
+  ]
+  it.each(invalidCreationCases)('rejects invalid copied creation filters: %j', (query) => {
+    expect(sharedUrlError(query)).toContain('invalid filter')
+  })
+  it('rejects reversed creation ranges without confusing the modification range', () => {
+    expect(
+      sharedUrlError({ created_from: '2026-02-01T00:00:00Z', created_to: '2026-01-01T00:00:00Z' }),
+    ).toContain('Creation:')
+    expect(
+      sharedUrlError({ created_from: '2026-02-01T00:00:00Z', touched_to: '2026-01-01T00:00:00Z' }),
+    ).toBeUndefined()
+  })
+})

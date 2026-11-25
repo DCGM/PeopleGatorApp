@@ -49,7 +49,7 @@ async def portraits(migrated_postgres):
         await session.commit()
         page, _ = await db.sources.get_or_create_page(PageCreateRequest(
             library="issue35", document_id=uuid.uuid4(), page_id=uuid.uuid4(),
-        ))
+        ), context=actor)
         yield SimpleNamespace(db=db, session=session, sessions=sessions, actor=actor,
                               person=entities[0], other=entities[1], organization=organization, page=page)
 

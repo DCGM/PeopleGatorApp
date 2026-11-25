@@ -91,17 +91,20 @@ async def records():
         )
         document_id = uuid.uuid4()
         document, _ = await db.sources.get_or_create_document(
-            DocumentCreateRequest(library="issue2", document_id=document_id)
+            DocumentCreateRequest(library="issue2", document_id=document_id),
+            context=actor,
         )
         other, _ = await db.sources.get_or_create_document(
-            DocumentCreateRequest(library="other", document_id=document_id)
+            DocumentCreateRequest(library="other", document_id=document_id),
+            context=actor,
         )
         pages = []
         for library in ("issue2", "issue2", "other"):
             page, _ = await db.sources.get_or_create_page(
                 PageCreateRequest(
                     library=library, document_id=document_id, page_id=uuid.uuid4()
-                )
+                ),
+                context=actor,
             )
             pages.append(page)
         yield SimpleNamespace(

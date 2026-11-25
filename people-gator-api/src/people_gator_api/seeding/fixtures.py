@@ -163,6 +163,9 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("creation-user", "preview-creation", "Creation: reviewer registration"),
+    Document("creation-key", "preview-creation", "Creation: API key registration"),
+    Document("creation-legacy", "preview-creation", "Creation: legacy unknown"),
     Document("page-strip", "preview-page-strip", "Page strip review practice"),
     Document("page-strip-mirror", "preview-page-strip-mirror", "Page strip isolation mirror", "page-strip"),
     Document("search-merge", "preview-merge", "Search merge practice"),
@@ -683,6 +686,9 @@ PAGES = (
          lines=TELEPROMPTER_WRAPPED_LINES),
     *PAGE_STRIP_PAGES,
     *SIDEBAR_PAGES,
+    Page("creation-user-1", "creation-user", 1),
+    Page("creation-key-1", "creation-key", 1),
+    Page("creation-legacy-1", "creation-legacy", 1),
     # #149: a verified page may still hold unverified evidence (an unassigned face).
     Page("verification-done-1", "verification-done", 1,
          (Face("verification-unassigned", None, 0, 0, embedded=False),)),

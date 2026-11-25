@@ -71,7 +71,8 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 )
             )
             source, _ = await database.sources.get_or_create_image(
-                ImageCreateRequest(url=AnyUrl(f"https://example.test/{marker}.jpg"))
+                ImageCreateRequest(url=AnyUrl(f"https://example.test/{marker}.jpg")),
+                context=user,
             )
             entities = await database.entities.create_batch(
                 [

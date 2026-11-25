@@ -55,6 +55,8 @@ export function utcToLocalTime(value: unknown): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${seconds}`
 }
 
+const CREATION_KEYS = ['created_by', 'created_key', 'created_from', 'created_to'] as const
+
 export const sharedKeys = [
   'library',
   'document',
@@ -64,6 +66,7 @@ export const sharedKeys = [
   'api_key',
   'touched_from',
   'touched_to',
+  ...CREATION_KEYS,
 ] as const
 
 export type SharedFilters = {
@@ -77,6 +80,10 @@ export type SharedFilters = {
   apiKeyIds: string[]
   touchedFrom: string
   touchedTo: string
+  creatorIds: string[]
+  creationApiKeyIds: string[]
+  createdFrom: string
+  createdTo: string
 }
 
 export function readSharedFilters(query: LocationQuery): SharedFilters {
@@ -85,6 +92,10 @@ export function readSharedFilters(query: LocationQuery): SharedFilters {
     documentIds: ids(query.document),
     pageIds: ids(query.page),
     linkStates: parseLinkStates(query.link_state),
+    creatorIds: ids(query.created_by),
+    creationApiKeyIds: ids(query.created_key),
+    createdFrom: utcToLocalTime(queryValues(query.created_from)[0]),
+    createdTo: utcToLocalTime(queryValues(query.created_to)[0]),
     userIds: ids(query.touched_by),
     apiKeyIds: ids(query.api_key),
     touchedFrom: utcToLocalTime(queryValues(query.touched_from)[0]),
@@ -109,6 +120,27 @@ export type SharedQuery = {
   'filter.last_touched_by_api_key_id'?: string[]
   'filter.last_touched_from'?: string
   'filter.last_touched_to'?: string
+  'filter.created_by_user_id'?: string[]
+  'filter.created_by_api_key_id'?: string[]
+  'filter.created_from'?: string
+  'filter.created_to'?: string
+}
+
+export type CreationQuery = Pick<
+  SharedQuery,
+  | 'filter.created_by_user_id'
+  | 'filter.created_by_api_key_id'
+  | 'filter.created_from'
+  | 'filter.created_to'
+>
+
+export function creationFiltersQuery(f: SharedFilters): CreationQuery {
+  return {
+    ...(f.creatorIds.length && { 'filter.created_by_user_id': f.creatorIds }),
+    ...(f.creationApiKeyIds.length && { 'filter.created_by_api_key_id': f.creationApiKeyIds }),
+    ...(f.createdFrom && { 'filter.created_from': localTimeToUtc(f.createdFrom) }),
+    ...(f.createdTo && { 'filter.created_to': localTimeToUtc(f.createdTo) }),
+  }
 }
 
 export function sharedFiltersQuery(f: SharedFilters): SharedQuery {
@@ -117,6 +149,7 @@ export function sharedFiltersQuery(f: SharedFilters): SharedQuery {
     ...(f.documentIds.length && { 'filter.document_source_id': f.documentIds }),
     ...(f.pageIds.length && { 'filter.page_source_id': f.pageIds }),
     ...(f.linkStates.length && { 'filter.entity_link_state': f.linkStates }),
+    ...creationFiltersQuery(f),
     ...(f.userIds.length && { 'filter.last_touched_by_user_id': f.userIds }),
     ...(f.apiKeyIds.length && { 'filter.last_touched_by_api_key_id': f.apiKeyIds }),
     ...(f.touchedFrom && { 'filter.last_touched_from': localTimeToUtc(f.touchedFrom) }),
@@ -131,6 +164,10 @@ export function sharedFiltersUrl(f: SharedFilters): LocationQueryRaw {
     document: list(f.documentIds),
     page: list(f.pageIds),
     link_state: f.linkStates.length ? f.linkStates : undefined,
+    created_by: list(f.creatorIds),
+    created_key: list(f.creationApiKeyIds),
+    created_from: localTimeToUtc(f.createdFrom),
+    created_to: localTimeToUtc(f.createdTo),
     touched_by: list(f.userIds),
     api_key: list(f.apiKeyIds),
     touched_from: localTimeToUtc(f.touchedFrom),
@@ -138,10 +175,10 @@ export function sharedFiltersUrl(f: SharedFilters): LocationQueryRaw {
   }
 }
 
-export function sharedFilterError(f: Pick<SharedFilters, 'touchedFrom' | 'touchedTo'>) {
-  const from = localTimeToUtc(f.touchedFrom)
-  const to = localTimeToUtc(f.touchedTo)
-  if ((f.touchedFrom && !from) || (f.touchedTo && !to)) return 'Enter a valid date and time.'
+function dateRangeError(lower: string, upper: string) {
+  const from = localTimeToUtc(lower)
+  const to = localTimeToUtc(upper)
+  if ((lower && !from) || (upper && !to)) return 'Enter a valid date and time.'
   const comparable = (value: string) =>
     value.replace(/\.(\d+)Z$/, (_, fraction: string) => `.${fraction.padEnd(6, '0')}Z`)
   if (from && to && comparable(from) > comparable(to))
@@ -149,14 +186,22 @@ export function sharedFilterError(f: Pick<SharedFilters, 'touchedFrom' | 'touche
   return undefined
 }
 
+export function sharedFilterError(
+  f: Pick<SharedFilters, 'touchedFrom' | 'touchedTo'> &
+    Partial<Pick<SharedFilters, 'createdFrom' | 'createdTo'>>,
+) {
+  const creationError = dateRangeError(f.createdFrom ?? '', f.createdTo ?? '')
+  return creationError ? `Creation: ${creationError}` : dateRangeError(f.touchedFrom, f.touchedTo)
+}
+
 /** Invalid copied values stay visible and block requests until removed. */
 export function invalidSharedValues(query: LocationQuery) {
   const invalid: { key: string; value: string }[] = []
-  for (const key of ['document', 'page', 'touched_by', 'api_key'])
+  for (const key of ['document', 'page', 'touched_by', 'api_key', 'created_by', 'created_key'])
     for (const value of queryValues(query[key])) if (!uuid.test(value)) invalid.push({ key, value })
   for (const value of queryValues(query.link_state))
     if (!parseLinkStates(value).length) invalid.push({ key: 'link_state', value })
-  for (const key of ['touched_from', 'touched_to']) {
+  for (const key of ['touched_from', 'touched_to', 'created_from', 'created_to']) {
     const values = queryValues(query[key])
     for (const value of values)
       if (values.length > 1 || !utcToLocalTime(value)) invalid.push({ key, value })
@@ -189,6 +234,10 @@ export function useSharedFilters() {
       const fields: Record<string, keyof SharedFilters> = {
         document: 'documentIds',
         page: 'pageIds',
+        created_by: 'creatorIds',
+        created_key: 'creationApiKeyIds',
+        created_from: 'createdFrom',
+        created_to: 'createdTo',
         touched_by: 'userIds',
         api_key: 'apiKeyIds',
         link_state: 'linkStates',

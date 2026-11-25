@@ -137,9 +137,9 @@ Semantics shared by every resource:
 | Collection (endpoint) | Fields | API default | UI default |
 | --- | --- | --- | --- |
 | People browse/search, Discover people, scan candidates (`/entities`, `/search-entities`) | `relevance` (search), `name`, `last_touched_at`, `created_at`, `entity_id` | UUID / relevance | Name A–Z; Relevance while a query or face signal exists |
-| Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing) | UUID / relevance | Name A–Z (unknown names first); Relevance while searching |
-| Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `page_number`, `last_touched_at` | UUID / relevance | Library A–Z; Relevance while searching |
-| Document page gallery and scan lists (`/pages`) | `page_number`, `page_id`, `last_touched_at` | UUID | Stored page number ascending, unknowns last; explicit user choices take precedence |
+| Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing), `created_at` | UUID / relevance | Name A–Z (unknown names first); Relevance while searching |
+| Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `page_number`, `last_touched_at`, `created_at` | UUID / relevance | Library A–Z; Relevance while searching |
+| Document page gallery and scan lists (`/pages`) | `page_number`, `page_id`, `last_touched_at`, `created_at` | UUID | Stored page number ascending, unknowns last; explicit user choices take precedence |
 | Person faces, scan page faces, Discover similar faces (`/faces`, `/search-faces`) | `relevance` (similarity, search), `last_touched_at`, `link_state`, `confidence`, `source` (library, document, page), `detection_id` | UUID / relevance | Face ID; Similarity in Discover. Scan page faces omit Source |
 | Person mentions, group occurrences (`/text-mentions`) | `text`, `last_touched_at`, `link_state`, `source`, `mention_id` | UUID | Text A–Z |
 | Exact appearance groups (`/text-mention-groups`) | `text`, `count`, `last_touched_at` (latest edit in the group) | Text A–Z | Text A–Z; groups and occurrences sort independently |
@@ -507,6 +507,36 @@ cards show the state counts used by the active filters/sort from batched entity
 statistics. Verification moves a link between state buckets without changing
 totals; review and verification mutations restart People continuation pages.
 Unassigned is intentionally absent: ownerless evidence cannot belong to a person.
+
+
+## Creation date and creator
+
+Creation criteria are shared by source/document/page/image, entity, face and
+text-mention lists and applicable searches/grouped mentions. They always describe
+the returned record's creation. A face's creator is independent of its source's
+creator and its latest editor. Criteria combine with AND; repeated creator IDs
+within one criterion combine with OR.
+
+| API query parameter | Browser URL key | Control |
+| --- | --- | --- |
+| `filter.created_by_user_id` (repeatable UUID) | `created_by` | Created by |
+| `filter.created_by_api_key_id` (repeatable UUID) | `created_key` | Created via key |
+| `filter.created_from` (aware timestamp) | `created_from` | Created from |
+| `filter.created_to` (aware timestamp) | `created_to` | Created to |
+
+Date bounds are inclusive; one bound or equal bounds are valid. The API requires
+an offset or UTC `Z` and rejects reversed intervals, invalid dates and empty
+creator lists. Controls show local time and preserve UTC timestamps, including
+microseconds, in copied URLs. Unknown creation fails an active creation criterion;
+user-only registrations do not match a creation API-key filter. Existing
+modification filters retain their separate meanings.
+
+These controls use the shared panel and active tags, including mobile collapse,
+individual removal, clear-all that preserves search, Back/Forward restoration
+and pagination reset. The scan editor sidebar has no creation filters. The legacy Weaviate adapter explicitly rejects
+creation filters with an unsupported-operation response rather than ignoring them.
+Creation sorting is unchanged.
+
 
 ### Viewer bottom page strip (#131)
 

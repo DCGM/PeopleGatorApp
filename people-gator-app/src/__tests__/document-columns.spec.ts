@@ -3,6 +3,7 @@ import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   appendDocumentColumn,
+  documentCreator,
   defaultDocumentColumnOrder,
   defaultDocumentColumns,
   DOCUMENT_COLUMN_ORDER_STORAGE_KEY,
@@ -140,6 +141,23 @@ describe('document column order', () => {
     wrapper = mount(Component)
     expect(order.value[0]).toBe('library')
     wrapper.unmount()
+  })
+})
+
+describe('creation column preferences', () => {
+  it('keeps creation hidden on existing tabs and persists add, move and remove choices', () => {
+    expect(readDocumentColumns({ getItem: () => '{"name":true}' })).toMatchObject({ created: false, created_by: false })
+    const saved = { ...defaultDocumentColumns(), created: true, created_by: true }
+    expect(readDocumentColumns({ getItem: () => JSON.stringify(saved) })).toEqual(saved)
+    const moved = moveDocumentColumn(defaultDocumentColumnOrder(), 'created_by', 'name', true)
+    expect(readDocumentColumnOrder({ getItem: () => JSON.stringify(moved) })).toEqual(moved)
+    expect(readDocumentColumns({ getItem: () => JSON.stringify({ ...saved, created: false }) }).created).toBe(false)
+  })
+  it('uses stable IDs when creator labels are unavailable', () => {
+    const document = { source_id: 'source', source_type: 'document' as const, url: 'https://example.test', library: 'test', document_id: 'archive' }
+    expect(documentCreator(document)).toBe('Unknown')
+    expect(documentCreator({ ...document, created_by_user_id: 'user-id' })).toBe('user-id')
+    expect(documentCreator({ ...document, created_by_user_id: 'user-id', created_by_api_key_id: 'key-id' })).toBe('user-id (key-id)')
   })
 })
 
