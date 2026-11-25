@@ -5,6 +5,8 @@ import {
   type PeopleCountState,
 } from './people-counts'
 import type { SharedQuery } from './shared-filters'
+import type { LifeDateQuery } from './people-life-dates'
+import { lifeSpan } from '@/lib/life-dates'
 import type { EntitySortField } from '@/client'
 import type { SortState } from '@/lib/sorting'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -17,6 +19,8 @@ export type PeopleSearchItem = {
   id: string
   name: string
   aliases: string[]
+  /** `1890–1962`, `b. 1948`, `d. 1931` or empty. */
+  lifeSpan: string
   faces: number | null
   names: number | null
   countDetails: { field: string; label: string; value: number | null }[]
@@ -26,7 +30,7 @@ export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
-  shared: MaybeRefOrGetter<SharedQuery & PeopleCountQuery> = {},
+  shared: MaybeRefOrGetter<SharedQuery & PeopleCountQuery & LifeDateQuery> = {},
   enabled: MaybeRefOrGetter<boolean> = true,
   sort?: MaybeRefOrGetter<SortState<EntitySortField>>,
 ) {
@@ -77,6 +81,7 @@ export function usePeopleSearch(
       thumbnailFaceId: person.thumbnail_face_id,
       name: person.name || 'Unnamed person',
       aliases: person.aliases ?? [],
+      lifeSpan: lifeSpan(person.birth_date, person.death_date),
       faces: person.entity_link_stats?.faces?.total ?? null,
       names: person.entity_link_stats?.mentions?.total ?? null,
       countDetails: countOptions.value.map(({ value: field, label }) => ({

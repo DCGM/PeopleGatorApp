@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { usePeopleMerge } from '@/viewmodels/people-merge'
 import { usePeopleCounts } from '@/viewmodels/people-counts'
+import { usePeopleLifeDates } from '@/viewmodels/people-life-dates'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, ref } from 'vue'
 import { useSharedFilters } from '@/viewmodels/shared-filters'
@@ -29,6 +30,10 @@ const route = useRoute()
 const router = useRouter()
 const shared = useSharedFilters()
 const counts = usePeopleCounts()
+const lifeDates = usePeopleLifeDates()
+const filtersValid = computed(
+  () => !shared.error.value && !counts.error.value && !lifeDates.error.value,
+)
 
 const resultsPerPage = 12
 function updateQuery(changes: import('vue-router').LocationQueryRaw) {
@@ -62,8 +67,8 @@ const {
   searchTerm,
   assignment,
   resultsPerPage,
-  computed(() => ({ ...shared.params.value, ...counts.params.value })),
-  computed(() => !shared.error.value && !counts.error.value),
+  computed(() => ({ ...shared.params.value, ...counts.params.value, ...lifeDates.params.value })),
+  filtersValid,
   sort,
 )
 const selectionScope = computed(() =>
@@ -84,7 +89,7 @@ useAutomaticPagination({
   hasNextPage,
   isFetching,
   error,
-  enabled: computed(() => !shared.error.value && !counts.error.value),
+  enabled: filtersValid,
   loadMore,
 })
 </script>
@@ -188,6 +193,7 @@ useAutomaticPagination({
             :name="person.name"
             :faces="person.faces"
             :names="person.names"
+            :life-span="person.lifeSpan"
             :count-details="person.countDetails"
           />
         </div>

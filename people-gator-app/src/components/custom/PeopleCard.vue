@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 const props = defineProps<{
   thumbnailFaceId?: string | null
   name: string
+  lifeSpan?: string
   selected?: boolean
   faces: number | null
   names: number | null
@@ -35,6 +36,9 @@ const props = defineProps<{
       <h3 class="block max-w-full truncate" :title="props.name">
         {{ props.name }}
       </h3>
+      <p v-if="props.lifeSpan">
+        <small>{{ props.lifeSpan }}</small>
+      </p>
       <p class="flex flex-wrap gap-x-2">
         <small
           ><b>{{ props.faces ?? '—' }}</b> faces

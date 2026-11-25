@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 import { CalendarIcon } from '@lucide/vue'
-import { parseDate } from '@internationalized/date'
+import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import type { DateValue } from 'reka-ui'
+import { createYearRange } from 'reka-ui/date'
+import { formatLifeDate } from '@/lib/life-dates'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-const props = defineProps<{ label: string; invalid?: boolean }>()
+// `dateOnly` edits a calendar date (`YYYY-MM-DD`) without a time or zone,
+// with years back to EARLIEST_YEAR for historical dates such as births.
+const props = defineProps<{ label: string; invalid?: boolean; dateOnly?: boolean }>()
 const value = defineModel<string>({ required: true })
+const EARLIEST_YEAR = 1400
+const yearRange = computed(() => {
+  if (!props.dateOnly) return undefined
+  const now = today(getLocalTimeZone())
+  return createYearRange({ start: now.set({ year: EARLIEST_YEAR }), end: now })
+})
 const open = ref(false)
 const timeId = useId()
 
@@ -19,6 +29,7 @@ const date = computed<DateValue | undefined>(() => {
 })
 const time = computed(() => value.value.split('T')[1] ?? '00:00:00.000')
 const displayValue = computed(() => {
+  if (props.dateOnly) return value.value ? formatLifeDate(value.value) : 'Any'
   if (!value.value) return 'Pick date and time'
   const day = new Date(value.value).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -29,6 +40,11 @@ const displayValue = computed(() => {
 })
 
 function selectDate(day: DateValue | undefined) {
+  if (props.dateOnly) {
+    value.value = day ? day.toString() : ''
+    if (day) open.value = false
+    return
+  }
   value.value = day ? `${day.toString()}T${time.value}` : ''
 }
 function updateTime(clock: string | number) {
@@ -62,13 +78,15 @@ function clear() {
           :model-value="date"
           :default-placeholder="date"
           layout="month-and-year"
+          :year-range="yearRange"
           initial-focus
           prevent-deselect
           @update:model-value="selectDate"
         />
         <div class="space-y-2 p-3">
-          <label :for="timeId">Time (local)</label>
+          <label v-if="!dateOnly" :for="timeId">Time (local)</label>
           <Input
+            v-if="!dateOnly"
             :id="timeId"
             :model-value="time.replace(/(\.\d{3})\d+$/, '$1')"
             type="time"

@@ -68,7 +68,11 @@ function cancel() {
 <template>
   <section aria-label="Name and life dates" class="mt-4 flex min-w-0 items-start gap-2">
     <dl class="flex min-w-0 flex-1 flex-wrap gap-x-5 gap-y-2 text-sm">
-      <div v-for="field in FIELDS" :key="field.key" class="flex min-w-0 max-w-full items-center gap-2">
+      <div
+        v-for="field in FIELDS"
+        :key="field.key"
+        class="flex min-w-0 max-w-full items-center gap-2"
+      >
         <dt class="shrink-0 text-xs font-semibold uppercase text-muted-foreground">
           {{ field.label }}
         </dt>

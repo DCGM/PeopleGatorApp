@@ -14,6 +14,7 @@ import {
   type SearchEntitiesGetApiV1SearchEntitiesGetData,
 } from '@/client'
 import type { PeopleCountQuery } from '@/viewmodels/people-counts'
+import type { LifeDateQuery } from '@/viewmodels/people-life-dates'
 import type { SharedQuery } from '@/viewmodels/shared-filters'
 import { responseData } from '@/query/api'
 import { fetchEntities } from '@/query/entities'
@@ -36,7 +37,10 @@ export type EntityResultsParams = {
   cursor?: string | null
   hasDetections?: boolean
   hasMentions?: boolean
-  processingFilters?: SharedQuery & PeopleCountQuery & Pick<EntitySearchParams, 'filter.entity_type'>
+  processingFilters?: SharedQuery &
+    PeopleCountQuery &
+    LifeDateQuery &
+    Pick<EntitySearchParams, 'filter.entity_type'>
   limit?: number
   sort?: SortState<EntitySortField>
 }

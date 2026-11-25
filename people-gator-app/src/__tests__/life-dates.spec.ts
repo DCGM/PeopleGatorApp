@@ -25,7 +25,9 @@ describe('life dates', () => {
   })
 
   it('rejects death before birth', () => {
-    expect(lifeDatesError('1900-01-02', '1900-01-01')).toBe('Death date must not be before birth date.')
+    expect(lifeDatesError('1900-01-02', '1900-01-01')).toBe(
+      'Death date must not be before birth date.',
+    )
     expect(lifeDatesError('1900-01-01', '1900-01-01')).toBeUndefined()
     expect(lifeDatesError('', '1900-01-01')).toBeUndefined()
     expect(lifeDatesError('1900-13-01', '')).toBe('Enter a valid date.')
