@@ -1,4 +1,4 @@
-"""Person subtype: structured names, life dates, filters, sorts and migration (#123)."""
+"""Person subtype: typed person contract, generic entities, filters, sorts and migration (#123)."""
 import uuid
 from datetime import date
 from types import SimpleNamespace
@@ -9,25 +9,27 @@ from alembic import command
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from people_gator_api.persistence.contracts import InvalidPersonFieldsError
+from people_gator_api.persistence.contracts import EntityTypeConflictError, InvalidPersonFieldsError
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.persistence.postgres.schema import migration_config, validate_schema
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
-    EntityDeleteManyRequest,
-    EntityListFilter,
     EntityListRequest,
-    EntityMergeTargetPatch,
-    EntityPatchBatchItem,
     EntityPatchRequest,
+    PersonCreateRequest,
+    PersonListFilter,
+    PersonListRequest,
+    PersonMergeBatchRequest,
+    PersonPatchBatchItem,
+    PersonPatchRequest,
 )
-from people_gator_api.schemas.search import QueryBase, SearchEntitiesRequest
+from people_gator_api.schemas.search import QueryBase, SearchPeopleRequest
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-# Distinct names, dates and missing values so every sort produces its own order.
 pytestmark = pytest.mark.asyncio
 
+# Distinct names, dates and missing values so every sort produces its own order.
 PEOPLE = {
     "ada": dict(first_name="Ada", surname="Novak", birth_date=date(1890, 3, 1), death_date=date(1962, 5, 4)),
     "bo": dict(first_name="Bohumil", middle_names="Karel  Jan", surname="Novák", birth_date=date(1901, 1, 1)),
@@ -51,9 +53,14 @@ async def persons(migrated_postgres):
         # Ascending fixed IDs make the entity_id tie-breaker explicit below.
         ids = {key: uuid.UUID(int=index + 1) for index, key in enumerate(PEOPLE)}
         for key, fields in PEOPLE.items():
-            await db.entities.put(ids[key], EntityCreateRequest(
-                entity_type="person", name=f"Person {key}", **fields), actor)
-        yield SimpleNamespace(db=db, session=session, actor=actor, ids=ids)
+            await db.entities.put_person(ids[key], PersonCreateRequest(name=f"Person {key}", **fields), actor)
+        # A historical non-person row: the typed contract treats it as absent.
+        other = uuid.UUID(int=99)
+        await session.execute(text(
+            "INSERT INTO pg_demo_entities (id, user_id, kind, name) VALUES (:id, :user, 'organization', 'Archive')"
+        ), {"id": other, "user": user.user_id})
+        await session.commit()
+        yield SimpleNamespace(db=db, session=session, actor=actor, ids=ids, other=other)
 
 
 def keys(r, items):
@@ -63,21 +70,21 @@ def keys(r, items):
 
 async def listed(r, **values):
     filter_values = values.pop("filter", {})
-    request = EntityListRequest(
-        filter_=EntityListFilter(entity_id=list(r.ids.values()), **filter_values), **values,
+    request = PersonListRequest(
+        filter_=PersonListFilter(entity_id=[*r.ids.values(), r.other], **filter_values), **values,
     )
-    return await r.db.entities.list(request)
+    return await r.db.entities.list_people(request)
 
 
-async def test_create_read_patch_clear_and_replace(persons):
+async def test_typed_create_read_patch_clear_and_replace(persons):
     r = persons
-    bo = await r.db.entities.get(r.ids["bo"])
+    bo = await r.db.entities.get_person(r.ids["bo"])
     assert (bo.first_name, bo.middle_names, bo.surname) == ("Bohumil", "Karel Jan", "Novák")
     assert (bo.birth_date, bo.death_date) == (date(1901, 1, 1), None)
-    assert (await r.db.entities.get(r.ids["ev"])).model_dump(include={"first_name", "birth_date"}) == {
-        "first_name": None, "birth_date": None}
+    ev = await r.db.entities.get_person(r.ids["ev"])
+    assert (ev.first_name, ev.birth_date) == (None, None)
 
-    patched = await r.db.entities.patch(r.ids["bo"], EntityPatchRequest(
+    patched = await r.db.entities.patch_person(r.ids["bo"], PersonPatchRequest(
         death_date=date(1970, 2, 2), middle_names=None,
     ), r.actor)
     assert (patched.first_name, patched.middle_names, patched.death_date) == ("Bohumil", None, date(1970, 2, 2))
@@ -85,46 +92,83 @@ async def test_create_read_patch_clear_and_replace(persons):
 
     # A partial patch is validated against the stored birth date and changes nothing.
     with pytest.raises(InvalidPersonFieldsError, match="earlier than birth_date"):
-        await r.db.entities.patch(r.ids["bo"], EntityPatchRequest(
+        await r.db.entities.patch_person(r.ids["bo"], PersonPatchRequest(
             death_date=date(1900, 1, 1), name="Must not change",
         ), r.actor)
-    after = await r.db.entities.get(r.ids["bo"])
+    after = await r.db.entities.get_person(r.ids["bo"])
     assert (after.name, after.death_date) == ("Person bo", date(1970, 2, 2))
 
-    batch = await r.db.entities.patch_batch([
-        EntityPatchBatchItem(entity_id=r.ids["ev"], surname="  Echo  "),
-        EntityPatchBatchItem(entity_id=r.ids["cy"], death_date=None),
+    batch = await r.db.entities.patch_person_batch([
+        PersonPatchBatchItem(entity_id=r.ids["ev"], surname="  Echo  "),
+        PersonPatchBatchItem(entity_id=r.other, surname="Not a person"),
+        PersonPatchBatchItem(entity_id=r.ids["cy"], death_date=None),
     ], r.actor)
-    assert batch[0].surname == "Echo" and batch[1].death_date is None
+    assert batch[0].surname == "Echo" and batch[1] is None and batch[2].death_date is None
 
-    replaced = await r.db.entities.put(r.ids["ada"], EntityCreateRequest(
-        entity_type="person", name="Ada Replaced", surname="Novak",
+    replaced = await r.db.entities.put_person(r.ids["ada"], PersonCreateRequest(
+        name="Ada Replaced", surname="Novak",
     ), r.actor)
     assert replaced.created is False
-    assert (replaced.entity.surname, replaced.entity.first_name, replaced.entity.birth_date) == ("Novak", None, None)
+    assert (replaced.person.surname, replaced.person.first_name, replaced.person.birth_date) == ("Novak", None, None)
 
     new_id = uuid.uuid4()
-    created = await r.db.entities.put(new_id, EntityCreateRequest(
-        entity_type="person", name="Put Person", birth_date=date(2000, 1, 1),
+    created = await r.db.entities.put_person(new_id, PersonCreateRequest(
+        name="Put Person", birth_date=date(2000, 1, 1),
     ), r.actor)
-    assert created.created and (await r.db.entities.get(new_id)).birth_date == date(2000, 1, 1)
+    assert created.created and (await r.db.entities.get_person(new_id)).birth_date == date(2000, 1, 1)
+    made = await r.db.entities.create_person(PersonCreateRequest(name="Made", surname="Maker"), r.actor)
+    assert made.surname == "Maker" and made.entity_type == "person"
+
+
+async def test_generic_entities_keep_person_fields_unchanged(persons):
+    r = persons
+    # Shared payloads never touch person fields, including a generic PUT.
+    await r.db.entities.patch(r.ids["ada"], EntityPatchRequest(short_description="Shared edit"), r.actor)
+    await r.db.entities.put(r.ids["ada"], EntityCreateRequest(entity_type="person", name="Ada Shared"), r.actor)
+    ada = await r.db.entities.get_person(r.ids["ada"])
+    assert (ada.name, ada.short_description, ada.surname, ada.birth_date) == ("Ada Shared", None, "Novak", date(1890, 3, 1))
+    created = await r.db.entities.create(EntityCreateRequest(entity_type="person", name="Shared Only"), r.actor)
+    assert (await r.db.entities.get_person(created.entity_id)).surname is None
+
+
+@pytest.mark.filterwarnings("ignore")
+def test_generic_entity_requests_reject_person_sorts_and_filters():
+    with pytest.raises(ValueError):
+        EntityListRequest(limit=1, sort="surname")
+    with pytest.raises(ValueError):
+        EntityListRequest.model_validate({"limit": 1, "filter_": {"birth_date_from": "1900-01-01"}})
+    assert PersonListRequest(limit=1, sort="surname").to_generic().filter_.entity_type == ["person"]
+
+
+async def test_non_person_entities_are_absent_from_typed_methods(persons):
+    r = persons
+    assert await r.db.entities.entity_kinds([r.other, r.ids["ada"], uuid.uuid4()]) == {r.other: "organization", r.ids["ada"]: "person"}
+    assert await r.db.entities.get_person(r.other) is None
+    assert await r.db.entities.patch_person(r.other, PersonPatchRequest(name="X"), r.actor) is None
+    assert await r.db.entities.merge_people(
+        r.ids["ada"], PersonMergeBatchRequest(source_entity_ids=[r.other]), context=r.actor) is None
+    assert await r.db.entities.delete_person(r.other, context=r.actor) is False
+    with pytest.raises(EntityTypeConflictError):
+        await r.db.entities.put_person(r.other, PersonCreateRequest(name="X"), r.actor)
+    assert r.other not in {item.entity_id for item in (await listed(r, limit=100)).items}
 
 
 async def test_merge_keeps_target_fields_unless_set(persons):
     r = persons
-    merged = await r.db.entities.merge_batch(r.ids["ada"], [r.ids["bo"]], context=r.actor)
+    merged = await r.db.entities.merge_people(
+        r.ids["ada"], PersonMergeBatchRequest(source_entity_ids=[r.ids["bo"]]), context=r.actor)
     target = merged.merged_entity
     assert (target.first_name, target.birth_date, target.death_date) == ("Ada", date(1890, 3, 1), date(1962, 5, 4))
     assert target.middle_names is None
 
     with pytest.raises(InvalidPersonFieldsError):
-        await r.db.entities.merge_batch(r.ids["ada"], [r.ids["cy"]], EntityMergeTargetPatch(
-            death_date=date(1800, 1, 1),
+        await r.db.entities.merge_people(r.ids["ada"], PersonMergeBatchRequest(
+            source_entity_ids=[r.ids["cy"]], death_date=date(1800, 1, 1),
         ), context=r.actor)
-    assert await r.db.entities.get(r.ids["cy"]) is not None  # rolled back
+    assert await r.db.entities.get_person(r.ids["cy"]) is not None  # rolled back
 
-    merged = await r.db.entities.merge_batch(r.ids["ada"], [r.ids["cy"]], EntityMergeTargetPatch(
-        first_name="Adéla", death_date=None,
+    merged = await r.db.entities.merge_people(r.ids["ada"], PersonMergeBatchRequest(
+        source_entity_ids=[r.ids["cy"]], first_name="Adéla", death_date=None,
     ), context=r.actor)
     assert (merged.merged_entity.first_name, merged.merged_entity.death_date) == ("Adéla", None)
     assert merged.merged_entity.surname == "Novak"
@@ -132,13 +176,11 @@ async def test_merge_keeps_target_fields_unless_set(persons):
 
 async def test_delete_removes_subtype_row(persons):
     r = persons
-    await r.db.entities.delete(r.ids["ev"], context=r.actor)
+    assert await r.db.entities.delete_person(r.ids["ev"], context=r.actor)
     assert await r.session.scalar(text(
         "SELECT count(*) FROM pg_demo_persons WHERE entity_id = :id"), {"id": r.ids["ev"]}) == 0
-    deleted = await r.db.entities.delete_many(EntityDeleteManyRequest(
-        filter=EntityListFilter(entity_id=list(r.ids.values()), death_date_to=date(1945, 1, 1)), limit=10,
-    ), context=r.actor)
-    assert deleted.deleted_count == 1 and await r.db.entities.get(r.ids["cy"]) is None
+    await r.db.entities.delete(r.ids["cy"], context=r.actor)
+    assert await r.db.entities.get_person(r.ids["cy"]) is None
 
 
 @pytest.mark.parametrize(("filter_values", "expected"), [
@@ -178,17 +220,17 @@ async def test_sorts_put_unknown_last_and_page_stably(persons, sort, direction, 
             break
     assert keys(r, paged) == expected
 
-    found = await r.db.entities.search(SearchEntitiesRequest(
-        query=QueryBase(text=["Person"]), filter_=EntityListFilter(entity_id=list(ids.values())),
+    found = await r.db.entities.search_people(SearchPeopleRequest(
+        query=QueryBase(text=["Person"]), filter_=PersonListFilter(entity_id=list(ids.values())),
         sort=sort, sort_direction=direction, limit=100,
     ))
     assert keys(r, found.items) == expected
 
 
 async def test_search_applies_date_filters(persons):
-    found = await persons.db.entities.search(SearchEntitiesRequest(
+    found = await persons.db.entities.search_people(SearchPeopleRequest(
         query=QueryBase(text=["Person"]),
-        filter_=EntityListFilter(entity_id=list(persons.ids.values()), birth_date_to=date(1895, 1, 1)),
+        filter_=PersonListFilter(entity_id=list(persons.ids.values()), birth_date_to=date(1895, 1, 1)),
         limit=10,
     ))
     assert sorted(keys(persons, found.items)) == ["ada", "di"]

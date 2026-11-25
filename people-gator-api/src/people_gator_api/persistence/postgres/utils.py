@@ -70,6 +70,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from people_gator_api.schemas.entities import (
     EntityListFilter,
     EntityResponse,
+    GenericEntityResponse,
 )
 from people_gator_api.schemas.enums import EntityType, FaceKeypointType, ScoreAggregation, SourceKind
 from people_gator_api.schemas.face_models import (
@@ -87,6 +88,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionResponse,
 )
 from people_gator_api.schemas.missing import (
+    MISSING,
     MissingType,
     is_missing,
     missing_to_none,
@@ -654,12 +656,12 @@ def annotation_values(record) -> dict:
             "last_touched_by_api_key_id": record.last_touched_by_api_key_id}
 
 
-def entity_response(entity: Entity) -> EntityResponse:
+def entity_response(entity: Entity) -> GenericEntityResponse:
     if entity.kind is None or entity.name is None:
         raise ValueError(
             f"entity {entity.id} does not satisfy the persistence contract"
         )
-    return EntityResponse(
+    return GenericEntityResponse(
         **creation_metadata(entity),
         entity_id=entity.id,
         thumbnail_face_id=entity.thumbnail_face_id,
@@ -801,9 +803,12 @@ def entity_filters(
     # Unknown (NULL) dates fail every bound, so a range excludes them.
     life_dates: list[ColumnElement[bool]] = []
     for column, lower, upper in (
-        (Person.birth_date, filter_values.birth_date_from, filter_values.birth_date_to),
-        (Person.death_date, filter_values.death_date_from, filter_values.death_date_to),
+        (Person.birth_date, "birth_date_from", "birth_date_to"),
+        (Person.death_date, "death_date_from", "death_date_to"),
     ):
+        # Only generic (typed person) filters carry the life-date ranges.
+        lower = getattr(filter_values, lower, MISSING)
+        upper = getattr(filter_values, upper, MISSING)
         if not is_missing(lower):
             life_dates.append(column >= lower)
         if not is_missing(upper):

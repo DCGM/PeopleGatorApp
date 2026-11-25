@@ -5741,6 +5741,7 @@ LIFE_DATE_KEYS = ("ada", "emil", "life-full", "life-living", "life-surname", "li
 async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
     """#123: names and life dates make the display-name, surname, birth and death orders differ."""
     from datetime import date
+    from people_gator_api.schemas.entities import PersonListFilter, PersonListRequest
 
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
@@ -5748,9 +5749,9 @@ async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
     by_id = {value: key for key, value in seed.entities.items()}
 
     async def order(sort, direction="asc", **bounds):
-        result = await db.entities.list(EntityListRequest(
+        result = await db.entities.list_people(PersonListRequest(
             limit=100, sort=sort, sort_direction=direction, return_total_count=True,
-            filter_=EntityListFilter(entity_id=ids, **bounds),
+            filter_=PersonListFilter(entity_id=ids, **bounds),
         ))
         return [by_id[item.entity_id] for item in result.items]
 
@@ -5768,10 +5769,10 @@ async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
     assert await order("death_date", death_date_to=date(1949, 12, 31)) == ["life-surname", "life-first"]
     assert await order("name", birth_date_from=date(1875, 1, 9), death_date_to=date(1940, 9, 30)) == ["life-first"]
 
-    full = await db.entities.get(seed.entities["life-full"])
+    full = await db.entities.get_person(seed.entities["life-full"])
     assert (full.first_name, full.middle_names, full.surname) == ("Karel", "Jan Maria", "Vrba")
     assert (full.birth_date, full.death_date) == (date(1890, 3, 14), date(1962, 11, 2))
-    living = await db.entities.get(seed.entities["life-living"])
+    living = await db.entities.get_person(seed.entities["life-living"])
     assert living.birth_date == date(1948, 6, 1) and living.death_date is None
     # Every example link resolves to a seeded person or the people search.
     assert urlsplit(seed.filter_examples["person-life-dates"]).path == f"/people/{seed.entities['life-full']}"
@@ -5785,28 +5786,29 @@ async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
 async def test_life_date_upgrade_fills_older_people_once_and_keeps_review_edits(seed_target, monkeypatch):
     """A preview seeded before #123 gains names/dates; edited or cleared records stay as reviewed."""
     from datetime import date
+    from people_gator_api.schemas.entities import PersonPatchRequest
 
     db, filesystem, _ = seed_target
     with monkeypatch.context() as legacy:
         legacy.setattr(preview, "PEOPLE", tuple(replace(person, details=None) for person in preview.PEOPLE))
         old = await preview.seed_preview(db, filesystem)
-    assert (await db.entities.get(old.entities["ada"])).birth_date is None
+    assert (await db.entities.get_person(old.entities["ada"])).birth_date is None
     actor = GenericActor(user_id=old.users["reviewer"])
-    reviewed = await db.entities.patch(old.entities["life-full"], EntityPatchRequest(first_name="Karl"), actor)
-    untouched = await db.entities.get(old.entities["lenka"])
+    reviewed = await db.entities.patch_person(old.entities["life-full"], PersonPatchRequest(first_name="Karl"), actor)
+    untouched = await db.entities.get_person(old.entities["lenka"])
 
     upgraded = await preview.seed_preview(db, filesystem)
     assert upgraded.entities.items() >= old.entities.items()
-    ada = await db.entities.get(old.entities["ada"])
+    ada = await db.entities.get_person(old.entities["ada"])
     assert (ada.first_name, ada.surname, ada.birth_date) == ("Ada", "Novak", date(1902, 4, 17))
-    assert (await db.entities.get(old.entities["life-living"])).surname == "Bartošová"
+    assert (await db.entities.get_person(old.entities["life-living"])).surname == "Bartošová"
     # The reviewer's partial edit is preserved rather than completed or overwritten.
-    full = await db.entities.get(old.entities["life-full"])
+    full = await db.entities.get_person(old.entities["life-full"])
     assert (full.first_name, full.surname, full.last_touched_at) == ("Karl", None, reviewed.last_touched_at)
-    assert await db.entities.get(old.entities["lenka"]) == untouched
+    assert await db.entities.get_person(old.entities["lenka"]) == untouched
 
     # A cleared value stays cleared; reruns and interrupted checkpoints never repeat a patch.
-    cleared = await db.entities.patch(old.entities["ada"], EntityPatchRequest(
+    cleared = await db.entities.patch_person(old.entities["ada"], PersonPatchRequest(
         first_name=None, surname=None, birth_date=None, death_date=None), actor)
     upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
     upgrades.person_details["person-details-v1/emil"].complete = False
@@ -5821,6 +5823,6 @@ async def test_life_date_upgrade_fills_older_people_once_and_keeps_review_edits(
     monkeypatch.setattr(db.entities, "patch", recording_patch)
     assert await preview.seed_preview(db, filesystem) == upgraded
     assert old.entities["ada"] not in patches and old.entities["emil"] not in patches
-    assert await db.entities.get(old.entities["ada"]) == cleared
+    assert await db.entities.get_person(old.entities["ada"]) == cleared
     upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
     assert all(edit.complete for edit in upgrades.person_details.values())

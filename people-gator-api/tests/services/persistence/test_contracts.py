@@ -45,7 +45,13 @@ def test_contract_abstract_surfaces_are_explicit() -> None:
         "merge_batch",
         "delete_many",
         "search",
+        "entity_kinds",
     }
+    # Typed person projections convert through the generic methods (#123).
+    for name in ("get_person", "list_people", "search_people", "create_person", "create_person_batch",
+                 "patch_person", "patch_person_batch", "put_person", "merge_person", "merge_people",
+                 "delete_person"):
+        assert callable(getattr(EntityRepository, name)) and name not in EntityRepository.__abstractmethods__
     assert SourceRepository.__abstractmethods__ == {
         "lookup",
         "list",

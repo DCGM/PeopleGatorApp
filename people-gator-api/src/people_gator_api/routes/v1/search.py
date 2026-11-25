@@ -11,6 +11,8 @@ from people_gator_api.routes.v1.query_dependencies import (
     PageSearchSortDependency,
     DocumentListFilterDependency,
     EntityListFilterDependency,
+    PersonListFilterDependency,
+    PersonSearchSortDependency,
     FaceListFilterDependency,
     PageListFilterDependency,
     SearchListRequestDependency,
@@ -22,6 +24,8 @@ from people_gator_api.schemas.search import (
     SearchDocumentsResultListResponse,
     SearchEntitiesRequest,
     SearchEntitiesResultListResponse,
+    SearchPeopleRequest,
+    SearchPeopleResultListResponse,
     SearchFacesRequest,
     SearchFacesResultListResponse,
     SearchPagesRequest,
@@ -60,6 +64,36 @@ async def search_entities_get(
         raise_api_error(501, "unsupported_operation", str(exc))
     except ValidationError:
         # A repository constructing an invalid result is an internal failure.
+        raise
+    except ValueError as exc:
+        raise_api_error(422, "invalid_search", str(exc))
+
+
+@router.get("/search-people", response_model=SearchPeopleResultListResponse, tags=["people"])
+async def search_people_get(
+    database: DatabaseDependency,
+    user: BrowseActorDependency,
+    query: EntitySearchQueryDependency,
+    filter: PersonListFilterDependency,
+    list_request: SearchListRequestDependency,
+    sort: PersonSearchSortDependency = DEFAULT_SORT,
+) -> SearchPeopleResultListResponse:
+    """Search people with person filters (life-date ranges) and sorts (surname, life dates)."""
+    del user
+    try:
+        request = SearchPeopleRequest(
+            query=query,
+            filter_=filter,
+            limit=list_request.limit,
+            return_total_count=list_request.return_total_count,
+            cursor=list_request.cursor,
+            sort=sort.sort,
+            sort_direction=sort.sort_direction,
+        )
+        return await database.entities.search_people(request)
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValidationError:
         raise
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))

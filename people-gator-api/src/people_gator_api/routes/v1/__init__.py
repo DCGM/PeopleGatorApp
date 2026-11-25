@@ -5,6 +5,7 @@ from people_gator_api.routes.v1.app_config import router as app_config_router
 from people_gator_api.routes.v1.entities import router as identities_router
 from people_gator_api.routes.v1.face_models import router as face_models_router
 from people_gator_api.routes.v1.media import router as media_router
+from people_gator_api.routes.v1.people import router as people_router
 from people_gator_api.routes.v1.users import router as users_router
 from people_gator_api.routes.v1.root import router as root_router
 from people_gator_api.routes.v1.rum_config import router as rum_config_router
@@ -18,6 +19,7 @@ from people_gator_api.routes.v1.translation import router as translation_router
 router = APIRouter(prefix="/api/v1")
 router.include_router(search_router)
 router.include_router(identities_router)
+router.include_router(people_router)
 router.include_router(annotations_router)
 router.include_router(face_models_router)
 router.include_router(text_mentions_router)

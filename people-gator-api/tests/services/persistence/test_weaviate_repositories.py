@@ -145,11 +145,6 @@ async def test_put_replaces_every_field_and_clears_omitted_ones() -> None:
         "short_description": None,
         "wikidata_id": None,
         "nlcr_authority_id": None,
-        "first_name": None,
-        "middle_names": None,
-        "surname": None,
-        "birth_date": None,
-        "death_date": None,
     }]
     collection.data.insert.assert_not_awaited()
 
@@ -157,6 +152,7 @@ async def test_put_replaces_every_field_and_clears_omitted_ones() -> None:
 @pytest.mark.asyncio
 async def test_person_fields_round_trip_and_validate_stored_dates() -> None:
     from people_gator_api.persistence.contracts import InvalidPersonFieldsError
+    from people_gator_api.schemas.entities import PersonCreateRequest, PersonListRequest, PersonPatchRequest
     collection = _collection()
     stored = _stored(
         {"name": "Ada", "entity_type": "person", "birth_date": "1890-03-01", "surname": "Novak"},
@@ -166,14 +162,23 @@ async def test_person_fields_round_trip_and_validate_stored_dates() -> None:
     sent: list[dict] = []
     collection.data.update.side_effect = lambda **kwargs: sent.append(dict(kwargs["properties"]))
     repository = WeaviateEntityRepository(_client(collection))
+    actor = GenericActor(user_id=uuid.uuid4())
     with pytest.raises(InvalidPersonFieldsError):
-        await repository.patch(stored.uuid, EntityPatchRequest(death_date="1800-01-01"), GenericActor(user_id=uuid.uuid4()))
+        await repository.patch_person(stored.uuid, PersonPatchRequest(death_date="1800-01-01"), actor)
     assert sent == []
-    result = await repository.patch(stored.uuid, EntityPatchRequest(death_date="1962-05-04"), GenericActor(user_id=uuid.uuid4()))
+    result = await repository.patch_person(stored.uuid, PersonPatchRequest(death_date="1962-05-04"), actor)
     assert sent == [{"death_date": "1962-05-04"}]
     assert (result.surname, str(result.birth_date), str(result.death_date)) == ("Novak", "1890-03-01", "1962-05-04")
+    # A shared entity patch neither sends nor clears person fields.
+    sent.clear()
+    await repository.patch(stored.uuid, EntityPatchRequest(name="Ada N."), actor)
+    assert sent == [{"name": "Ada N."}]
+    # A typed replacement clears omitted person fields.
+    sent.clear()
+    await repository.put_person(stored.uuid, PersonCreateRequest(name="Ada", first_name="Ada"), actor)
+    assert sent[0]["first_name"] == "Ada" and sent[0]["surname"] is None and sent[0]["birth_date"] is None
     with pytest.raises(NotImplementedError, match="date filters require PostgreSQL"):
-        await repository.list(EntityListRequest(limit=1, filter_={"birth_date_from": "1890-01-01"}))
+        await repository.list_people(PersonListRequest(limit=1, filter_={"birth_date_from": "1890-01-01"}))
 
 
 @pytest.mark.asyncio

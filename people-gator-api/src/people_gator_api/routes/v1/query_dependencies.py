@@ -19,7 +19,7 @@ from people_gator_api.schemas.common import (
     GenericListRequest,
     ListFilterBase,
 )
-from people_gator_api.schemas.entities import EntityListFilter
+from people_gator_api.schemas.entities import EntityFilterBase, EntityListFilter, PersonListFilter
 from people_gator_api.schemas.entity_links import LEGACY_FILTER_REPLACEMENTS, SharedFilter
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
@@ -37,6 +37,7 @@ from people_gator_api.schemas.sorting import (
     RELEVANCE,
     DocumentSortField,
     EntitySortField,
+    PersonSortField,
     FaceSortField,
     PageSortField,
     SortDirection,
@@ -275,78 +276,69 @@ def shared_filter_dependency(
 
 
 
-def entity_list_filter_dependency(
+def _entity_filter_values(
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     entity_id: Annotated[
         list[uuid.UUID] | None,
-        _model_parameter(EntityListFilter, "entity_id", "filter"),
-    ] = None,
-    entity_type: Annotated[
-        list[EntityType] | None,
-        _model_parameter(EntityListFilter, "entity_type", "filter"),
+        _model_parameter(EntityFilterBase, "entity_id", "filter"),
     ] = None,
     wikidata_id: Annotated[
         list[str] | None,
-        _model_parameter(EntityListFilter, "wikidata_id", "filter"),
+        _model_parameter(EntityFilterBase, "wikidata_id", "filter"),
     ] = None,
     nlcr_authority_id: Annotated[
         list[str] | None,
-        _model_parameter(EntityListFilter, "nlcr_authority_id", "filter"),
+        _model_parameter(EntityFilterBase, "nlcr_authority_id", "filter"),
     ] = None,
     source_id: Annotated[
         list[uuid.UUID] | None,
-        _model_parameter(EntityListFilter, "source_id", "filter"),
+        _model_parameter(EntityFilterBase, "source_id", "filter"),
     ] = None,
     detection_id: Annotated[
         list[uuid.UUID] | None,
-        _model_parameter(EntityListFilter, "detection_id", "filter"),
+        _model_parameter(EntityFilterBase, "detection_id", "filter"),
     ] = None,
     mention_id: Annotated[
         list[uuid.UUID] | None,
-        _model_parameter(EntityListFilter, "mention_id", "filter"),
+        _model_parameter(EntityFilterBase, "mention_id", "filter"),
     ] = None,
-    min_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_faces_total_count", "filter")] = None,
-    max_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_faces_total_count", "filter")] = None,
-    min_faces_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_faces_verified_count", "filter")] = None,
-    max_faces_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_faces_verified_count", "filter")] = None,
-    min_faces_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_faces_manual_count", "filter")] = None,
-    max_faces_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_faces_manual_count", "filter")] = None,
-    min_faces_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_faces_automatic_count", "filter")] = None,
-    max_faces_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_faces_automatic_count", "filter")] = None,
-    min_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_mentions_total_count", "filter")] = None,
-    max_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_mentions_total_count", "filter")] = None,
-    min_mentions_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_mentions_verified_count", "filter")] = None,
-    max_mentions_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_mentions_verified_count", "filter")] = None,
-    min_mentions_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_mentions_manual_count", "filter")] = None,
-    max_mentions_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_mentions_manual_count", "filter")] = None,
-    min_mentions_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_mentions_automatic_count", "filter")] = None,
-    max_mentions_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_mentions_automatic_count", "filter")] = None,
-    min_annotations_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_annotations_total_count", "filter")] = None,
-    max_annotations_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_annotations_total_count", "filter")] = None,
-    min_annotations_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_annotations_verified_count", "filter")] = None,
-    max_annotations_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_annotations_verified_count", "filter")] = None,
-    min_annotations_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_annotations_manual_count", "filter")] = None,
-    max_annotations_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_annotations_manual_count", "filter")] = None,
-    min_annotations_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_annotations_automatic_count", "filter")] = None,
-    max_annotations_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_annotations_automatic_count", "filter")] = None,
+    min_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_faces_total_count", "filter")] = None,
+    max_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_faces_total_count", "filter")] = None,
+    min_faces_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_faces_verified_count", "filter")] = None,
+    max_faces_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_faces_verified_count", "filter")] = None,
+    min_faces_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_faces_manual_count", "filter")] = None,
+    max_faces_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_faces_manual_count", "filter")] = None,
+    min_faces_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_faces_automatic_count", "filter")] = None,
+    max_faces_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_faces_automatic_count", "filter")] = None,
+    min_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_mentions_total_count", "filter")] = None,
+    max_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_mentions_total_count", "filter")] = None,
+    min_mentions_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_mentions_verified_count", "filter")] = None,
+    max_mentions_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_mentions_verified_count", "filter")] = None,
+    min_mentions_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_mentions_manual_count", "filter")] = None,
+    max_mentions_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_mentions_manual_count", "filter")] = None,
+    min_mentions_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_mentions_automatic_count", "filter")] = None,
+    max_mentions_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_mentions_automatic_count", "filter")] = None,
+    min_annotations_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_annotations_total_count", "filter")] = None,
+    max_annotations_total_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_annotations_total_count", "filter")] = None,
+    min_annotations_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_annotations_verified_count", "filter")] = None,
+    max_annotations_verified_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_annotations_verified_count", "filter")] = None,
+    min_annotations_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_annotations_manual_count", "filter")] = None,
+    max_annotations_manual_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_annotations_manual_count", "filter")] = None,
+    min_annotations_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "min_annotations_automatic_count", "filter")] = None,
+    max_annotations_automatic_count: Annotated[MinimumCount | None, _model_parameter(EntityFilterBase, "max_annotations_automatic_count", "filter")] = None,
     has_mentions: Annotated[
         bool | None,
-        _model_parameter(EntityListFilter, "has_mentions", "filter"),
+        _model_parameter(EntityFilterBase, "has_mentions", "filter"),
     ] = None,
     has_detections: Annotated[
         bool | None,
-        _model_parameter(EntityListFilter, "has_detections", "filter"),
+        _model_parameter(EntityFilterBase, "has_detections", "filter"),
     ] = None,
-    birth_date_from: Annotated[date | None, _model_parameter(EntityListFilter, "birth_date_from", "filter")] = None,
-    birth_date_to: Annotated[date | None, _model_parameter(EntityListFilter, "birth_date_to", "filter")] = None,
-    death_date_from: Annotated[date | None, _model_parameter(EntityListFilter, "death_date_from", "filter")] = None,
-    death_date_to: Annotated[date | None, _model_parameter(EntityListFilter, "death_date_to", "filter")] = None,
-) -> EntityListFilter:
-    return _filter(
-        EntityListFilter,
+) -> dict[str, object]:
+    """Criteria shared by the entity and typed person filters."""
+    return dict(
         **shared,
         entity_id=entity_id,
-        entity_type=entity_type,
 
         wikidata_id=wikidata_id,
         nlcr_authority_id=nlcr_authority_id,
@@ -379,6 +371,29 @@ def entity_list_filter_dependency(
         max_annotations_automatic_count=max_annotations_automatic_count,
         has_mentions=has_mentions,
         has_detections=has_detections,
+    )
+
+
+def entity_list_filter_dependency(
+    values: Annotated[dict[str, object], Depends(_entity_filter_values)],
+    entity_type: Annotated[
+        list[EntityType] | None,
+        _model_parameter(EntityListFilter, "entity_type", "filter"),
+    ] = None,
+) -> EntityListFilter:
+    return _filter(EntityListFilter, **values, entity_type=entity_type)
+
+
+def person_list_filter_dependency(
+    values: Annotated[dict[str, object], Depends(_entity_filter_values)],
+    birth_date_from: Annotated[date | None, _model_parameter(PersonListFilter, "birth_date_from", "filter")] = None,
+    birth_date_to: Annotated[date | None, _model_parameter(PersonListFilter, "birth_date_to", "filter")] = None,
+    death_date_from: Annotated[date | None, _model_parameter(PersonListFilter, "death_date_from", "filter")] = None,
+    death_date_to: Annotated[date | None, _model_parameter(PersonListFilter, "death_date_to", "filter")] = None,
+) -> PersonListFilter:
+    return _filter(
+        PersonListFilter,
+        **values,
         birth_date_from=birth_date_from,
         birth_date_to=birth_date_to,
         death_date_from=death_date_from,
@@ -742,12 +757,15 @@ def _sort_dependency(fields: type[StrEnum]):
 
 
 EntityListSortField = _list_fields(EntitySortField, "EntityListSortField")
+PersonListSortField = _list_fields(PersonSortField, "PersonListSortField")
 DocumentListSortField = _list_fields(DocumentSortField, "DocumentListSortField")
 PageListSortField = _list_fields(PageSortField, "PageListSortField")
 FaceListSortField = _list_fields(FaceSortField, "FaceListSortField")
 
 EntityListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(EntityListSortField))]
 EntitySearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(EntitySortField))]
+PersonListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(PersonListSortField))]
+PersonSearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(PersonSortField))]
 DocumentListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(DocumentListSortField))]
 DocumentSearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(DocumentSortField))]
 PageListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(PageListSortField))]
@@ -773,6 +791,10 @@ EntitySearchQueryDependency = Annotated[EntitySearchQuery, Depends(entity_search
 EntityListFilterDependency = Annotated[
     EntityListFilter,
     Depends(entity_list_filter_dependency),
+]
+PersonListFilterDependency = Annotated[
+    PersonListFilter,
+    Depends(person_list_filter_dependency),
 ]
 FaceListFilterDependency = Annotated[
     FaceListFilter,
@@ -810,6 +832,8 @@ __all__ = [
     "DocumentSearchSortDependency",
     "EntityListSortDependency",
     "EntitySearchSortDependency",
+    "PersonListSortDependency",
+    "PersonSearchSortDependency",
     "FaceListSortDependency",
     "FaceSearchSortDependency",
     "PageListSortDependency",
@@ -819,6 +843,7 @@ __all__ = [
     "TextMentionSortDependency",
     "DocumentListFilterDependency",
     "EntityListFilterDependency",
+    "PersonListFilterDependency",
     "FaceListFilterDependency",
     "ImageListFilterDependency",
     "ListRequestDependency",

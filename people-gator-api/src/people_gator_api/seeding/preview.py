@@ -19,12 +19,13 @@ from people_gator_api.media.image_content import image_content_key
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.schemas.entities import (
-    EntityCreateRequest,
     EntityPatchRequest,
     EntityListRequest,
     EntityResponse,
+    PersonCreateRequest,
+    PersonPatchRequest,
 )
-from people_gator_api.schemas.enums import EntityType, EntityLinkState, VerificationState
+from people_gator_api.schemas.enums import EntityLinkState, VerificationState
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
@@ -227,8 +228,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Recover by the stable ID, even if renamed, so PUT never replaces edits.
             entity = await database.entities.get(fixture_entity_id(person.key))
         if entity is None:
-            request = EntityCreateRequest(
-                entity_type=EntityType.person,
+            # Every fixture is a person, created through the typed person contract.
+            request = PersonCreateRequest(
                 name=person.name,
                 aliases=list(person.aliases),
                 short_description=person.description,
@@ -237,11 +238,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 **(person.details.fields() if person.details else {}),
             )
             if person.put:
-                entity = (await database.entities.put(
+                entity = (await database.entities.put_person(
                     fixture_entity_id(person.key), request, actors["reviewer"]
-                )).entity
+                )).person
             else:
-                entity = await database.entities.create(request, actors["reviewer"])
+                entity = await database.entities.create_person(request, actors["reviewer"])
             existing.append(entity)
         manifest.entities[person.key] = entity.entity_id
         active_entities[person.key] = entity.entity_id
@@ -548,7 +549,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     for key in LIFE_DATE_PEOPLE:
         details = fixtures[key].details
         person_id = active_entities.get(key)
-        person = await database.entities.get(person_id) if person_id else None
+        person = await database.entities.get_person(person_id) if person_id else None
         if details is None or person is None:
             continue
         upgrade_key = "person-details-v1/" + key
@@ -562,8 +563,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         if person.last_touched_at == edit.expected_touched_at and all(
             getattr(person, name) is None for name in details.fields()
         ):
-            await database.entities.patch(
-                person.entity_id, EntityPatchRequest(**details.fields()), actors["reviewer"],
+            await database.entities.patch_person(
+                person.entity_id, PersonPatchRequest(**details.fields()), actors["reviewer"],
             )
         edit.complete = True
         await checkpoint_upgrades()
