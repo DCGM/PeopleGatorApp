@@ -34,11 +34,12 @@ relationships. See [Database](DATABASE.md).
 Protected routes accept either a bearer JWT or `X-API-Key`. Sending both returns
 400; missing/invalid credentials return 401; insufficient scopes return 403.
 JWT login checks Argon2 hashes in the users JSON file in the configured storage.
-`/token/login` takes an OAuth2 password form; `/token/basic` takes HTTP Basic
-credentials and answers missing or wrong ones with a Basic challenge, so the
-browser app signs in through the browser's own dialog. It grants the requested
-scopes the account holds. With `JWK__PUBLIC_ACCOUNT` set (PR previews only), a
-request without credentials signs in as that account instead of prompting.
+`/token/login` takes an OAuth2 password form and grants the requested scopes, or
+every scope the account holds when none is requested. The browser app reads
+`GET /api/v1/app-config` at startup. With `PUBLIC_LOGIN` set, it signs in as that
+public account by itself; otherwise, or after the user leaves the public account,
+it shows its login page (`/login`). The public login is published to every
+browser, so give that account only what anyone may do.
 Refresh sessions rotate and live in process memory, so a restart invalidates
 them and multiple workers require routing to the issuing worker.
 

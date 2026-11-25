@@ -27,7 +27,7 @@ secrets.
 | `OTEL_HEADERS` | secret | optional | optional | optional | `Authorization=Basic …` if the collector needs it |
 | `RUM_CLIENT_TOKEN` | secret | optional | optional | optional | Enables browser RUM |
 | `RUM_SITE` | variable | optional | optional | optional | RUM site, default `openobserve.capturemyhand.com` |
-| `USERS_JSON` | secret | optional | | | Preview login accounts in the format of `people-gator-api/example.users.json`; that file (`test` / `test`) is the default. Previews open as `test` without a prompt while it exists |
+| `USERS_JSON` | secret | optional | | | Preview login accounts in the format of `people-gator-api/example.users.json`; that file (`test` / `test`) is the default. Previews open as `test` without the login page while it exists |
 
 Omitting `OTEL_*` or `RUM_*` leaves that feature off. For example:
 
@@ -156,16 +156,17 @@ account's `postgres` container; staging creates its own database and role there.
    ```
 
 6. **Logins.** Upload the staging users to `peoplegator_api/users.json` in the
-   `STAGING_S3_BUCKET` ([format](#logins)). The browser asks for one of them.
+   `STAGING_S3_BUCKET` ([format](#logins)). The login page asks for one of them.
 7. **Deploy.** Every push to `main` deploys staging (or run **CI** manually on
    `main`). The first deploy creates an empty database; later ones migrate it.
 
 ## Logins
 
-Every environment signs users in through the browser's username and password
-dialog, checked against `peoplegator_api/users.json` in its storage. Previews use
-`USERS_JSON` and are public: browsers open them as `test` without a prompt; if
-`USERS_JSON` has no `test` account, the dialog asks instead. For staging and production, upload the file to `STAGING_S3_BUCKET`
+Every environment signs users in on the app's login page, checked against
+`peoplegator_api/users.json` in its storage. Previews use `USERS_JSON` and are
+public: the app opens them as `test` / `test` without the login page; if
+`USERS_JSON` has no such account, the login page asks instead. Staging and
+production have no public account. For them, upload the file to `STAGING_S3_BUCKET`
 or `PRODUCTION_S3_BUCKET` before inviting users; until then nobody can sign in.
 Each entry holds an Argon2 hash and the account's scopes, as in
 `people-gator-api/example.users.json`; never upload that example's `test` account.

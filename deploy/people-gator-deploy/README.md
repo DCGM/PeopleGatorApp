@@ -270,7 +270,7 @@ the commit, retries and recovery finish the remaining files from the journal.
 ### Release access boundary
 
 The production stack has no reload, debug, seed or development mounts. The
-browser asks for an account from `peoplegator_api/users.json` in
+app's login page asks for an account from `peoplegator_api/users.json` in
 `PRODUCTION_S3_BUCKET` ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)); upload that file
 before inviting users, and keep `peoplegator_api/jwks.json` there across releases.
 

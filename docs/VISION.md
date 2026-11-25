@@ -78,8 +78,8 @@ The API consumes prepared OCR and face artifacts. This repository does not ship
 an OCR pipeline, train face models or provision an inference service. An optional
 external embedding service and OpenRouter translation integration are separate
 runtime dependencies. Transactional operations target PostgreSQL; the optional
-Weaviate adapter has different guarantees. The browser signs in through its
-own username/password dialog against a users file; single sign-on is not
+Weaviate adapter has different guarantees. The browser app signs in on its
+login page against a users file, or as a configured public account; single sign-on is not
 implemented here.
 
 ## Proposed roadmap

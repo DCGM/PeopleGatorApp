@@ -76,8 +76,9 @@ class TelemetryTests(unittest.TestCase):
                     self.assertEqual(rendered['networks']['telemetry']['name'], 'web')  # only otel moves it to the collector network
                     self.assertEqual(rendered['networks']['database']['name'], 'db')
                     self.assertEqual(backend['logging']['driver'], 'json-file')
-                    # Only previews sign in browsers without credentials, as the demo account.
-                    self.assertEqual(env.get('PEOPLE_GATOR_API__JWK__PUBLIC_ACCOUNT'), 'test' if name == 'pr' else None)
+                    # Only previews open as the demo account; the others show the login page.
+                    for key in ('USERNAME', 'PASSWORD'):
+                        self.assertEqual(env.get(f'PEOPLE_GATOR_API__PUBLIC_LOGIN__{key}'), 'test' if name == 'pr' else None)
                     for service, settings in rendered['services'].items():
                         if service != 'backend':
                             self.assertNotIn('synthetic-rum', json.dumps(settings))

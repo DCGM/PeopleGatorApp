@@ -67,8 +67,10 @@ services:
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}"]'
       PEOPLE_GATOR_API__JWK__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
       PEOPLE_GATOR_API__JWK__AUDIENCE: ${HTTP_HOST:-localhost}
-      # The existing example users file supplies the frontend's test/test login.
+      # The example users file supplies test/test; the app opens as that account by itself.
       PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
+      PEOPLE_GATOR_API__PUBLIC_LOGIN__USERNAME: test
+      PEOPLE_GATOR_API__PUBLIC_LOGIN__PASSWORD: test
       PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:-}
       WATCHFILES_FORCE_POLLING: "true"
     volumes:
@@ -130,8 +132,6 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       ALLOWED_VITE_HOSTS: ${HTTP_HOST:-localhost}
       VITE_API_BASE_URL: ${HTTP_API_BASE_URL:-http://localhost:8080}
-      VITE_API_USERNAME: test
-      VITE_API_PASSWORD: test
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
       interval: 10s

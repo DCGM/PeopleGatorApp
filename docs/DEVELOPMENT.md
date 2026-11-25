@@ -88,8 +88,6 @@ Create `people-gator-app/.env.local`:
 
 ```dotenv
 VITE_API_BASE_URL=http://localhost:8000
-VITE_API_USERNAME=test
-VITE_API_PASSWORD=test
 ```
 
 In a second terminal, from `people-gator-app`:
@@ -99,10 +97,14 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
 Set the API base explicitly: without it the client falls back to a remote
-development server. The app automatically logs in with the configured demo
-credentials and requests all four scopes. `VITE_*` values enter browser code.
-Without `VITE_API_USERNAME` the browser asks for a username and password instead,
-as deployments do.
+development server. `VITE_*` values enter browser code. The app shows its login
+page; sign in with `test` / `test`. To open as that account without the login
+page, as development Compose does, add to the API's `.env`:
+
+```dotenv
+PEOPLE_GATOR_API__PUBLIC_LOGIN__USERNAME=test
+PEOPLE_GATOR_API__PUBLIC_LOGIN__PASSWORD=test
+```
 
 ## Readiness and first checks
 
