@@ -5758,8 +5758,10 @@ async def test_life_date_people_filter_and_sort_in_distinct_orders(seed_target):
     # Accent-insensitive surnames, then first names; no surname sorts last.
     assert await order("surname") == ["life-living", "emil", "life-surname", "ada", "life-full", "life-first"]
     assert await order("birth_date") == ["life-first", "life-full", "emil", "ada", "life-living", "life-surname"]
-    # A living person and Emil have no death date and stay last when descending.
-    assert await order("death_date", "desc") == ["ada", "life-full", "life-first", "life-surname", "emil", "life-living"]
+    # A living person and Emil have no death date and stay last when descending;
+    # their tie falls back to entity UUID ascending, which differs per seed.
+    unknown_death = sorted(["emil", "life-living"], key=lambda key: seed.entities[key].int)
+    assert await order("death_date", "desc") == ["ada", "life-full", "life-first", "life-surname", *unknown_death]
     # Inclusive ranges exclude unknown dates and combine with AND.
     assert await order("birth_date", birth_date_from=date(1870, 1, 1), birth_date_to=date(1910, 12, 31)) == [
         "life-first", "life-full", "emil", "ada"]
