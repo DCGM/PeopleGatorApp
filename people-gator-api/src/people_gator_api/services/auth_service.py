@@ -2,8 +2,8 @@ import asyncio
 import logging
 import uuid
 from botocore.exceptions import ClientError
-from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import Depends, HTTPException, Query, Request, Security, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 from typing import Literal
 from people_gator_api.schemas.common import GenericActor
@@ -174,49 +174,18 @@ async def get_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     database_context: IdentityContextDependency,
 ) -> TokenResponse:
-    """Issue tokens for a username and password posted as an OAuth2 password form."""
-    # Not "Basic": a Basic challenge makes browsers prompt for credentials this form ignores.
-    user_record = await _verify_password(form_data.username, form_data.password, "Bearer")
-    _check_scopes(form_data.scopes, user_record["scopes"])
-    return await _issue_session(form_data.username, form_data.scopes, database_context)
+    """Issue tokens for a username and password posted as an OAuth2 password form.
 
-
-BASIC_REALM = "People Gator"
-BASIC_CHALLENGE = f'Basic realm="{BASIC_REALM}", charset="UTF-8"'
-basic_security = HTTPBasic(auto_error=False, realm=BASIC_REALM)
-
-
-async def get_basic_token(
-    credentials: Annotated[HTTPBasicCredentials | None, Depends(basic_security)],
-    database_context: IdentityContextDependency,
-    scope: Annotated[str, Query(description="Space-separated scopes; defaults to all allowed scopes")] = "",
-) -> TokenResponse:
-    """Issue tokens for HTTP Basic credentials, the browser's sign-in dialog.
-
-    Missing or wrong credentials get a Basic challenge, so the browser asks the
-    user and retries. A configured public account signs in browsers that send
-    no credentials. The token carries the requested scopes the user holds.
+    Without a requested scope the token carries every scope the account holds.
     """
-    if credentials is None:
-        public_account = settings.jwk.public_account
-        public_record = (await get_users()).get(public_account) if public_account else None
-        if public_account is None or public_record is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Sign in required",
-                headers={"WWW-Authenticate": BASIC_CHALLENGE},
-            )
-        username, user_record = public_account, public_record
-    else:
-        username = credentials.username
-        user_record = await _verify_password(username, credentials.password, BASIC_CHALLENGE)
-    allowed = set(user_record["scopes"]) & KNOWN_SCOPES
-    requested = scope.split() or sorted(allowed)
-    scopes = [item for item in dict.fromkeys(requested) if item in allowed]
+    # Not "Basic": a Basic challenge makes browsers open their own credentials dialog.
+    user_record = await _verify_password(form_data.username, form_data.password, "Bearer")
+    scopes = form_data.scopes or sorted(set(user_record["scopes"]) & KNOWN_SCOPES)
     if not scopes:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permitted scopes")
-    return await _issue_session(username, scopes, database_context)
-    
+    _check_scopes(scopes, user_record["scopes"])
+    return await _issue_session(form_data.username, scopes, database_context)
+
 
 api_key_security = APIKeyHeader(name="X-API-Key", scheme_name="PeopleGatorAPIKey", auto_error=False)
 
@@ -369,7 +338,6 @@ async def refresh_access_token(
 
 
 type TokenDependency = Annotated[TokenResponse, Depends(get_token)]
-type BasicTokenDependency = Annotated[TokenResponse, Depends(get_basic_token)]
 
 type DataIngestActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[INGEST_SCOPE])]
 type AnnotatorActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[ANNOTATE_SCOPE])]

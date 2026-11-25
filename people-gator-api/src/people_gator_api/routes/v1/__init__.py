@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from people_gator_api.routes.v1.annotations import router as annotations_router
+from people_gator_api.routes.v1.app_config import router as app_config_router
 from people_gator_api.routes.v1.entities import router as identities_router
 from people_gator_api.routes.v1.face_models import router as face_models_router
 from people_gator_api.routes.v1.media import router as media_router
@@ -28,5 +29,6 @@ router.include_router(api_keys_router)
 router.include_router(translation_router)
 router.include_router(root_router)
 router.include_router(rum_config_router)
+router.include_router(app_config_router)
 
 __all__ = ["router"]
