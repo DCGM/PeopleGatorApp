@@ -203,8 +203,13 @@ export async function assignTextMentions(mentionIds: readonly string[], entityId
 export function useAssignTextMentionsMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ mentionIds, entityId }: { mentionIds: readonly string[]; entityId: string | null }) =>
-      assignTextMentions(mentionIds, entityId),
+    mutationFn: ({
+      mentionIds,
+      entityId,
+    }: {
+      mentionIds: readonly string[]
+      entityId: string | null
+    }) => assignTextMentions(mentionIds, entityId),
     onSuccess: (mentions) => {
       for (const mention of mentions)
         queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
@@ -239,7 +244,15 @@ export function useDeleteTextMentionsMutation() {
 export function usePatchTextMentionTextMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ mentionId, name, context }: { mentionId: string; name: string; context: string }) =>
+    mutationFn: ({
+      mentionId,
+      name,
+      context,
+    }: {
+      mentionId: string
+      name: string
+      context: string
+    }) =>
       responseData(
         patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
           path: { mention_id: mentionId },

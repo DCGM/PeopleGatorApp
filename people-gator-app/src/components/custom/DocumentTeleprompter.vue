@@ -13,6 +13,7 @@ import {
   ArrowUpFromLine,
   Highlighter,
   ListPlus,
+  TextCursor,
   UnfoldVertical,
   UserRound,
   X,
@@ -24,6 +25,7 @@ import type {
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
+import { mentionSelectMode, type MentionSelectMode } from '@/viewmodels/mention-selection'
 import {
   EXPAND_STEP,
   LINE_VISIBILITIES,
@@ -68,8 +70,14 @@ const props = withDefaults(
     selectedLanguage?: Language
     currentTranslation?: string
     translationLoading?: boolean
+    /** Name mentions selected for the person card, by mention ID (#176). */
+    selectedMentionIds?: readonly string[]
+    /** Offer Create mention for selected plain text. */
+    canCreateMention?: boolean
+    /** Offer Change mention for selected text that overlaps a mention. */
+    canChangeMention?: boolean
   }>(),
-  { included: undefined },
+  { included: undefined, selectedMentionIds: () => [] },
 )
 
 const lineVisibility = defineModel<LineVisibility>('lineVisibility', { default: 'all' })
@@ -79,7 +87,10 @@ const annotationHighlight = defineModel<HighlightState[]>('annotationHighlight',
 
 const emit = defineEmits<{
   'select-line': [index: number]
-  'select-entity': [index: number, entity: TranscriptionEntitySpan]
+  'select-entity': [index: number, entity: TranscriptionEntitySpan, mode: MentionSelectMode]
+  'clear-mentions': []
+  'create-mention': [mention: { lineIndex: number; name: string; context: string }]
+  'change-mention': [mention: { mentionId: string; name: string; context: string }]
   expand: [passage: Passage, direction: 'before' | 'after', count: number]
 }>()
 
@@ -299,10 +310,18 @@ const mentionSelectionClasses = {
   default: 'bg-transparent hover:bg-accent/10',
 } as const
 
+const selectedMentions = computed(() => new Set(props.selectedMentionIds))
+function isSelectedMention(entity: TranscriptionEntitySpan) {
+  return (
+    props.selectedEntityKey === entityKey(entity) ||
+    Boolean(entity.mention_id && selectedMentions.value.has(entity.mention_id))
+  )
+}
+
 function mentionSelectionState(entity: TranscriptionEntitySpan) {
   const key = entityKey(entity)
   const mentioned = Boolean(entity.entity_id) && props.relatedEntityId === entity.entity_id
-  if (props.selectedEntityKey === key) return mentioned ? 'selectedMentioned' : 'selected'
+  if (isSelectedMention(entity)) return mentioned ? 'selectedMentioned' : 'selected'
   if (mentioned) return 'mentioned'
   // All fragments of a multiline mention respond to hovering any one of them.
   return hoveredEntityKey.value === key ? 'hovered' : 'default'
@@ -369,10 +388,123 @@ function selectLine(index: number) {
   // Finishing a drag selection must not also move the selected line.
   if (textSelection()) return
   if (index !== props.selectedLineIndex) emit('select-line', index)
+  // Clicking text outside the mentions clears them, as an empty scan click does for faces.
+  else if (props.selectedMentionIds.length) emit('clear-mentions')
 }
 
-function activateEntity(index: number, entity: TranscriptionEntitySpan) {
-  if (!textSelection()) emit('select-entity', index, entity)
+/**
+ * Click and Enter/Space select mentions as faces are selected: plain replaces
+ * the selection, Ctrl/Cmd toggles one mention and Shift selects a range (#176).
+ * A plain keyboard activation moves focus into the person card.
+ */
+function activateEntity(
+  index: number,
+  entity: TranscriptionEntitySpan,
+  event: MouseEvent | KeyboardEvent,
+) {
+  if (event instanceof MouseEvent && textSelection()) return
+  const mode = mentionSelectMode(event)
+  emit('select-entity', index, entity, mode)
+  if (mode === 'replace' && event instanceof KeyboardEvent) focusMentionCard()
+}
+
+/** Shift/Ctrl-click must not extend or start a native text selection. */
+function keepTextSelection(event: MouseEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey) event.preventDefault()
+}
+
+const mentionCard = ref<HTMLElement | null>(null)
+function focusMentionCard() {
+  void nextTick(() => mentionCard.value?.focus({ preventScroll: true }))
+}
+
+function clearMentions() {
+  const key = props.selectedEntityKey
+  emit('clear-mentions')
+  // Return focus from the card to the mention it was opened from.
+  if (mentionCard.value?.contains(document.activeElement))
+    scrollElement.value
+      ?.querySelector<HTMLElement>(`[data-occurrence="${CSS.escape(key ?? '')}"]`)
+      ?.focus({ preventScroll: true })
+}
+
+type SelectionAction = {
+  kind: 'create' | 'change'
+  lineIndex: number
+  name: string
+  context: string
+  mentionId?: string
+  left: number
+  top: number
+}
+/** Create or Change mention for text selected within one line. */
+const selectionAction = ref<SelectionAction | null>(null)
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+function measureSelectionAction(): SelectionAction | null {
+  if (!props.canCreateMention && !props.canChangeMention) return null
+  const current = textSelection()
+  const body = bodyElement.value
+  if (!current || !body) return null
+  const { range } = current
+  const lineTexts = [
+    ...(scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text]') ?? []),
+  ].filter((element) => range.intersectsNode(element))
+  const element = lineTexts[0]
+  // Mentions spanning several lines are out of scope.
+  if (lineTexts.length !== 1 || !element) return null
+  if (!element.contains(range.startContainer) || !element.contains(range.endContainer)) return null
+  const lineIndex = Number(element.closest<HTMLElement>('[data-line-index]')?.dataset.lineIndex)
+  const line = props.transcription[lineIndex]
+  if (!line) return null
+  const before = document.createRange()
+  before.selectNodeContents(element)
+  before.setEnd(range.startContainer, range.startOffset)
+  let start = before.toString().length
+  const selected = range.toString()
+  if (line.text.slice(start, start + selected.length) !== selected) return null
+  let end = start + selected.length
+  // Trim spaces, then cover whole words.
+  while (start < end && /\s/.test(line.text[start]!)) start += 1
+  while (end > start && /\s/.test(line.text[end - 1]!)) end -= 1
+  if (start === end) return null
+  while (start > 0 && WORD_CHARACTER.test(line.text[start - 1]!)) start -= 1
+  while (end < line.text.length && WORD_CHARACTER.test(line.text[end]!)) end += 1
+  const name = line.text.slice(start, end)
+  const overlapping = (line.entities ?? []).find(
+    (span) => span.mention_id && span.start_index < end && span.end_index > start,
+  )
+  if (overlapping) {
+    const unchanged =
+      overlapping.start_index === start && overlapping.end_index === end
+    if (!props.canChangeMention || unchanged) return null
+  } else if (!props.canCreateMention) return null
+  const bounds = body.getBoundingClientRect()
+  // Older engines (and jsdom) lack Range geometry; the line still places the action.
+  const target =
+    typeof range.getBoundingClientRect === 'function'
+      ? range.getBoundingClientRect()
+      : element.getBoundingClientRect()
+  const above = target.top - bounds.top - MENTION_BADGE_HEIGHT - 4
+  return {
+    kind: overlapping ? 'change' : 'create',
+    lineIndex,
+    name,
+    context: line.text,
+    mentionId: overlapping?.mention_id,
+    left: Math.max(0, target.left - bounds.left),
+    top: above >= 0 ? above : target.bottom - bounds.top + 4,
+  }
+}
+
+function applySelectionAction() {
+  const action = selectionAction.value
+  if (!action) return
+  if (action.kind === 'change' && action.mentionId)
+    emit('change-mention', { mentionId: action.mentionId, name: action.name, context: action.context })
+  else emit('create-mention', { lineIndex: action.lineIndex, name: action.name, context: action.context })
+  window.getSelection()?.removeAllRanges()
+  selectionAction.value = null
 }
 
 /** Whether a range covers a whole element, such as a collapsed gap band. */
@@ -419,6 +551,7 @@ const selectedGaps = ref<ReadonlySet<number>>(new Set())
 let selectionFrame: number | undefined
 function measureSelectedGaps() {
   selectionFrame = undefined
+  selectionAction.value = measureSelectionAction()
   const current = textSelection()
   const next = new Set<number>()
   if (current)
@@ -640,11 +773,11 @@ function expandTranslation() {
   }
 }
 
-defineExpose({ scrollPage, navigateTo })
+defineExpose({ scrollPage, navigateTo, focusMentionCard })
 </script>
 
 <template>
-  <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
+  <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] overflow-hidden bg-background">
     <PanelBar label="Teleprompter settings">
       <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
         :model-value="lineVisibility" @update:model-value="setLineVisibility">
@@ -707,13 +840,16 @@ defineExpose({ scrollPage, navigateTo })
                 <template v-for="(segment, segmentIndex) in segments[index]" :key="segmentIndex">
                   <mark v-if="segment.entity && isHighlighted(segment.entity)" tabindex="0" role="button"
                     :aria-label="mentionLabel(segment.entity)" :data-link-state="spanHighlightState(segment.entity)"
+                    :aria-pressed="isSelectedMention(segment.entity)"
+                    :data-occurrence="entityKey(segment.entity)"
                     class="transcription-entity cursor-pointer" :class="mentionClasses(segment.entity)"
                     :data-selection="mentionSelectionState(segment.entity)"
                     @mouseenter="showMentionBadge($event, segment.entity)" @mouseleave="hideMentionBadge"
                     @focus="showMentionBadge($event, segment.entity)" @blur="hideMentionBadge"
-                    @keydown.enter.stop.prevent="emit('select-entity', index, segment.entity)"
-                    @keydown.space.stop.prevent="emit('select-entity', index, segment.entity)"
-                    @click.stop="activateEntity(index, segment.entity)">
+                    @keydown.enter.stop.prevent="activateEntity(index, segment.entity, $event)"
+                    @keydown.space.stop.prevent="activateEntity(index, segment.entity, $event)"
+                    @keydown.esc="selectedMentionIds.length && ($event.stopPropagation(), clearMentions())"
+                    @mousedown="keepTextSelection" @click.stop="activateEntity(index, segment.entity, $event)">
                     {{ segment.text }}
                   </mark>
                   <template v-else>{{ segment.text }}</template>
@@ -729,11 +865,29 @@ defineExpose({ scrollPage, navigateTo })
         <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
           :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
       </div>
+      <!-- Create or change a mention from text selected within one line (#176). -->
+      <div v-if="selectionAction" class="absolute z-20"
+        :style="{ left: `${selectionAction.left}px`, top: `${selectionAction.top}px` }">
+        <Button type="button" size="xs" variant="outline" class="bg-background shadow-xs" data-selection-action
+          @mousedown.prevent @click="applySelectionAction">
+          <TextCursor aria-hidden="true" />
+          {{ selectionAction.kind === 'change' ? 'Change mention' : 'Create mention' }}
+        </Button>
+      </div>
       <div class="min-h-0 select-none overflow-hidden py-2">
         <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo"
           @scroll="scrollBy" />
       </div>
     </div>
+
+    <!-- The selected mentions' person card, docked below the text so it never
+      covers the mentions still to be Ctrl- or Shift-clicked (#176). -->
+    <section v-if="selectedMentionIds.length && $slots['mention-card']" ref="mentionCard" tabindex="-1"
+      data-mention-card aria-label="Selected mentions"
+      class="max-h-56 shrink-0 overflow-y-auto border-t bg-popover outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      @keydown.esc.stop="clearMentions">
+      <slot name="mention-card" />
+    </section>
 
     <section v-if="isTranslationOpen && !emptyMessage"
       class="grid shrink-0 grid-cols-[2.5rem_minmax(0,1fr)_2rem] items-start border-t bg-background px-3 py-2 text-base sm:px-6"

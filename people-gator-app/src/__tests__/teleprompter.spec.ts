@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { nextTick, ref } from 'vue'
+import { h, nextTick, ref } from 'vue'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
@@ -701,4 +701,144 @@ describe('DocumentTeleprompter', () => {
     }
   })
 
+  describe('name mention selection and editing (#176)', () => {
+    const select = async (element: Element, from: number, to: number, end?: Element) => {
+      const text = (node: Element) => {
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+        let current = walker.nextNode()
+        while (current && !current.textContent?.trim()) current = walker.nextNode()
+        return current!
+      }
+      const range = document.createRange()
+      range.setStart(text(element), from)
+      range.setEnd(text(end ?? element), to)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      document.dispatchEvent(new Event('selectionchange'))
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await nextTick()
+    }
+    afterEach(() => window.getSelection()?.removeAllRanges())
+
+    it('emits plain, Ctrl/Cmd and Shift selection from clicks and keys', async () => {
+      const wrapper = render()
+      const mark = wrapper.get('[data-line-index="3"] mark')
+      await mark.trigger('click')
+      await mark.trigger('click', { ctrlKey: true })
+      await mark.trigger('click', { metaKey: true })
+      await mark.trigger('click', { shiftKey: true })
+      await mark.trigger('keydown', { key: 'Enter' })
+      await mark.trigger('keydown', { key: 'Enter', ctrlKey: true })
+      await mark.trigger('keydown', { key: ' ', shiftKey: true })
+      expect(wrapper.emitted('select-entity')!.map(([index, entity, mode]) => [index, (entity as TranscriptionEntitySpan).mention_id, mode])).toEqual([
+        [3, 'other-ada-L4-0', 'replace'],
+        [3, 'other-ada-L4-0', 'toggle'],
+        [3, 'other-ada-L4-0', 'toggle'],
+        [3, 'other-ada-L4-0', 'range'],
+        [3, 'other-ada-L4-0', 'replace'],
+        [3, 'other-ada-L4-0', 'toggle'],
+        [3, 'other-ada-L4-0', 'range'],
+      ])
+      // Shift/Ctrl presses keep the browser from extending a text selection.
+      const press = new MouseEvent('mousedown', { shiftKey: true, cancelable: true, bubbles: true })
+      mark.element.dispatchEvent(press)
+      expect(press.defaultPrevented).toBe(true)
+      const plain = new MouseEvent('mousedown', { cancelable: true, bubbles: true })
+      mark.element.dispatchEvent(plain)
+      expect(plain.defaultPrevented).toBe(false)
+    })
+
+    it('highlights every selected mention, docks its card and clears on Escape or a text click', async () => {
+      const wrapper = render({
+        selectedMentionIds: ['other-ada-L4-0', 'multi'],
+        selectedEntityKey: 'multi',
+        selectedLineIndex: 8,
+      })
+      const pressed = wrapper
+        .findAll('mark[aria-pressed="true"]')
+        .map((mark) => mark.element.closest('[data-line-index]')!.getAttribute('data-line-index'))
+      // Both fragments of the two-line mention, and the mention on L4.
+      expect(pressed).toEqual(['3', '8', '9'])
+      expect(wrapper.find('[data-mention-card]').exists()).toBe(false)
+      const withCard = mount(DocumentTeleprompter, {
+        attachTo: document.body,
+        props: {
+          transcription: sample(),
+          selectedLineIndex: 8,
+          selectedEntityKey: 'multi',
+          relatedEntityId: null,
+          selectedMentionIds: ['multi'],
+        },
+        slots: { 'mention-card': () => h('button', { 'aria-label': 'Card action' }) },
+      })
+      cleanup.push(() => withCard.unmount())
+      const card = withCard.get('[data-mention-card]')
+      expect(card.attributes('aria-label')).toBe('Selected mentions')
+      await withCard.get('[aria-label="Card action"]').trigger('keydown', { key: 'Escape' })
+      await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Escape' })
+      // A click on the selected line's text outside a mention clears too.
+      await withCard.get('[data-line-index="8"]').trigger('click')
+      expect(withCard.emitted('clear-mentions')).toHaveLength(3)
+      expect(withCard.emitted('select-line')).toBeUndefined()
+      // A plain keyboard activation moves focus into the card.
+      await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Enter' })
+      await nextTick()
+      expect(document.activeElement).toBe(card.element)
+    })
+
+    it('offers Create mention for whole words selected in one line', async () => {
+      const wrapper = render({ canCreateMention: true, canChangeMention: true })
+      const line = wrapper.get('[data-line-index="2"] [data-line-text]').element
+      // "lain con" inside "Plain context line." covers the words "Plain context".
+      await select(line, 1, 9)
+      const action = wrapper.get('[data-selection-action]')
+      expect(action.text()).toBe('Create mention')
+      await action.trigger('click')
+      expect(wrapper.emitted('create-mention')).toEqual([
+        [{ lineIndex: 2, name: 'Plain context', context: 'Plain context line.' }],
+      ])
+      expect(window.getSelection()!.isCollapsed).toBe(true)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+    })
+
+    it('offers Change mention for a selection overlapping a mention', async () => {
+      const wrapper = render({ canCreateMention: false, canChangeMention: true })
+      const line = wrapper.get('[data-line-index="1"] [data-line-text]').element
+      const mark = line.querySelector('mark')!
+      // From "Novak" inside the mention into " signed".
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+      let after = walker.nextNode()
+      while (after && !after.textContent?.includes('signed')) after = walker.nextNode()
+      const range = document.createRange()
+      range.setStart(mark.firstChild!, 4)
+      range.setEnd(after!, 4)
+      window.getSelection()!.removeAllRanges()
+      window.getSelection()!.addRange(range)
+      document.dispatchEvent(new Event('selectionchange'))
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await nextTick()
+      const action = wrapper.get('[data-selection-action]')
+      expect(action.text()).toBe('Change mention')
+      await action.trigger('click')
+      expect(wrapper.emitted('change-mention')).toEqual([
+        [{ mentionId: 'ada-L2-0', name: 'Novak signed', context: 'Ada Novak signed it.' }],
+      ])
+    })
+
+    it('offers nothing across lines, for blanks, for unchanged words or without permission', async () => {
+      const wrapper = render({ canCreateMention: true, canChangeMention: true })
+      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      await select(text(2), 0, 5, text(4))
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+      await select(text(2), 5, 6)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+      // Exactly the mention's own words: nothing to change.
+      await select(text(1).querySelector('mark')!, 0, 9)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+      await wrapper.setProps({ canCreateMention: false, canChangeMention: false })
+      await select(text(2), 0, 5)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+    })
+  })
 })

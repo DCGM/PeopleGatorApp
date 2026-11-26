@@ -28,6 +28,11 @@ const mocks = vi.hoisted(() => ({
   getFace: vi.fn(),
   listEntities: vi.fn(),
   searchEntities: vi.fn(),
+  patchMentions: vi.fn(),
+  patchMention: vi.fn(),
+  deleteMentions: vi.fn(),
+  createMention: vi.fn(),
+  putPerson: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: mocks.route,
@@ -41,10 +46,16 @@ vi.mock('@/client', async (original) => ({
   getFaceRouteApiV1FacesDetectionIdGet: mocks.getFace,
   listEntitiesRouteApiV1EntitiesGet: mocks.listEntities,
   searchEntitiesGetApiV1SearchEntitiesGet: mocks.searchEntities,
+  patchTextMentionBatchRouteApiV1TextMentionsBatchPatch: mocks.patchMentions,
+  patchTextMentionRouteApiV1TextMentionsMentionIdPatch: mocks.patchMention,
+  deleteTextMentionBatchRouteApiV1TextMentionsBatchDelete: mocks.deleteMentions,
+  createTextMentionRouteApiV1TextMentionsPost: mocks.createMention,
+  putPersonRouteApiV1PeopleEntityIdPut: mocks.putPerson,
 }))
 vi.mock('@/composables/can-annotate', () => ({
   useCanAnnotate: () => ref(true),
   useCanDeleteDetection: () => ref(true),
+  useHasScope: () => ref(true),
 }))
 vi.mock('@/composables/link-state-filter', () => ({ useLinkStateFilter: () => ref([]) }))
 vi.mock('@/query/entities', async (original) => ({
@@ -170,7 +181,7 @@ async function settleFocus() {
   await new Promise((resolve) => requestAnimationFrame(resolve))
   await flushPromises()
 }
-async function mountView(renderActions = false) {
+async function mountView(renderActions = false, mentionCard = false) {
   const wrapper = (renderActions ? mount : shallowMount)(DocumentPageView, {
     global: {
       plugins: [
@@ -197,7 +208,21 @@ async function mountView(renderActions = false) {
                   v-if="actionsEnabled && face.id === selectedFaceId" name="card" :face="face"
                 /></template></div>`,
               },
-              DocumentTeleprompter: true,
+              DocumentTeleprompter: mentionCard
+                ? {
+                    name: 'DocumentTeleprompter',
+                    props: [
+                      'selectedMentionIds',
+                      'selectedEntityKey',
+                      'selectedLineIndex',
+                      'relatedEntityId',
+                      'canCreateMention',
+                      'canChangeMention',
+                    ],
+                    methods: { focusMentionCard: () => undefined },
+                    template: '<div><slot name="mention-card" /></div>',
+                  }
+                : true,
               LoadableImage: true,
               IdentityFacePreview: true,
               RouterLink: RouterLinkStub,
@@ -1233,6 +1258,261 @@ describe('independent panel visibility (#139)', () => {
     await flushPromises()
     expect(wrapper.get('#people-panel').attributes('style') ?? '').not.toContain('display: none')
     expect(mocks.focusPeople).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+})
+
+describe('scan name mentions and their person card (#176)', () => {
+  const lastQuery = (navigate: typeof mocks.push) =>
+    (navigate.mock.lastCall?.[0] as { query: Record<string, unknown> }).query
+  const mention = (id: string, line_id: string, start: number, text: string, extra = {}) => ({
+    mention_id: id,
+    occurrence: `${id}:${line_id}:${start}`,
+    line_id,
+    label: 'person' as const,
+    text,
+    start_index: start,
+    end_index: start + text.length,
+    linkState: null,
+    verifiedBy: null,
+    verifiedAt: null,
+    ...extra,
+  })
+  const m1 = mention('m1', 'l1', 0, 'Jan Bulk', { entity_id: 'jan', linkState: 'automatic' })
+  const m2 = mention('m2', 'l2', 0, 'Eva')
+  const m3 = mention('m3', 'l2', 8, 'Jan Bulk', { entity_id: 'jan', linkState: 'verified' })
+
+  beforeEach(() => {
+    lines.value = [
+      { id: 'l1', text: 'Jan Bulk wrote', position: box, entities: [m1] },
+      { id: 'l2', text: 'Eva and Jan Bulk', position: { ...box, top: 70 }, entities: [m2, m3] },
+    ]
+    const workspace = mocks.workspace()
+    mocks.workspace.mockReturnValue({
+      ...workspace,
+      entityNames: ref(new Map([['jan', 'Jan Bulk']])),
+    })
+    mocks.patchMentions.mockImplementation(({ body }) =>
+      Promise.resolve({ data: body.map((item: object) => ({ ...item, name: 'x' })) }),
+    )
+  })
+  const teleprompter = (wrapper: Awaited<ReturnType<typeof mountView>>) =>
+    wrapper.findComponent({ name: 'DocumentTeleprompter' })
+  const mentionCard = (wrapper: Awaited<ReturnType<typeof mountView>>) =>
+    wrapper
+      .findAllComponents({ name: 'SelectedFaceItem' })
+      .find((card) => card.props('mentions'))
+  async function choose(
+    wrapper: Awaited<ReturnType<typeof mountView>>,
+    index: number,
+    span: typeof m1,
+    mode = 'replace',
+  ) {
+    teleprompter(wrapper).vm.$emit('select-entity', index, span, mode)
+    await flushPromises()
+  }
+
+  it('selects one mention, toggles and ranges across lines, beside an independent face', async () => {
+    const wrapper = await mountView(true, true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    await choose(wrapper, 0, m1)
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1'])
+    expect(teleprompter(wrapper).props('selectedEntityKey')).toBe('m1:l1:0')
+    expect(lastQuery(mocks.replace)).toMatchObject({ person: 'a', selectedPerson: 'jan', line: 'l1' })
+    // The face keeps its own card; the mention gets the shared person card.
+    const cards = wrapper.findAllComponents({ name: 'SelectedFaceItem' })
+    expect(cards.map((card) => Boolean(card.props('face')))).toEqual([false, true])
+    expect(mentionCard(wrapper)!.props('mentions')).toMatchObject({
+      ids: ['m1'],
+      texts: ['Jan Bulk'],
+      personId: 'jan',
+      name: 'Jan Bulk',
+      linkState: 'automatic',
+      anyUnverified: true,
+    })
+    // Ctrl adds m3 and moves the anchor; Shift from m3 back to m1 covers m2 on the next line.
+    await choose(wrapper, 1, m3, 'toggle')
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1', 'm3'])
+    await choose(wrapper, 0, m1, 'range')
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1', 'm2', 'm3'])
+    expect(mentionCard(wrapper)!.props('mentions')).toMatchObject({
+      texts: ['Jan Bulk', 'Eva'],
+      personId: null,
+      mixed: true,
+      linkState: null,
+    })
+    // Toggling the clicked mention off leaves the others.
+    await choose(wrapper, 0, m1, 'toggle')
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m2', 'm3'])
+    expect(teleprompter(wrapper).props('selectedEntityKey')).toBeNull()
+    // Escape (or an empty click) clears the mentions; the face stays selected.
+    teleprompter(wrapper).vm.$emit('clear-mentions')
+    await flushPromises()
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual([])
+    expect(mentionCard(wrapper)).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'SelectedFaceItem' }).props('face')).toMatchObject({ id: 'a' })
+    expect(lastQuery(mocks.replace)).toMatchObject({ person: 'a', selectedPerson: 'ada' })
+    // People gets both targets with permission to assign.
+    await choose(wrapper, 1, m2)
+    const people = wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    expect(people.attributes()).toMatchObject({ 'can-assign': 'true' })
+    expect(teleprompter(wrapper).props('canCreateMention')).toBe(true)
+    expect(teleprompter(wrapper).props('canChangeMention')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('assigns, unlinks, verifies, searches and deletes all selected mentions in batches', async () => {
+    const wrapper = await mountView(true, true)
+    await choose(wrapper, 0, m1)
+    await choose(wrapper, 1, m3, 'range')
+    const people = wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    people.vm.$emit('assignMentions', { id: 'ada' })
+    await flushPromises()
+    expect(mocks.patchMentions).toHaveBeenLastCalledWith({
+      body: ['m1', 'm2', 'm3'].map((mention_id) => ({
+        mention_id,
+        entity_id: 'ada',
+        entity_link_state: 'manual',
+      })),
+      throwOnError: true,
+    })
+    // Assigning mentions never touches a face.
+    expect(mocks.assignFace).not.toHaveBeenCalled()
+    await mentionCard(wrapper)!.get('[aria-label="Unassign current profile"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patchMentions.mock.lastCall![0].body).toEqual(
+      ['m1', 'm2', 'm3'].map((mention_id) => ({ mention_id, entity_id: null, entity_link_state: null })),
+    )
+    // Verify skips unlinked and already verified mentions.
+    await mentionCard(wrapper)!.get('[aria-label="Verify this link"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patchMentions.mock.lastCall![0].body).toEqual([
+      { mention_id: 'm1', entity_link_state: 'verified' },
+    ])
+    // Search fills People with the distinct names and drops an attached face.
+    await mentionCard(wrapper)!.get('[aria-label="Search people by these names"]').trigger('click')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_text: 'Jan Bulk Eva',
+      candidate_face: undefined,
+      panel: undefined,
+    })
+    // Delete confirms first, then deletes every selected mention at once.
+    mocks.deleteMentions.mockResolvedValueOnce({ data: 3 })
+    await mentionCard(wrapper)!.get('[aria-label="Delete mentions"]').trigger('click')
+    await flushPromises()
+    expect(mocks.deleteMentions).not.toHaveBeenCalled()
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
+    expect(wrapper.text()).toContain('Delete 3 mentions?')
+    await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
+    await flushPromises()
+    expect(mocks.deleteMentions).toHaveBeenCalledWith({ body: ['m1', 'm2', 'm3'], throwOnError: true })
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual([])
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('reports a failed update and keeps the selection', async () => {
+    const wrapper = await mountView(true, true)
+    await choose(wrapper, 1, m2)
+    mocks.patchMentions.mockRejectedValueOnce(new Error('Forbidden'))
+    wrapper.findComponent({ name: 'ScanPeoplePanel' }).vm.$emit('assignMentions', { id: 'ada' })
+    await flushPromises()
+    expect(mentionCard(wrapper)!.text()).toContain('Could not update link.')
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m2'])
+    wrapper.unmount()
+  })
+
+  it('creates a person through PUT /people, links every mention and retries without a duplicate', async () => {
+    const uuid = vi.spyOn(crypto, 'randomUUID')
+    uuid.mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
+    mocks.putPerson.mockImplementation(({ path, body }) =>
+      Promise.resolve({ data: { ...body, entity_id: path.entity_id, user_id: 'u' } }),
+    )
+    const wrapper = await mountView(true, true)
+    await choose(wrapper, 0, m1)
+    await choose(wrapper, 1, m2, 'toggle')
+    mocks.patchMentions.mockRejectedValueOnce(new Error('offline'))
+    mentionCard(wrapper)!.vm.$emit('createProfile', { name: 'Jan Bulk', shortDescription: 'Clerk' })
+    await flushPromises()
+    expect(mentionCard(wrapper)!.text()).toContain('Could not create and link the person.')
+    mentionCard(wrapper)!.vm.$emit('createProfile', { name: 'Jan Bulk' })
+    await flushPromises()
+    expect(mocks.putPerson.mock.calls.map(([options]) => options.path.entity_id)).toEqual([
+      '11111111-1111-4111-8111-111111111111',
+      '11111111-1111-4111-8111-111111111111',
+    ])
+    expect(mocks.putPerson.mock.calls[0]![0].body).toEqual({
+      entity_type: 'person',
+      name: 'Jan Bulk',
+      short_description: 'Clerk',
+    })
+    expect(mocks.patchMentions.mock.lastCall![0].body).toEqual(
+      ['m1', 'm2'].map((mention_id) => ({
+        mention_id,
+        entity_id: '11111111-1111-4111-8111-111111111111',
+        entity_link_state: 'manual',
+      })),
+    )
+    expect(uuid).toHaveBeenCalledTimes(1)
+    expect(lastQuery(mocks.replace)).toMatchObject({
+      selectedPerson: '11111111-1111-4111-8111-111111111111',
+    })
+    uuid.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('creates an unlinked mention from selected text and selects it once its span appears', async () => {
+    mocks.createMention.mockResolvedValue({ data: { mention_id: 'new', name: 'Eva' } })
+    const wrapper = await mountView(true, true)
+    teleprompter(wrapper).vm.$emit('create-mention', {
+      lineIndex: 1,
+      name: 'Eva',
+      context: 'Eva and Jan Bulk',
+    })
+    await flushPromises()
+    expect(mocks.createMention).toHaveBeenCalledWith({
+      body: { name: 'Eva', context: 'Eva and Jan Bulk', source_id: 'source' },
+      throwOnError: true,
+    })
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual([])
+    const created = mention('new', 'l2', 0, 'Eva')
+    lines.value = [lines.value[0]!, { ...lines.value[1]!, entities: [created, m3] }]
+    await flushPromises()
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['new'])
+    expect(mentionCard(wrapper)!.props('mentions')).toMatchObject({
+      ids: ['new'],
+      texts: ['Eva'],
+      personId: null,
+    })
+    // Changing a mention's words keeps its link: only name and context are sent.
+    mocks.patchMention.mockResolvedValue({ data: { mention_id: 'm3', name: 'Bulk' } })
+    teleprompter(wrapper).vm.$emit('change-mention', {
+      mentionId: 'm3',
+      name: 'Bulk',
+      context: 'Eva and Jan Bulk',
+    })
+    await flushPromises()
+    expect(mocks.patchMention).toHaveBeenCalledWith({
+      path: { mention_id: 'm3' },
+      body: { name: 'Bulk', context: 'Eva and Jan Bulk' },
+      throwOnError: true,
+    })
+    const changed = { ...m3, occurrence: 'm3:l2:12', text: 'Bulk', start_index: 12 }
+    lines.value = [lines.value[0]!, { ...lines.value[1]!, entities: [created, changed] }]
+    await flushPromises()
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m3'])
+    expect(teleprompter(wrapper).props('selectedEntityKey')).toBe('m3:l2:12')
+    wrapper.unmount()
+  })
+
+  it('reports a failed mention creation', async () => {
+    mocks.createMention.mockRejectedValue(new Error('Forbidden'))
+    const wrapper = await mountView(true, true)
+    teleprompter(wrapper).vm.$emit('create-mention', { lineIndex: 0, name: 'Jan', context: 'x' })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('Could not create mention.')
     wrapper.unmount()
   })
 })
