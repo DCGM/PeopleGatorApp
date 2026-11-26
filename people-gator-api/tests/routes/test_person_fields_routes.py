@@ -82,6 +82,11 @@ def test_create_returns_person_fields_and_normalizes_middle_names() -> None:
 @pytest.mark.parametrize("body", [
     {"birth_date": "1890-02-30"},
     {"birth_date": "1890"},
+    {"birth_date": 0},
+    {"birth_date": "86400"},
+    {"death_date": 86400.5},
+    {"birth_date": "1890-03-14T00:00:00"},
+    {"birth_date": "1890-3-14"},
     {"birth_date": "1900-01-02", "death_date": "1900-01-01"},
 ])
 def test_invalid_dates_are_unprocessable(body) -> None:
@@ -140,10 +145,114 @@ def test_list_parses_date_ranges_and_person_sorts() -> None:
 @pytest.mark.parametrize(("path", "params"), [
     ("/api/v1/people", {"filter.birth_date_from": "1900-01-02", "filter.birth_date_to": "1900-01-01"}),
     ("/api/v1/people", {"filter.death_date_to": "not-a-date"}),
+    ("/api/v1/people", {"filter.birth_date_from": "0"}),
+    ("/api/v1/people", {"filter.birth_date_from": "86400"}),
+    ("/api/v1/people", {"filter.death_date_from": "1950-01-01T00:00:00Z"}),
+    ("/api/v1/search-people", {"query.text": "Ada", "filter.birth_date_to": "1890"}),
+    ("/api/v1/search-people", {"query.text": "Ada", "filter.birth_date_from": "1900-01-02",
+                               "filter.birth_date_to": "1900-01-01"}),
     ("/api/v1/entities", {"sort": "surname"}),
 ])
 def test_invalid_ranges_and_generic_person_sorts_are_rejected(path, params) -> None:
     listed = AsyncMock()
-    client = _client(list=listed, list_people=listed)
+    client = _client(list=listed, list_people=listed, search_people=listed)
     assert client.get(path, params=params).status_code == 422
     listed.assert_not_awaited()
+
+
+def test_dates_from_year_one_are_accepted() -> None:
+    create = AsyncMock(side_effect=lambda payload, _: _person(birth_date=payload.birth_date))
+    response = _client(create_person=create).post("/api/v1/people", json={"name": "Ada", "birth_date": "0001-01-01"})
+    assert response.status_code == 201 and response.json()["birth_date"] == "0001-01-01"
+
+
+def test_search_people_forces_person_type_and_maps_errors() -> None:
+    from people_gator_api.schemas.search import SearchPeopleResultListResponse
+
+    search = AsyncMock(return_value=SearchPeopleResultListResponse(items=[], limit=10))
+    response = _client(search_people=search).get("/api/v1/search-people", params={
+        "query.text": "Ada", "filter.death_date_from": "1950-01-01", "sort": "birth_date",
+    })
+    assert response.status_code == 200, response.text
+    request = search.await_args.args[0]
+    generic = request.to_generic()
+    assert generic.filter_.entity_type == ["person"] and generic.filter_.death_date_from == date(1950, 1, 1)
+    assert request.effective_sort() == ("birth_date", "asc")
+    failing = AsyncMock(side_effect=ValueError("unknown reference entity"))
+    response = _client(search_people=failing).get("/api/v1/search-people", params={"query.text": "Ada"})
+    assert response.status_code == 422 and response.json()["detail"]["code"] == "invalid_search"
+
+
+def test_generic_lists_and_search_omit_person_fields() -> None:
+    from people_gator_api.schemas.entities import GenericEntityListResponse
+    from people_gator_api.schemas.search import GenericFoundEntity, GenericSearchEntitiesResultListResponse
+
+    listed = AsyncMock(return_value=GenericEntityListResponse(
+        items=[_person(GenericEntityResponse, surname="Novak")], limit=10))
+    item = _client(list=listed).get("/api/v1/entities").json()["items"][0]
+    assert not PERSON_FIELDS & set(item)
+    found = GenericFoundEntity(**_person(GenericEntityResponse, birth_date=date(1890, 1, 1)).model_dump(), score=1.0)
+    search = AsyncMock(return_value=GenericSearchEntitiesResultListResponse(items=[found], limit=10))
+    item = _client(search=search).get("/api/v1/search-entities", params={"query.text": "Ada"}).json()["items"][0]
+    assert not PERSON_FIELDS & set(item)
+
+
+def test_batch_create_and_patch() -> None:
+    create = AsyncMock(side_effect=lambda payloads, _: [_person(**p.person_values()) for p in payloads])
+    response = _client(create_person_batch=create).post("/api/v1/people:batch", json=[
+        {"name": "Ada", "surname": "Novak"}, {"name": "Bo"}])
+    assert response.status_code == 201 and [p["surname"] for p in response.json()] == ["Novak", None]
+    assert _client(create_person_batch=create).post(
+        "/api/v1/people:batch", json=[{"name": "Ada", "birth_date": 1890}]).status_code == 422
+    patch = AsyncMock(return_value=[_person(first_name="Ada"), None])
+    response = _client(patch_person_batch=patch).patch("/api/v1/people:batch", json=[
+        {"entity_id": str(uuid.uuid4()), "first_name": "Ada"}, {"entity_id": str(uuid.uuid4()), "surname": None}])
+    assert response.status_code == 200 and response.json()[1] is None
+    assert patch.await_args.args[0][1].person_values() == {"surname": None}
+
+
+@pytest.mark.parametrize(("deleted", "code"), [(True, 204), (False, 404)])
+def test_delete_person(deleted, code) -> None:
+    delete = AsyncMock(return_value=deleted)
+    assert _client(delete_person=delete).delete(f"/api/v1/people/{uuid.uuid4()}").status_code == code
+
+
+@pytest.mark.parametrize(("outcome", "code"), [
+    (InvalidPersonFieldsError("death_date must not be earlier than birth_date"), 422),
+    (ValueError("source and target must differ"), 409),
+    (None, 404),
+])
+@pytest.mark.parametrize("batch", [False, True])
+def test_merge_routes_map_errors(outcome, code, batch) -> None:
+    target = uuid.uuid4()
+    mock = AsyncMock(side_effect=outcome) if isinstance(outcome, Exception) else AsyncMock(return_value=outcome)
+    if batch:
+        response = _client(merge_people=mock).post(
+            f"/api/v1/people/{target}:merge-batch", json={"source_entity_ids": [str(uuid.uuid4())]})
+    else:
+        response = _client(merge_person=mock).post(
+            f"/api/v1/people/{target}:merge", json={"source_entity_id": str(uuid.uuid4())})
+    assert response.status_code == code
+
+
+def test_put_reports_invalid_references() -> None:
+    put = AsyncMock(side_effect=ValueError("actor user not found"))
+    assert _client(put_person=put).put(f"/api/v1/people/{uuid.uuid4()}", json={"name": "Ada"}).status_code == 422
+
+
+def test_people_routes_require_the_entity_scopes() -> None:
+    app = FastAPI()
+    app.include_router(v1_router)
+    paths = app.openapi()["paths"]
+
+    def scopes(path: str, method: str) -> set[str]:
+        return {scope for item in paths[path][method].get("security", []) for values in item.values() for scope in values}
+
+    for path, method in (("/api/v1/people", "get"), ("/api/v1/people/{entity_id}", "get"), ("/api/v1/search-people", "get")):
+        assert scopes(path, method) == scopes("/api/v1/entities", "get")
+    for path, method in (("/api/v1/people", "post"), ("/api/v1/people/{entity_id}", "patch"),
+                         ("/api/v1/people/{entity_id}", "put"), ("/api/v1/people:batch", "patch")):
+        assert scopes(path, method) == scopes("/api/v1/entities/{entity_id}", "patch")
+    for path, method in (("/api/v1/people/{entity_id}", "delete"), ("/api/v1/people/{target_entity_id}:merge-batch", "post")):
+        assert scopes(path, method) == scopes("/api/v1/entities/{entity_id}", "delete")
+    assert scopes("/api/v1/people/{entity_id}", "delete") != scopes("/api/v1/people/{entity_id}", "patch")

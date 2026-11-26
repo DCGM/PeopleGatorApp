@@ -7,7 +7,7 @@ convention: search inputs use ``query.<field>``, filters use
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -19,7 +19,7 @@ from people_gator_api.schemas.common import (
     GenericListRequest,
     ListFilterBase,
 )
-from people_gator_api.schemas.entities import EntityFilterBase, EntityListFilter, PersonListFilter
+from people_gator_api.schemas.entities import EntityFilterBase, EntityListFilter, IsoDate, PersonListFilter
 from people_gator_api.schemas.entity_links import LEGACY_FILTER_REPLACEMENTS, SharedFilter
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
@@ -386,10 +386,10 @@ def entity_list_filter_dependency(
 
 def person_list_filter_dependency(
     values: Annotated[dict[str, object], Depends(_entity_filter_values)],
-    birth_date_from: Annotated[date | None, _model_parameter(PersonListFilter, "birth_date_from", "filter")] = None,
-    birth_date_to: Annotated[date | None, _model_parameter(PersonListFilter, "birth_date_to", "filter")] = None,
-    death_date_from: Annotated[date | None, _model_parameter(PersonListFilter, "death_date_from", "filter")] = None,
-    death_date_to: Annotated[date | None, _model_parameter(PersonListFilter, "death_date_to", "filter")] = None,
+    birth_date_from: Annotated[IsoDate | None, _model_parameter(PersonListFilter, "birth_date_from", "filter")] = None,
+    birth_date_to: Annotated[IsoDate | None, _model_parameter(PersonListFilter, "birth_date_to", "filter")] = None,
+    death_date_from: Annotated[IsoDate | None, _model_parameter(PersonListFilter, "death_date_from", "filter")] = None,
+    death_date_to: Annotated[IsoDate | None, _model_parameter(PersonListFilter, "death_date_to", "filter")] = None,
 ) -> PersonListFilter:
     return _filter(
         PersonListFilter,

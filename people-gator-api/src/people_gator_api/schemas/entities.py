@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     model_validator,
     Field,
     field_validator,
@@ -36,6 +38,21 @@ PERSON_NAME_FIELDS = ("first_name", "middle_names", "surname")
 PERSON_FIELDS = (*PERSON_NAME_FIELDS, "birth_date", "death_date")
 PERSON_DATES_MESSAGE = "death_date must not be earlier than birth_date"
 
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def strict_iso_date(value: object) -> object:
+    """Accept only a calendar date as YYYY-MM-DD; reject numbers, timestamps and date-times."""
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and _ISO_DATE.fullmatch(value):
+        return value  # Pydantic still rejects impossible dates such as 1900-02-30.
+    raise ValueError("dates must be YYYY-MM-DD")
+
+
+IsoDate = Annotated[date, BeforeValidator(strict_iso_date)]
+"""A full calendar date written as YYYY-MM-DD, from 0001-01-01."""
+
 
 def normalize_person_name(value: str | None | MissingType) -> str | None | MissingType:
     """Collapse repeated and surrounding whitespace; a blank name clears the field."""
@@ -63,10 +80,10 @@ class PersonFields(BaseModel):
     surname: str | None | MissingType = Field(
         default=MISSING, description="Person only: family name."
     )
-    birth_date: date | None | MissingType = Field(
+    birth_date: IsoDate | None | MissingType = Field(
         default=MISSING, description="Person only: full date of birth (YYYY-MM-DD)."
     )
-    death_date: date | None | MissingType = Field(
+    death_date: IsoDate | None | MissingType = Field(
         default=MISSING,
         description="Person only: full date of death (YYYY-MM-DD); not earlier than birth_date.",
     )
@@ -382,19 +399,19 @@ class PersonResponseFields(BaseModel):
 class LifeDateFilter(BaseModel):
     """Inclusive person life-date ranges; unknown dates never match."""
 
-    birth_date_from: date | MissingType = Field(
+    birth_date_from: IsoDate | MissingType = Field(
         default=MISSING,
         description="Inclusive earliest birth date; excludes unknown birth dates.",
     )
-    birth_date_to: date | MissingType = Field(
+    birth_date_to: IsoDate | MissingType = Field(
         default=MISSING,
         description="Inclusive latest birth date; excludes unknown birth dates.",
     )
-    death_date_from: date | MissingType = Field(
+    death_date_from: IsoDate | MissingType = Field(
         default=MISSING,
         description="Inclusive earliest death date; excludes unknown death dates.",
     )
-    death_date_to: date | MissingType = Field(
+    death_date_to: IsoDate | MissingType = Field(
         default=MISSING,
         description="Inclusive latest death date; excludes unknown death dates.",
     )
@@ -592,6 +609,8 @@ class PersonMergeResponse(BaseModel):
 
 __all__ = [
     "MAX_ENTITY_BATCH_SIZE",
+    "IsoDate",
+    "strict_iso_date",
     "EntityFilterBase",
     "GenericEntityCreateRequest",
     "GenericEntityListFilter",
