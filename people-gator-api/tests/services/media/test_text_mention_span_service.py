@@ -123,6 +123,57 @@ def test_text_mention_name_matches_every_ocr_appearance() -> None:
     ]
 
 
+def test_text_mention_context_limits_the_name_to_its_own_line() -> None:
+    """A mention created from one line covers only that line's words (#176)."""
+    mention_id = uuid.uuid4()
+    layout = _layout(
+        _line("line-1", "Jan Novak wrote first.", 0),
+        _line("line-2", "Later Jan Novak signed.", 1),
+    )
+    mention = _TextMentionText(
+        mention_id, None, None, "Jan Novak", context="Later Jan Novak signed."
+    )
+
+    spans = _match_text_mention_spans(layout, [mention])
+
+    assert [(span.start_line_id, span.start_character, span.end_character) for span in spans] == [
+        ("line-2", 6, 15)
+    ]
+    assert spans[0].entity_id is None
+    assert spans[0].entity_type is None
+
+
+def test_text_mention_context_phrase_and_unmatched_context() -> None:
+    layout = _layout(
+        _line("line-1", "Ada met Ada.", 0),
+        _line("line-2", "Ada left.", 1),
+    )
+    phrase = _TextMentionText(uuid.uuid4(), uuid.uuid4(), EntityType.person, "Ada", context="ada  LEFT")
+    unknown = _TextMentionText(uuid.uuid4(), uuid.uuid4(), EntityType.person, "Ada", context="Elsewhere")
+
+    assert [span.start_line_id for span in _match_text_mention_spans(layout, [phrase])] == ["line-2"]
+    # A context found on no line keeps the page-wide match of earlier records.
+    assert len(_match_text_mention_spans(layout, [unknown])) == 3
+    # Context words match whole words, never parts of a line's words.
+    partial = _TextMentionText(uuid.uuid4(), None, None, "Ada", context="da lef")
+    assert len(_match_text_mention_spans(layout, [partial])) == 3
+
+
+def test_text_mention_context_can_hold_a_two_line_name() -> None:
+    layout = _layout(
+        _line("line-1", "Prefix Ada", 0),
+        _line("line-2", "Lovelace, later", 1),
+        _line("line-3", "Ada Lovelace again", 2),
+    )
+    mention = _TextMentionText(
+        uuid.uuid4(), None, None, "Ada Lovelace", context="Prefix Ada Lovelace, later"
+    )
+
+    spans = _match_text_mention_spans(layout, [mention])
+
+    assert [(span.start_line_id, span.end_line_id) for span in spans] == [("line-1", "line-2")]
+
+
 def test_text_mention_spans_do_not_cross_layout_regions() -> None:
     layout = PageLayoutModel(
         id="page-1",
@@ -214,13 +265,20 @@ async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
         page_source_id,
     )
 
+    # Unlinked mentions are served too, so the scan can select and assign them (#176).
     assert mentions == [
         _TextMentionText(
             mention_id,
             entity_id,
             EntityType.person,
             "Ada Lovelace",
-        )
+        ),
+        _TextMentionText(
+            unassigned_mention_id,
+            None,
+            None,
+            "Unassigned",
+        ),
     ]
     assert len(mention_queries) == 1
     assert len(entity_queries) == 1

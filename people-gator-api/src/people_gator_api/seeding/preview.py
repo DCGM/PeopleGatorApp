@@ -616,6 +616,15 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         f"/libraries/{focus_document.library}/documents/{focus_document.document_id}"
         f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
     )
+    # Issue #176: select, reassign, unlink, create and change name mentions on a scan.
+    mention_editing_document = next(item for item in DOCUMENTS if item.key == "mention-editing")
+    mention_editing_page = next(item for item in PAGES if item.key == "mention-editing-1")
+    mention_editing_examples = {
+        "mention-editing": (
+            f"/libraries/{mention_editing_document.library}/documents/"
+            f"{mention_editing_document.document_id}/pages/{mention_editing_page.page_id}"
+        ),
+    }
     teleprompter_document = next((item for item in DOCUMENTS if item.key == "teleprompter"), None)
     teleprompter_page = next((item for item in PAGES if item.key == "teleprompter-1"), None)
     # Issue #36: a 40-line page where Ada's repeated and two-line mentions
@@ -895,6 +904,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "person-last-change": f"/people/{manifest.entities['link-ada']}",
             # #173: created through PUT /api/v1/entities/{id}; PUT again to replace.
             "put-replace-person": f"/people/{manifest.entities['put-replace']}",
+            **mention_editing_examples,
             "document-pages-without-annotations": "/documents?" + urlencode({
                 "q": "Příběhy archivářů",
             }),

@@ -32,12 +32,13 @@ _WORD_PATTERN = re.compile(r"[^\W_]+(?:[’'\-][^\W_]+)*", re.UNICODE)
 @dataclass(frozen=True, slots=True)
 class _TextMentionText:
     mention_id: uuid.UUID
-    entity_id: uuid.UUID
+    entity_id: uuid.UUID | None
     entity_type: EntityType | None
     name: str
     entity_link_state: EntityLinkState | None = None
     entity_link_verified_by_user_id: uuid.UUID | None = None
     entity_link_verified_at: datetime | None = None
+    context: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +84,7 @@ async def _fetch_text_mentions(
     entity_link_state: list[EntityLinkState] | MissingType = MISSING,
     filter_: TextMentionListFilter | None = None,
 ) -> list[_TextMentionText]:
-    """Fetch every text mention linked to the requested page source."""
+    """Fetch every text mention on the requested page source, linked or not."""
     mentions: list[_TextMentionText] = []
     cursor: str | None = None
     while True:
@@ -94,11 +95,8 @@ async def _fetch_text_mentions(
                 cursor=cursor,
             )
         )
-        assigned: list[tuple[TextMentionResponse, uuid.UUID]] = []
-        for item in response.items:
-            if item.entity_id is not None:
-                assigned.append((item, item.entity_id))
-        entity_ids = list(dict.fromkeys(entity_id for _item, entity_id in assigned))
+        items: list[TextMentionResponse] = list(response.items)
+        entity_ids = list(dict.fromkeys(item.entity_id for item in items if item.entity_id is not None))
         entity_types: dict[uuid.UUID, EntityType] = {}
         if entity_ids:
             entities = await database.entities.list(
@@ -113,14 +111,15 @@ async def _fetch_text_mentions(
         mentions.extend(
             _TextMentionText(
                 mention_id=item.mention_id,
-                entity_id=entity_id,
-                entity_type=entity_types.get(entity_id),
+                entity_id=item.entity_id,
+                entity_type=entity_types.get(item.entity_id) if item.entity_id else None,
                 name=item.name,
                 entity_link_state=item.entity_link_state,
                 entity_link_verified_by_user_id=item.entity_link_verified_by_user_id,
                 entity_link_verified_at=item.entity_link_verified_at,
+                context=item.context,
             )
-            for item, entity_id in assigned
+            for item in items
         )
         if response.cursor is None:
             break
@@ -135,12 +134,15 @@ def _match_text_mention_spans(
     mentions: Sequence[_TextMentionText],
 ) -> list[TextMentionSpanModel]:
     words = _layout_words(layout)
+    line_texts = _line_texts(layout)
     spans: list[tuple[int, TextMentionSpanModel]] = []
     for mention in mentions:
         mention_words = _normalized_words(mention.name)
         if not mention_words:
             continue
-        matches = _mention_matches(words, mention_words)
+        matches = _mention_matches(
+            words, mention_words, _context_lines(line_texts, mention.context)
+        )
 
         for match in _best_non_overlapping(matches):
             first_word = words[match.start_word]
@@ -168,7 +170,6 @@ def _match_text_mention_spans(
             item[1].start_character,
             item[1].end_character,
             item[1].mention_id,
-            item[1].entity_id,
         )
     )
     return [span for _position, span in spans]
@@ -208,6 +209,39 @@ def _layout_words(layout: PageLayoutModel) -> list[_Word]:
     return words
 
 
+def _line_texts(layout: PageLayoutModel) -> dict[str, str]:
+    return {
+        line.id: _normalized_text(line.transcription)
+        for region in layout.regions
+        for line in region.lines
+    }
+
+
+def _normalized_text(value: str) -> str:
+    return " ".join(_normalized_words(value))
+
+
+def _context_lines(line_texts: dict[str, str], context: str | None) -> frozenset[str] | None:
+    """Lines a mention's context points to, or None to match the whole page.
+
+    A context holding whole lines (such as the OCR line text recorded with the
+    mention) or a phrase within one line limits the name to those lines, so a
+    mention covers its own words rather than every same-named word on the page.
+    Contexts that match no line keep the page-wide match.
+    """
+    target = _normalized_text(context or "")
+    if not target:
+        return None
+    # Whole words only: padding keeps "ovak" from matching inside "novak".
+    padded = f" {target} "
+    lines = frozenset(
+        line_id
+        for line_id, text in line_texts.items()
+        if text and (f" {text} " in padded or padded in f" {text} ")
+    )
+    return lines or None
+
+
 def _normalized_words(value: str) -> tuple[str, ...]:
     return tuple(
         normalized
@@ -223,6 +257,7 @@ def _normalize(value: str) -> str:
 def _mention_matches(
     words: Sequence[_Word],
     mention_words: tuple[str, ...],
+    lines: frozenset[str] | None = None,
 ) -> list[_Match]:
     target = " ".join(mention_words)
     expected_word_count = len(mention_words)
@@ -236,6 +271,8 @@ def _mention_matches(
             end_word = start_word + window_size
             window = words[start_word:end_word]
             if window[0].region_id != window[-1].region_id:
+                continue
+            if lines is not None and not all(word.line_id in lines for word in window):
                 continue
             candidate = " ".join(word.normalized for word in window)
             length_ratio = min(len(target), len(candidate)) / max(
