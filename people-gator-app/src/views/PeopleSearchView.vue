@@ -160,7 +160,7 @@ useAutomaticPagination({
 
             <div
               v-if="people.length || isLoading"
-              class="grid gap-0 pt-6 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4"
+              class="grid gap-0 pt-6 grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]"
             >
               <div v-for="person in people" :key="person.id" class="group relative min-w-0">
                 <RouterLink
