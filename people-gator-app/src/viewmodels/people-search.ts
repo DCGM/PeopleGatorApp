@@ -5,18 +5,22 @@ import {
   type PeopleCountState,
 } from './people-counts'
 import type { SharedQuery } from './shared-filters'
-import type { EntitySortField } from '@/client'
+import type { LifeDateQuery } from './people-life-dates'
+import { lifeSpan } from '@/lib/life-dates'
+import type { PersonSortField } from '@/client'
 import type { SortState } from '@/lib/sorting'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import { assignmentEntityFilter, type AssignmentFilter } from '@/viewmodels/assignment'
-import { useEntityResultsQuery, type EntitySearchRecord } from '@/query/search'
+import { usePeopleResultsQuery, type PersonSearchRecord } from '@/query/search'
 
 export type PeopleSearchItem = {
   thumbnailFaceId?: string | null
   id: string
   name: string
   aliases: string[]
+  /** `1890–1962`, `b. 1948`, `d. 1931` or empty. */
+  lifeSpan: string
   faces: number | null
   names: number | null
   countDetails: { field: string; label: string; value: number | null }[]
@@ -26,25 +30,25 @@ export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
-  shared: MaybeRefOrGetter<SharedQuery & PeopleCountQuery> = {},
+  shared: MaybeRefOrGetter<SharedQuery & PeopleCountQuery & LifeDateQuery> = {},
   enabled: MaybeRefOrGetter<boolean> = true,
-  sort?: MaybeRefOrGetter<SortState<EntitySortField>>,
+  sort?: MaybeRefOrGetter<SortState<PersonSortField>>,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
-  const peopleQuery = useEntityResultsQuery(
+  const peopleQuery = usePeopleResultsQuery(
     computed(() => ({
       query: normalizedSearch.value,
       ...assignment.value,
-      processingFilters: { ...toValue(shared), 'filter.entity_type': ['person'] },
+      processingFilters: toValue(shared),
       limit: pageSize,
       sort: sort && toValue(sort),
     })),
     enabled,
   )
 
-  const pageRecords = computed<EntitySearchRecord[]>(() => {
-    const uniquePeople = new Map<string, EntitySearchRecord>()
+  const pageRecords = computed<PersonSearchRecord[]>(() => {
+    const uniquePeople = new Map<string, PersonSearchRecord>()
     for (const page of peopleQuery.data.value?.pages ?? []) {
       for (const person of page.items) uniquePeople.set(person.entity_id, person)
     }
@@ -61,7 +65,7 @@ export function usePeopleSearch(
           (sort && toValue(sort).field === value)),
     ),
   )
-  function stateCount(person: EntitySearchRecord, field: PeopleCountField): number | null {
+  function stateCount(person: PersonSearchRecord, field: PeopleCountField): number | null {
     const [category, state] = field.split('_') as [string, PeopleCountState]
     const stats = person.entity_link_stats
     const faces = stats?.faces?.[state],
@@ -77,6 +81,7 @@ export function usePeopleSearch(
       thumbnailFaceId: person.thumbnail_face_id,
       name: person.name || 'Unnamed person',
       aliases: person.aliases ?? [],
+      lifeSpan: lifeSpan(person.birth_date, person.death_date),
       faces: person.entity_link_stats?.faces?.total ?? null,
       names: person.entity_link_stats?.mentions?.total ?? null,
       countDetails: countOptions.value.map(({ value: field, label }) => ({

@@ -6,7 +6,10 @@ SQLAlchemy sessions, backend filters, or transaction objects.
 
 Database exposes repositories for entities, sources, faces, text mentions, and
 users. Page, document, and image APIs are typed projections of the source
-repository.
+repository. Likewise, person APIs (`get_person`, `list_people`,
+`search_people`, `patch_person`, …) are typed projections of the entity
+repository: its generic methods accept `GenericEntity*` requests carrying
+subtype fields, and shared `Entity*` requests leave those fields unchanged.
 
 ## Shared behavior
 

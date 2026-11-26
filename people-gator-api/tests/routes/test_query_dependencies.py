@@ -21,7 +21,7 @@ from people_gator_api.routes.v1.query_dependencies import (
 
 PAGINATION_PARAMETERS = {"limit", "return_total_count", "cursor"}
 SORT_PARAMETERS = {"sort", "sort_direction"}
-SORTABLE_LISTS = {"/entities", "/faces", "/text-mentions", "/documents", "/pages"}
+SORTABLE_LISTS = {"/entities", "/people", "/faces", "/text-mentions", "/documents", "/pages"}
 QUERY_PARAMETERS = {
     "query.text",
     "query.face_id",
@@ -92,6 +92,10 @@ LIST_FILTERS = {
         "mention_id",
     },
 }
+# #123: typed people drop entity_type and add life-date ranges; /entities has neither.
+LIST_FILTERS["/people"] = (LIST_FILTERS["/entities"] - {"entity_type"}) | {
+    "birth_date_from", "birth_date_to", "death_date_from", "death_date_to",
+}
 LIST_FILTERS["/documents"].add("has_unassigned_faces")
 for path in ("/documents", "/pages"):
     LIST_FILTERS[path].add("verification_state")
@@ -114,6 +118,7 @@ for path, fields in LIST_FILTERS.items():
 
 SEARCH_FILTERS = {
     "/search-entities": LIST_FILTERS["/entities"],
+    "/search-people": LIST_FILTERS["/people"],
     "/search-faces": LIST_FILTERS["/faces"],
     "/search-pages": LIST_FILTERS["/pages"],
     "/search-documents": LIST_FILTERS["/documents"],
@@ -156,7 +161,7 @@ def test_search_endpoints_expose_query_filter_and_pagination_groups(
 ) -> None:
     assert _parameter_names(openapi, path) == {
         *QUERY_PARAMETERS,
-        *({"query.entity_id", "query.entity_annotations"} if path in {"/search-entities", "/search-faces"} else set()),
+        *({"query.entity_id", "query.entity_annotations"} if path in {"/search-entities", "/search-people", "/search-faces"} else set()),
         *(f"filter.{field}" for field in fields),
         *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,
@@ -176,6 +181,8 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
 @pytest.mark.parametrize(("path", "values"), [
     ("/entities", ["name", "entity_id", "last_touched_at", "created_at"]),
     ("/search-entities", ["relevance", "name", "entity_id", "last_touched_at", "created_at"]),
+    ("/people", ["name", "surname", "birth_date", "death_date", "entity_id", "last_touched_at", "created_at"]),
+    ("/search-people", ["relevance", "name", "surname", "birth_date", "death_date", "entity_id", "last_touched_at", "created_at"]),
     ("/documents", ["name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
     ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "verified_page_count", "verified_page_percentage", "last_touched_at", "created_at"]),
     ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at", "created_at"]),
@@ -189,7 +196,7 @@ def test_sort_fields_are_resource_allowlists(openapi: dict[str, Any], path: str,
     """Relevance is offered only where a search score exists."""
     if path in {"/documents", "/search-documents", "/pages", "/search-pages"}:
         values = [*ANNOTATION_COUNT_FIELDS, *values]
-    if path in {"/entities", "/search-entities"}:
+    if path in {"/entities", "/search-entities", "/people", "/search-people"}:
         values = [*ENTITY_COUNT_FIELDS, *values]
     assert _sort_values(openapi, path) == values
 

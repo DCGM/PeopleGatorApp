@@ -61,7 +61,19 @@ from people_gator_api.schemas.entities import (
     EntityPatchRequest,
     EntityPatchBatchItem,
     EntityResponse,
+    GenericEntityListRequest,
+    PersonCreateRequest,
+    PersonListRequest,
+    PersonListResponse,
+    PersonMergeBatchRequest,
+    PersonMergeBatchResponse,
+    PersonMergeFromRequest,
+    PersonMergeResponse,
+    PersonPatchBatchItem,
+    PersonPatchRequest,
+    PersonResponse,
 )
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
@@ -79,7 +91,11 @@ from people_gator_api.schemas.face_models import (
 from people_gator_api.schemas.search import (
     SearchDocumentsRequest,
     SearchDocumentsResultListResponse,
+    FoundPerson,
+    GenericSearchEntitiesRequest,
     SearchEntitiesRequest,
+    SearchPeopleRequest,
+    SearchPeopleResultListResponse,
     SearchEntitiesResultListResponse,
     SearchFacesRequest,
     SearchFacesResultListResponse,
@@ -147,6 +163,13 @@ class EntityTypeConflictError(ValueError):
     """A replacement tried to change an existing entity's immutable type."""
 
 
+class InvalidPersonFieldsError(ValueError):
+    """Person fields are invalid for the stored record, e.g. death before birth.
+
+    Raised after combining a partial patch or merge with stored values.
+    """
+
+
 @dataclass(frozen=True)
 class EntityPutResult:
     """The stored entity and whether the PUT created it."""
@@ -155,7 +178,24 @@ class EntityPutResult:
     created: bool
 
 
+@dataclass(frozen=True)
+class PersonPutResult:
+    """The stored person and whether the PUT created it."""
+
+    person: PersonResponse
+    created: bool
+
+
 class EntityRepository(ABC):
+    """Entities and their subtypes through one repository, like sources.
+
+    Generic methods accept the shared ``Entity*`` schemas or their ``GenericEntity*``
+    variants, which add subtype fields (person names and life dates), filters and
+    sorts, and return ``GenericEntityResponse``/``GenericFoundEntity`` records.
+    Shared payloads leave subtype fields unchanged. The typed ``*_person``/
+    ``*_people`` methods convert to and from the generic schemas.
+    """
+
     @abstractmethod
     async def get(self, entity_id: uuid.UUID) -> EntityResponse | None:
         """
@@ -169,7 +209,7 @@ class EntityRepository(ABC):
         """
 
     @abstractmethod
-    async def list(self, query: EntityListRequest) -> EntityListResponse:
+    async def list(self, query: EntityListRequest | GenericEntityListRequest) -> EntityListResponse:
         """
         Retrieve a list of entities based on the given query.
 
@@ -340,7 +380,7 @@ class EntityRepository(ABC):
 
     @abstractmethod
     async def search(
-        self, query: SearchEntitiesRequest
+        self, query: SearchEntitiesRequest | GenericSearchEntitiesRequest
     ) -> SearchEntitiesResultListResponse:
         """
         Search for entities based on the given query.
@@ -369,6 +409,129 @@ class EntityRepository(ABC):
         :return: The list of entities matching the search criteria.
         :rtype: SearchEntitiesResultListResponse
         """
+
+    # Typed person projections (#123), mirroring the typed source methods.
+
+    @abstractmethod
+    async def entity_kinds(self, entity_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
+        """Stored type of each existing entity, including historical kinds.
+
+        Absent IDs are omitted. Typed subtype methods use this to treat other
+        entity types as absent without loading them.
+        """
+
+    async def get_person(self, entity_id: uuid.UUID) -> PersonResponse | None:
+        """Return the person with this ID, or None if absent or not a person."""
+        if await self._non_people([entity_id]) or (entity := await self.get(entity_id)) is None:
+            return None
+        return PersonResponse.from_generic(entity)
+
+    async def list_people(self, query: PersonListRequest) -> PersonListResponse:
+        """List people with person filters and sorts."""
+        result = await self.list(query.to_generic())
+        return PersonListResponse(
+            items=[PersonResponse.from_generic(item) for item in result.items],
+            limit=result.limit,
+            total_count=result.total_count,
+            cursor=result.cursor,
+        )
+
+    async def search_people(self, query: SearchPeopleRequest) -> SearchPeopleResultListResponse:
+        """Search people with person filters and sorts."""
+        result = await self.search(query.to_generic())
+        return SearchPeopleResultListResponse(
+            items=[FoundPerson.from_generic(item) for item in result.items],
+            limit=result.limit,
+            total_count=result.total_count,
+            cursor=result.cursor,
+        )
+
+    async def create_person(self, payload: PersonCreateRequest, context: GenericActor) -> PersonResponse:
+        return PersonResponse.from_generic(await self.create(payload.to_generic(), context))
+
+    async def create_person_batch(
+        self, payloads: Sequence[PersonCreateRequest], context: GenericActor
+    ) -> list[PersonResponse]:
+        created = await self.create_batch([payload.to_generic() for payload in payloads], context)
+        return [PersonResponse.from_generic(item) for item in created]
+
+    async def _non_people(self, ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+        """IDs that exist but are not people; typed person writes treat them as absent."""
+        kinds = await self.entity_kinds(list(dict.fromkeys(ids)))
+        return {item_id for item_id, kind in kinds.items() if kind != EntityType.person.value}
+
+    async def patch_person(
+        self, entity_id: uuid.UUID, payload: PersonPatchRequest, context: GenericActor
+    ) -> PersonResponse | None:
+        """Patch a person; return None if absent or not a person."""
+        if await self._non_people([entity_id]):
+            return None
+        entity = await self.patch(entity_id, payload.to_generic(), context)
+        return PersonResponse.from_generic(entity) if entity is not None else None
+
+    async def patch_person_batch(
+        self, commands: Sequence[PersonPatchBatchItem], context: GenericActor
+    ) -> list[PersonResponse | None]:
+        """Patch people; non-people are skipped and reported as None, like absent IDs."""
+        skipped = await self._non_people([command.entity_id for command in commands])
+        results = await self.patch_batch(
+            [command.to_generic() for command in commands if command.entity_id not in skipped], context
+        )
+        patched = iter(results)
+        return [
+            None if command.entity_id in skipped
+            else (PersonResponse.from_generic(item) if (item := next(patched)) is not None else None)
+            for command in commands
+        ]
+
+    async def put_person(
+        self, entity_id: uuid.UUID, payload: PersonCreateRequest, context: GenericActor
+    ) -> PersonPutResult:
+        """Create a person with this ID or replace an existing person's fields.
+
+        Omitted optional fields, including person fields, are cleared.
+
+        :raises EntityTypeConflictError: when the ID belongs to another entity type.
+        """
+        result = await self.put(entity_id, payload.to_generic(), context)
+        return PersonPutResult(PersonResponse.from_generic(result.entity), result.created)
+
+    async def merge_people(
+        self,
+        target_entity_id: uuid.UUID,
+        payload: PersonMergeBatchRequest,
+        *, context: GenericActor,
+    ) -> PersonMergeBatchResponse | None:
+        """Merge people into the target person; None if any is absent or not a person.
+
+        The target keeps its person fields unless the request sets them.
+        """
+        if await self._non_people([target_entity_id, *payload.source_entity_ids]):
+            return None
+        result = await self.merge_batch(
+            target_entity_id, payload.source_entity_ids, target_patch=payload.to_generic(), context=context
+        )
+        return PersonMergeBatchResponse.from_generic(result) if result is not None else None
+
+    async def merge_person(
+        self,
+        target_entity_id: uuid.UUID,
+        payload: PersonMergeFromRequest,
+        *, context: GenericActor,
+    ) -> PersonMergeResponse | None:
+        """Merge one person into the target person."""
+        if await self._non_people([target_entity_id, payload.source_entity_id]):
+            return None
+        result = await self.merge(
+            target_entity_id, payload.source_entity_id, target_patch=payload.to_generic(), context=context
+        )
+        return PersonMergeResponse.from_generic(result) if result is not None else None
+
+    async def delete_person(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
+        """Delete a person; False if absent or not a person."""
+        if await self._non_people([entity_id]):
+            return False
+        return await self.delete(entity_id, context=context)
 
 
 class SourceRepository(ABC):

@@ -21,14 +21,14 @@ import json
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, cast as type_cast
 
 from sqlalchemy import ColumnElement, and_, case, false, func, or_
 
 from people_gator_api.schemas.sorting import SortDirection
 
-KeyKind = Literal["text", "uuid", "datetime", "number"]
+KeyKind = Literal["text", "uuid", "datetime", "date", "number"]
 
 # Explicit, documented assignment-state order; unassigned is unknown and last.
 LINK_STATE_RANK = {"verified": 0, "manual": 1, "automatic": 2}
@@ -148,7 +148,7 @@ def _encode_value(value: object) -> object:
         return value
     if isinstance(value, uuid.UUID):
         return str(value)
-    if isinstance(value, datetime):
+    if isinstance(value, (datetime, date)):
         return value.isoformat()
     return float(type_cast(Any, value))
 
@@ -163,6 +163,11 @@ def _decode_value(kind: KeyKind, value: object) -> object:
         if parsed.tzinfo is None:
             raise ValueError
         return parsed
+    if kind == "date" and isinstance(value, str):
+        parsed_date = date.fromisoformat(value)
+        if parsed_date.isoformat() != value:
+            raise ValueError
+        return parsed_date
     if kind == "text" and isinstance(value, str):
         return value
     if kind == "number" and isinstance(value, (int, float)) and not isinstance(value, bool):

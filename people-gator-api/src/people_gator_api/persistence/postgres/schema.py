@@ -24,6 +24,7 @@ from people_gator_api.persistence.postgres.models import (
     TABLE_NAME_PREFIX,
 )
 from people_gator_api.persistence.postgres.thumbnail_ddl import THUMBNAIL_DDL
+from people_gator_api.persistence.postgres.person_ddl import PERSON_FUNCTION, PERSON_TRIGGER
 
 logger = logging.getLogger(__name__)
 
@@ -67,17 +68,24 @@ def _include_name(
 
 def validate_schema(
     connection: Connection, *, check_revision: bool = True, metadata: MetaData | None = None,
+    ignored_tables: frozenset[str] = frozenset(),
 ) -> None:
     """Reject incompatible migration history and structural drift without DDL.
 
     Alembic detects table/column/type/nullability, foreign key, unique constraint
     and static index changes. It does not comprehensively compare CHECK/primary
     key constraints or arbitrary functions; migration tests remain necessary.
+    ``ignored_tables`` are left out of the comparison entirely.
     """
+    def include_name(name: str | None, type_: str, parent_names: dict[str, str | None]) -> bool:
+        return _include_name(name, type_, parent_names) and not (
+            type_ == "table" and name in ignored_tables
+        )
+
     context = MigrationContext.configure(connection, opts={
         "compare_type": True,
         "include_object": include_object,
-        "include_name": _include_name,
+        "include_name": include_name,
     })
     if check_revision:
         expected = set(ScriptDirectory.from_config(migration_config()).get_heads())
@@ -117,6 +125,13 @@ def validate_schema(
     if "thumbnail_face_id" in expected_metadata.tables["pg_demo_entities"].c:
         _validate_thumbnail_invariants(connection)
 
+    if "pg_demo_persons" in expected_metadata.tables and "pg_demo_persons" not in ignored_tables:
+        constraint = next((item for item in inspect(connection).get_check_constraints("pg_demo_persons") if item["name"] == "ck_pg_demo_persons_life_dates"), None)
+        expected = "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date"
+        if constraint is None or "".join(constraint["sqltext"].lower().split()).replace("(", "").replace(")", "") != "".join(expected.lower().split()):
+            raise SchemaValidationError("Missing or incompatible person life-date constraint")
+        _validate_person_rows(connection)
+
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.
     with warnings.catch_warnings():
@@ -136,6 +151,34 @@ def _canonical_sql(value: str) -> str:
     # Reflection qualifies objects outside search_path and DDL may use OR REPLACE.
     value = re.sub(r"\b\w+\.(?=pg_demo_)", "", value.replace("OR REPLACE ", ""))
     return " ".join(value.split())
+
+
+def _validate_person_rows(connection: Connection) -> None:
+    """Every person needs its subtype row; the deferred trigger keeps it so (#123)."""
+    function = re.match(r"CREATE OR REPLACE FUNCTION \w+\(.*?\$\$(.*)\$\$", PERSON_FUNCTION, re.S)
+    assert function is not None
+    sources = connection.execute(text("""
+        SELECT p.prosrc FROM pg_proc p
+        WHERE p.proname = 'pg_demo_ensure_person' AND pg_function_is_visible(p.oid)
+    """)).scalars().all()
+    if [_canonical_sql(source) for source in sources] != [_canonical_sql(function[1])]:
+        raise SchemaValidationError("Missing or incompatible person subtype function: pg_demo_ensure_person")
+    trigger = connection.execute(text("""
+        SELECT t.tgconstraint <> 0, t.tgdeferrable, t.tginitdeferred, t.tgenabled IN ('O', 'A'),
+               p.proname
+        FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
+        WHERE t.tgrelid = to_regclass('pg_demo_entities') AND t.tgname = :name AND NOT t.tgisinternal
+    """), {"name": PERSON_TRIGGER}).first()
+    if trigger is None or tuple(trigger) != (True, True, True, True, "pg_demo_ensure_person"):
+        raise SchemaValidationError(f"Missing, disabled or incompatible person subtype trigger: {PERSON_TRIGGER}")
+    orphans = connection.execute(text("""
+        SELECT count(*) FROM pg_demo_entities e
+        WHERE e.kind = 'person' AND NOT EXISTS (SELECT 1 FROM pg_demo_persons p WHERE p.entity_id = e.id)
+    """)).scalar_one()
+    if orphans:
+        raise SchemaValidationError(
+            f"{orphans} person entities lack a pg_demo_persons row. Run the deployment migration job."
+        )
 
 
 def _validate_thumbnail_invariants(connection: Connection) -> None:

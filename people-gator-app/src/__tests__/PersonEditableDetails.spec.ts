@@ -39,4 +39,102 @@ describe('PersonEditableDetails', () => {
       nationalLibraryAuthorityId: 'xx0000000',
     })
   })
+
+  const base = {
+    modelValue: { name: 'Karel Vrba', shortDescription: '', article: '', aliases: [] },
+    personId: 'karel',
+    faceCount: 0,
+    mentionCount: 0,
+    libraryCount: 0,
+    wikidataId: '',
+    nationalLibraryAuthorityId: '',
+  }
+  const nameDates = {
+    firstName: 'Karel',
+    middleNames: '',
+    surname: 'Vrba',
+    birthDate: '1890-03-14',
+    deathDate: '',
+  }
+
+  it('shows and edits structured names and life dates', async () => {
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: { ...base, nameDates },
+    })
+    const section = () => wrapper.get('[aria-label="Name and life dates"]')
+    expect(section().text()).toContain('Karel')
+    expect(section().text()).toContain('Vrba')
+    expect(section().text()).toContain('1890')
+    expect(section().text()).toContain('Died—')
+
+    await wrapper.get('[aria-label="Edit name and life dates"]').trigger('click')
+    await wrapper.get('input[aria-label="Middle names"]').setValue('  Jan   Maria ')
+    await wrapper.get('input[aria-label="Died"]').setValue('1962-11-02')
+    await wrapper.get('input[aria-label="First name"]').setValue('')
+    await wrapper.get('[aria-label="Save name and life dates"]').trigger('click')
+
+    expect(wrapper.emitted('update:nameDates')?.[0]?.[0]).toEqual({
+      firstName: '',
+      middleNames: 'Jan Maria',
+      surname: 'Vrba',
+      birthDate: '1890-03-14',
+      deathDate: '1962-11-02',
+    })
+    expect(wrapper.find('input[aria-label="Died"]').exists()).toBe(false)
+  })
+
+  it('keeps editing and explains a death date before the birth date', async () => {
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: { ...base, nameDates },
+    })
+    await wrapper.get('[aria-label="Edit name and life dates"]').trigger('click')
+    await wrapper.get('input[aria-label="Died"]').setValue('1880-01-01')
+    await wrapper.get('[aria-label="Save name and life dates"]').trigger('click')
+
+    expect(wrapper.emitted('update:nameDates')).toBeUndefined()
+    expect(wrapper.get('[role="alert"]').text()).toBe('Death date must not be before birth date.')
+    expect(wrapper.get('input[aria-label="Died"]').attributes('aria-invalid')).toBe('true')
+
+    await wrapper.get('[aria-label="Cancel name and life dates editing"]').trigger('click')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('1880')
+  })
+
+  it('sends a bare year as 1 January and keeps the alert outside the list', async () => {
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: { ...base, nameDates },
+    })
+    await wrapper.get('[aria-label="Edit name and life dates"]').trigger('click')
+    expect(wrapper.get('input[aria-label="Born"]').attributes('type')).toBe('text')
+    await wrapper.get('input[aria-label="Died"]').setValue('1962')
+    await wrapper.get('input[aria-label="Born"]').setValue('800')
+    await wrapper.get('[aria-label="Save name and life dates"]').trigger('click')
+    expect(wrapper.emitted('update:nameDates')?.[0]?.[0]).toMatchObject({
+      birthDate: '0800-01-01',
+      deathDate: '1962-01-01',
+    })
+  })
+
+  it.each(['1890-03', '1890-03-', '0', '14.3.1890'])(
+    'rejects the incomplete date %s without sending or clearing the stored one',
+    async (input) => {
+      const wrapper = mount(PersonEditableDetails, {
+        global: { stubs: { PersonPortrait: true } },
+        props: { ...base, nameDates },
+      })
+      await wrapper.get('[aria-label="Edit name and life dates"]').trigger('click')
+      await wrapper.get('input[aria-label="Born"]').setValue(input)
+      await wrapper.get('input[aria-label="Born"]').trigger('keydown', { key: 'Enter' })
+      expect(wrapper.emitted('update:nameDates')).toBeUndefined()
+      const alert = wrapper.get('[role="alert"]')
+      expect(alert.text()).toBe('Enter a date as YYYY-MM-DD or a year.')
+      expect(alert.element.closest('dl')).toBeNull()
+      expect(wrapper.get('input[aria-label="Born"]').attributes('aria-invalid')).toBe('true')
+      await wrapper.get('[aria-label="Cancel name and life dates editing"]').trigger('click')
+      expect(wrapper.text()).toContain('1890')
+    },
+  )
 })

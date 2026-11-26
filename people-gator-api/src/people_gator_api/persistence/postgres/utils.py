@@ -70,6 +70,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from people_gator_api.schemas.entities import (
     EntityListFilter,
     EntityResponse,
+    GenericEntityResponse,
 )
 from people_gator_api.schemas.enums import EntityType, FaceKeypointType, ScoreAggregation, SourceKind
 from people_gator_api.schemas.face_models import (
@@ -87,7 +88,9 @@ from people_gator_api.schemas.mentions import (
     TextMentionResponse,
 )
 from people_gator_api.schemas.missing import (
+    MISSING,
     MissingType,
+    is_missing,
     missing_to_none,
 )
 from people_gator_api.schemas.search import (
@@ -111,6 +114,8 @@ from people_gator_api.persistence.postgres.models import (
     FaceModel,
     ImageOccurrence,
     Page,
+    PERSON_FIELDS,
+    Person,
     Source,
     TextMention,
     User,
@@ -651,12 +656,12 @@ def annotation_values(record) -> dict:
             "last_touched_by_api_key_id": record.last_touched_by_api_key_id}
 
 
-def entity_response(entity: Entity) -> EntityResponse:
+def entity_response(entity: Entity) -> GenericEntityResponse:
     if entity.kind is None or entity.name is None:
         raise ValueError(
             f"entity {entity.id} does not satisfy the persistence contract"
         )
-    return EntityResponse(
+    return GenericEntityResponse(
         **creation_metadata(entity),
         entity_id=entity.id,
         thumbnail_face_id=entity.thumbnail_face_id,
@@ -673,6 +678,7 @@ def entity_response(entity: Entity) -> EntityResponse:
         aliases=[alias.name for alias in entity.aliases],
         wikidata_id=entity.wikidata_id,
         nlcr_authority_id=entity.nlcr_authority_id,
+        **{name: getattr(entity, name) for name in PERSON_FIELDS if isinstance(entity, Person)},
     )
 
 
@@ -793,6 +799,22 @@ def entity_filters(
     if has_detections is not None:
         predicate = exists().where(ImageOccurrence.entity_id == Entity.id)
         filters.append(predicate if has_detections else ~predicate)
+    # Correlated so callers selecting only entity columns never gain a cross join.
+    # Unknown (NULL) dates fail every bound, so a range excludes them.
+    life_dates: list[ColumnElement[bool]] = []
+    for column, lower, upper in (
+        (Person.birth_date, "birth_date_from", "birth_date_to"),
+        (Person.death_date, "death_date_from", "death_date_to"),
+    ):
+        # Only generic (typed person) filters carry the life-date ranges.
+        lower = getattr(filter_values, lower, MISSING)
+        upper = getattr(filter_values, upper, MISSING)
+        if not is_missing(lower):
+            life_dates.append(column >= lower)
+        if not is_missing(upper):
+            life_dates.append(column <= upper)
+    if life_dates:
+        filters.append(exists().where(Person.entity_id == Entity.id, *life_dates))
     return filters
 
 

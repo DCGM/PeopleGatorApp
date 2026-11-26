@@ -33,6 +33,7 @@ vi.mock('@/client', () => ({
   searchPagesGetApiV1SearchPagesGet: api.pagesSearch,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
+  getPersonRouteApiV1PeopleEntityIdGet: api.entity,
   patchFaceRouteApiV1FacesDetectionIdPatch: api.patchFace,
   patchTextMentionRouteApiV1TextMentionsMentionIdPatch: api.patchMention,
   getPageRouteApiV1PagesPageSourceIdGet: api.page,

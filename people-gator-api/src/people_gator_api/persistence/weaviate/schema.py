@@ -256,6 +256,16 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("wikidata_id", "Entity-level aggregated Wikidata ID."),
     _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
 ]
+# Person fields. Dates are stored as YYYY-MM-DD text because Weaviate DATE
+# requires a time and zone; date filters and sorts require PostgreSQL.
+PERSON_PROPERTIES: list[Property] = [
+    _text_property("first_name", "Person given name."),
+    _text_property("middle_names", "Person middle names."),
+    _text_property("surname", "Person family name."),
+    _text_property("birth_date", "Person birth date (YYYY-MM-DD).", searchable=False),
+    _text_property("death_date", "Person death date (YYYY-MM-DD).", searchable=False),
+]
+ENTITY_PROPERTIES.extend(PERSON_PROPERTIES)
 
 ENTITY_LINK_PROPERTIES: list[Property] = [
     _text_property("entity_link_state", "Current link state.", searchable=False),
@@ -392,7 +402,8 @@ ADDITIVE_PROPERTY_MIGRATIONS: dict[str, list[Property]] = {
     ],
     TEXT_MENTION_COLLECTION: ENTITY_LINK_PROPERTIES,
     ENTITY_COLLECTION: [
-        p for p in ENTITY_PROPERTIES if p.name.startswith("last_touched")
+        *(p for p in ENTITY_PROPERTIES if p.name.startswith("last_touched")),
+        *PERSON_PROPERTIES,
     ],
     SOURCE_COLLECTION: [p for p in SOURCE_PROPERTIES if p.name == "name"],
 }

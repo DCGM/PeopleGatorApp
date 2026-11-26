@@ -4,13 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from people_gator_api.schemas.missing import MISSING, missing_to_none
-from people_gator_api.schemas.search import SearchEntitiesRequest, SearchFacesRequest
+from people_gator_api.schemas.search import GenericSearchEntitiesRequest, SearchEntitiesRequest, SearchFacesRequest
 
 from .models import Alias, Entity, Face, FaceEmbedding
 from .utils import reference_vectors, usable_cosine_vector
 
 
-async def resolve_entity_search[T: SearchEntitiesRequest | SearchFacesRequest](
+async def resolve_entity_search[T: SearchEntitiesRequest | GenericSearchEntitiesRequest | SearchFacesRequest](
     session: AsyncSession,
     request: T,
 ) -> T:

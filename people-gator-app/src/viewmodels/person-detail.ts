@@ -6,12 +6,13 @@ import { linkMetadata } from '@/lib/entity-links'
 import type { EntityLinkState, FaceSortField, PageResponse, TextMentionSortField } from '@/client'
 import type {
   PersonIdentifiers,
+  PersonNameDates,
   PersonFace,
   PersonMention,
   PersonProfile,
   PersonProcessingInfo,
 } from '@/viewmodels/person-detail.types'
-import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
+import { usePatchPersonMutation, usePersonQuery } from '@/query/people'
 import { fetchFaceAlignedCrop, useFaceListQuery } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
@@ -38,8 +39,9 @@ export function usePersonDetail(
   mentionSort: MaybeRefOrGetter<SortState<TextMentionSortField>> = MENTION_DEFAULT,
   mentionsEnabled: MaybeRefOrGetter<boolean> = true,
 ) {
-  const entityQuery = useEntityQuery(personId)
-  const patchEntity = usePatchEntityMutation()
+  // The person page reads and writes through the typed person API (#123).
+  const entityQuery = usePersonQuery(personId)
+  const patchEntity = usePatchPersonMutation()
   const touchedUserId = computed(() => entityQuery.data.value?.last_touched_by_user_id ?? '')
   const touchedApiKeyId = computed(() => entityQuery.data.value?.last_touched_by_api_key_id ?? '')
   const processingUsers = usePeopleFilterOptions('user', touchedUserId, () =>
@@ -197,6 +199,13 @@ export function usePersonDetail(
     wikidataId: entityQuery.data.value?.wikidata_id ?? '',
     nationalLibraryAuthorityId: entityQuery.data.value?.nlcr_authority_id ?? '',
   }))
+  const nameDates = computed<PersonNameDates>(() => ({
+    firstName: entityQuery.data.value?.first_name ?? '',
+    middleNames: entityQuery.data.value?.middle_names ?? '',
+    surname: entityQuery.data.value?.surname ?? '',
+    birthDate: entityQuery.data.value?.birth_date ?? '',
+    deathDate: entityQuery.data.value?.death_date ?? '',
+  }))
 
   const faces = computed<PersonFace[]>(() =>
     faceRecords.value.flatMap((face, faceIndex) => {
@@ -244,6 +253,19 @@ export function usePersonDetail(
     })
   }
 
+  function updateNameDates(next: PersonNameDates) {
+    patchEntity.mutate({
+      entityId: toValue(personId),
+      body: {
+        first_name: next.firstName || null,
+        middle_names: next.middleNames || null,
+        surname: next.surname || null,
+        birth_date: next.birthDate || null,
+        death_date: next.deathDate || null,
+      },
+    })
+  }
+
   function updateIdentifiers(nextIdentifiers: PersonIdentifiers) {
     patchEntity.mutate({
       entityId: toValue(personId),
@@ -279,6 +301,8 @@ export function usePersonDetail(
     faceCount: computed(() => faceQuery.data.value?.pages[0]?.total_count ?? 0),
     faces,
     identifiers,
+    nameDates,
+    updateNameDates,
     isLoading: computed(
       () =>
         entityQuery.isPending.value || faceQuery.isPending.value || mentionQuery.isPending.value,

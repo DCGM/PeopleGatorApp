@@ -4,7 +4,12 @@ import { reactive, ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
-import type { PersonIdentifiers, PersonProfile } from '@/viewmodels/person-detail.types'
+import type {
+  PersonIdentifiers,
+  PersonNameDates as PersonNameDatesValue,
+  PersonProfile,
+} from '@/viewmodels/person-detail.types'
+import PersonNameDates from './PersonNameDates.vue'
 import PersonPortrait from './PersonPortrait.vue'
 import { Button } from '@/components/ui/button'
 
@@ -21,11 +26,13 @@ const props = defineProps<{
   libraryCount: number
   wikidataId: string
   nationalLibraryAuthorityId: string
+  nameDates?: PersonNameDatesValue
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [profile: PersonProfile]
   'update:identifiers': [identifiers: PersonIdentifiers]
+  'update:nameDates': [value: PersonNameDatesValue]
 }>()
 
 const draft = reactive<PersonProfile>({
@@ -233,6 +240,12 @@ watch(
             @cancel="cancelEditing('shortDescription')"
           />
         </div>
+
+        <PersonNameDates
+          v-if="props.nameDates"
+          :model-value="props.nameDates"
+          @update:model-value="emit('update:nameDates', $event)"
+        />
 
         <div class="mt-5 flex flex-wrap items-center gap-2">
           <small class="mr-2 font-semibold uppercase text-muted-foreground">Aliases</small>

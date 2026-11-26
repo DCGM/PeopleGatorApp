@@ -33,7 +33,7 @@ import {
   MENTION_GROUP_SORTS,
   MENTION_SORT_KEYS,
   MENTION_SORTS,
-  PEOPLE_SORTS,
+  SIMILAR_PEOPLE_SORTS,
   RELEVANCE,
   SIMILAR_PEOPLE_SORT_KEYS,
   scoredOptions,
@@ -58,7 +58,7 @@ const faceSort = useRouteSort(FACE_SORT_KEYS, faceSortOptions, FACE_DEFAULT)
 const mentionSort = useRouteSort(MENTION_SORT_KEYS, MENTION_SORTS, MENTION_DEFAULT)
 const groupSort = useRouteSort(MENTION_GROUP_SORT_KEYS, MENTION_GROUP_SORTS, MENTION_GROUP_DEFAULT)
 const similarFaceSort = useRouteSort(DISCOVERY_FACE_SORT_KEYS, FACE_SORTS, RELEVANCE)
-const similarPeopleSort = useRouteSort(SIMILAR_PEOPLE_SORT_KEYS, PEOPLE_SORTS, RELEVANCE)
+const similarPeopleSort = useRouteSort(SIMILAR_PEOPLE_SORT_KEYS, SIMILAR_PEOPLE_SORTS, RELEVANCE)
 const mentionCompact = computed({
   get: () => route.query.mention_density === 'compact',
   set: (value: boolean) => {
@@ -97,6 +97,7 @@ const {
   faceCount,
   faces,
   identifiers,
+  nameDates,
   libraryCount,
   mentionCount,
   mentionFilters,
@@ -105,6 +106,7 @@ const {
   profile,
   processing,
   updateIdentifiers,
+  updateNameDates,
   updateProfile,
 } = usePersonDetail(
   personId,
@@ -402,7 +404,7 @@ function retrySearch() {
             v-model:face-sort="similarFaceSort"
             v-model:people-sort="similarPeopleSort"
             :face-sort-options="FACE_SORTS"
-            :people-sort-options="PEOPLE_SORTS"
+            :people-sort-options="SIMILAR_PEOPLE_SORTS"
             :faces="similarFaces"
             :face-count="foundFaceCount"
             :has-more-faces="hasMoreFoundFaces"
@@ -527,8 +529,10 @@ function retrySearch() {
             :library-count="libraryCount"
             :wikidata-id="identifiers.wikidataId"
             :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
+            :name-dates="nameDates"
             @update:model-value="updateProfile"
             @update:identifiers="updateIdentifiers"
+            @update:name-dates="updateNameDates"
           >
           </PersonEditableDetails>
         </TabsContent>

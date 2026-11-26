@@ -10,12 +10,19 @@ from pydantic import (
     model_validator,
     field_validator,
 )
-from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
+from people_gator_api.schemas.entities import (
+    EntityListFilter,
+    EntityResponse,
+    GenericEntityListFilter,
+    PersonListFilter,
+    PersonResponseFields,
+)
 from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
 from people_gator_api.schemas.sorting import (
     DocumentSortField,
     EntitySortField,
     FaceSortField,
+    PersonSortField,
     PageSortField,
     SortableRequest,
 )
@@ -206,6 +213,65 @@ class SearchEntitiesRequest(GenericSearchRequest[EntityListFilter, EntitySortFie
         )
 
 
+class GenericFoundEntity(FoundEntity, PersonResponseFields):
+    """Repository search result with every subtype field."""
+
+
+GenericSearchEntitiesResultListResponse = GenericListResponse[GenericFoundEntity]
+
+
+class GenericSearchEntitiesRequest(GenericSearchRequest[GenericEntityListFilter, PersonSortField]):
+    """Repository search request accepting subtype filters and sorts."""
+
+    query: EntitySearchQuery
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def accept_explicit_query(cls, value):
+        return (
+            value.model_dump()
+            if isinstance(value, QueryBase) and not isinstance(value, EntitySearchQuery)
+            else value
+        )
+
+
+class FoundPerson(FoundEntity, PersonResponseFields):
+    """A single person search result."""
+
+    @classmethod
+    def from_generic(cls, generic: FoundEntity) -> "FoundPerson":
+        return cls.model_validate(generic.model_dump())
+
+
+SearchPeopleResultListResponse = GenericListResponse[FoundPerson]
+
+
+class SearchPeopleRequest(GenericSearchRequest[PersonListFilter, PersonSortField]):
+    """Typed person search; converts to the generic entity search."""
+
+    query: EntitySearchQuery
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def accept_explicit_query(cls, value):
+        return (
+            value.model_dump()
+            if isinstance(value, QueryBase) and not isinstance(value, EntitySearchQuery)
+            else value
+        )
+
+    def to_generic(self) -> GenericSearchEntitiesRequest:
+        return GenericSearchEntitiesRequest(
+            query=self.query,
+            filter_=(self.filter_ or PersonListFilter()).to_generic(),
+            limit=self.limit,
+            return_total_count=self.return_total_count,
+            cursor=self.cursor,
+            sort=self.sort,
+            sort_direction=self.sort_direction,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Face similarity search
 # ---------------------------------------------------------------------------
@@ -279,6 +345,12 @@ __all__ = [
     "FoundEntity",
     "SearchEntitiesResultListResponse",
     "SearchEntitiesRequest",
+    "GenericFoundEntity",
+    "GenericSearchEntitiesResultListResponse",
+    "GenericSearchEntitiesRequest",
+    "FoundPerson",
+    "SearchPeopleResultListResponse",
+    "SearchPeopleRequest",
     "FoundFace",
     "SearchFacesResultListResponse",
     "SearchFacesRequest",

@@ -180,9 +180,11 @@ async def test_preview_stamped_before_renumbering_gains_page_verification(migrat
         await connection.execute(text('ALTER TABLE pg_demo_pages DROP COLUMN verification_state, DROP COLUMN verified_at, '
                                       'DROP COLUMN verified_by_user_id, DROP COLUMN verified_by_api_key_id'))
         await connection.execute(text('DROP TYPE pg_demo_verification_state'))
+        # Such a preview also predates later revisions, e.g. the person subtype.
+        await connection.execute(text('DROP TABLE pg_demo_persons'))
         await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0017'"))
         await connection.run_sync(lambda sync: migrate(sync, 'head'))
-        assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == 'd34a021b0018'
+        assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == 'd34a021b0020'
         await connection.run_sync(validate_schema)
 
 

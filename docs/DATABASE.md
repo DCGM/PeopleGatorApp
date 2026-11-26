@@ -13,6 +13,7 @@ The historical `pg_demo_` table prefix remains in the active application schema.
 | `pg_demo_users` | Actor identities; referenced users cannot be deleted |
 | `pg_demo_api_keys` | Stable API-key identifier/display name and owning user; no credentials |
 | `pg_demo_entities` | Person/entity profile, original owner and nullable last-touch actor/time |
+| `pg_demo_persons` | Person subtype keyed by `entity_id`: optional first/middle/surname and birth/death dates (death not before birth); cascades with its entity. A deferred `ensure_person` trigger adds the row for any person inserted without it, and schema validation rejects people lacking one (#123) |
 | `pg_demo_aliases` | Entity aliases; cascade when their identity is deleted |
 | `pg_demo_sources` | Unique canonical URL, source kind and processing attribution |
 | `pg_demo_documents` | Source subtype: library, archive document UUID and optional name |

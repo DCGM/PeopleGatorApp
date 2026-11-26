@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 # migrations must run normally; do not automatically adopt arbitrary revisions.
 SNAPSHOT_REVISIONS = ("c82e7f4a901d", "d34a021b0001", "d34a021b0002", "d34a021b0003")
 LEGACY_REVISIONS = ("9897af156aa1", "65c4e6cdfa7f")
+# Tables introduced after the snapshots by revisions that reuse a copy created
+# by ORM bootstrap (``if_not_exists``). Starting a newer ORM in bootstrap mode
+# against snapshot tables creates them, so snapshot matching ignores them.
+LATER_BOOTSTRAP_TABLES = frozenset({"pg_demo_persons"})
 
 
 class _SnapshotOperations:
@@ -147,7 +151,8 @@ def matching_bootstrap_revision(connection: Connection, config: Config) -> str |
         if position < current_position:
             continue
         try:
-            validate_schema(connection, check_revision=False, metadata=metadata)
+            validate_schema(connection, check_revision=False, metadata=metadata,
+                            ignored_tables=LATER_BOOTSTRAP_TABLES)
             _validate_constraints(connection, metadata)
         except SchemaValidationError as exc:
             last_error = exc

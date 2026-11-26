@@ -117,7 +117,8 @@ describe('people filter controls and URL restoration', () => {
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Modified by"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Modified via key"]').exists()).toBe(true)
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    // Shared modified/created ranges plus People birth/death ranges (#123).
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(8)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
@@ -153,7 +154,8 @@ describe('people filter controls and URL restoration', () => {
       touched_by: id('user', 1),
       api_key: id('api-key', 1),
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    // Shared modified/created ranges plus People birth/death ranges (#123).
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(8)
     expect(wrapper.text()).toContain('Document: document One')
     expect(wrapper.text()).toContain('Modified by: user One')
     expect(wrapper.text()).toContain('Modified via key: api-key One')
@@ -304,7 +306,8 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-03T12:00:00Z',
       touched_to: '2026-01-01T12:00:00Z',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    // Shared modified/created ranges plus People birth/death ranges (#123).
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(8)
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
     wrapper.unmount()
   })

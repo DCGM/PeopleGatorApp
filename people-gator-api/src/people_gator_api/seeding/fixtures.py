@@ -1,6 +1,7 @@
 """Small, synthetic preview scenarios. Stable keys are part of the seed identity."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import date
 from uuid import UUID, uuid5
 
 NAMESPACE = UUID("3de5e244-1389-42bd-af9d-d99667987951")
@@ -20,6 +21,20 @@ def fixture_entity_id(key: str) -> UUID:
 
 
 @dataclass(frozen=True)
+class PersonDetails:
+    """Structured person fields (#123); None means unknown."""
+
+    first_name: str | None = None
+    middle_names: str | None = None
+    surname: str | None = None
+    birth_date: date | None = None
+    death_date: date | None = None
+
+    def fields(self) -> dict[str, str | date | None]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Person:
     key: str
     name: str
@@ -28,6 +43,13 @@ class Person:
     actor: str
     # Create through PUT at fixture_entity_id(key) instead of POST.
     put: bool = False
+    details: PersonDetails | None = None
+
+
+# Issue #123: full, partial and missing structured names and life dates. Display
+# name, surname, birth and death orders all differ. Ada and Emil predate the
+# fields; older previews receive theirs through a narrow additive upgrade.
+LIFE_DATE_PEOPLE = ("ada", "emil", "life-full", "life-living", "life-surname", "life-first")
 
 
 PAGINATION_ITEMS = 14
@@ -67,6 +89,7 @@ PEOPLE = (
         ("A. Novak",),
         "Synthetic archivist with faces and mentions across two documents.",
         "importer",
+        details=PersonDetails("Ada", None, "Novak", date(1902, 4, 17), date(1979, 8, 30)),
     ),
     Person(
         "emil",
@@ -74,7 +97,20 @@ PEOPLE = (
         ("E. Dvorak",),
         "Synthetic photographer linked through face detections only.",
         "reviewer",
+        details=PersonDetails("Emil", None, "Dvorak", date(1898, 12, 5)),
     ),
+    Person("life-full", "Karel Vrba", ("K. J. M. Vrba",),
+           "Synthetic engraver with every name part and both life dates.", "reviewer",
+           details=PersonDetails("Karel", "Jan Maria", "Vrba", date(1890, 3, 14), date(1962, 11, 2))),
+    Person("life-living", "Alena Bartošová", (),
+           "Synthetic living conservator: a birth date and no death date.", "reviewer",
+           details=PersonDetails("Alena", None, "Bartošová", date(1948, 6, 1))),
+    Person("life-surname", "Photographer Hrubý", (),
+           "Synthetic studio photographer known only by surname and date of death.", "reviewer",
+           details=PersonDetails(surname="Hrubý", death_date=date(1931, 5, 20))),
+    Person("life-first", "Zdeněk of Kladno", (),
+           "Synthetic miner known by first name, with both life dates.", "reviewer",
+           details=PersonDetails(first_name="Zdeněk", birth_date=date(1875, 1, 9), death_date=date(1940, 9, 30))),
     Person(
         "nora",
         "Nora Svoboda",

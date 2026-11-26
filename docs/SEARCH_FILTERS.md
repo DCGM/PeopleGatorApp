@@ -576,3 +576,33 @@ to the viewer while preserving selected-person, person-only and gallery sort
 settings. Compact and expanded modes use the same document-scoped query,
 face-or-mention predicate, page totals, orange highlights and automatic
 pagination described above; expansion adds no new filters or counters.
+
+## People: names and life dates (#123)
+
+`Person` is a subtype of `Entity`, served like documents and pages over sources:
+the typed routes `/api/v1/people`, `/people/{entity_id}`, `/people:batch`,
+`/people/{entity_id}:merge(-batch)` and `/search-people` read and write only
+people and expose optional `first_name`, `middle_names`, `surname`, `birth_date`
+and `death_date` (full dates from `0001-01-01`, written strictly as
+`YYYY-MM-DD`; numbers, timestamps, date-times and bare years return 422). `/entities` and
+`/search-entities` keep the shared entity fields, filters and sorts; shared
+writes leave person fields unchanged.
+
+`/people` and `/search-people` accept inclusive `filter.birth_date_from`,
+`filter.birth_date_to`, `filter.death_date_from` and `filter.death_date_to`. A
+range never matches an unknown date, combines with other filters using AND, and
+a reversed or invalid range returns 422. `sort=surname` orders by surname, first
+name and then middle names, comparing all three case- and accent-insensitively
+before their exact text; `sort=birth_date` and `sort=death_date` compare
+chronologically and default to ascending. Unknown values sort last in both
+directions and the entity UUID breaks ties. `sort=name` keeps ordering by the
+display name. Death before birth returns 422 on create, patch, replace and
+merge, including against stored values.
+
+The person editor accepts a full `YYYY-MM-DD` date or a bare year, which it
+sends as 1 January of that year; any other entry, such as a partly deleted
+date, shows an error and sends nothing. People shows the ranges as **Born from**, **Born to**, **Died from** and **Died
+to** date-only pickers (URL `born_from`, `born_to`, `died_from`, `died_to`, as
+`YYYY-MM-DD`, never converted to UTC times), with removable tags, and offers
+**Surname**, **Birth date** and **Death date** sorts. Weaviate stores the fields
+but rejects the date filters and these sorts.

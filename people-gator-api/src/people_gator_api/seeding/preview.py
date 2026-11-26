@@ -19,12 +19,13 @@ from people_gator_api.media.image_content import image_content_key
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.schemas.entities import (
-    EntityCreateRequest,
     EntityPatchRequest,
     EntityListRequest,
     EntityResponse,
+    PersonCreateRequest,
+    PersonPatchRequest,
 )
-from people_gator_api.schemas.enums import EntityType, EntityLinkState, VerificationState
+from people_gator_api.schemas.enums import EntityLinkState, VerificationState
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
@@ -43,7 +44,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, VERIFIED_PAGES, Face, fixture_entity_id
+from .fixtures import BREADCRUMB_PAGES, BREADCRUMB_PERSON, DOCUMENTS, LIFE_DATE_PEOPLE, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, SIDEBAR_LEGACY_MENTIONS, VERIFIED_PAGES, Face, fixture_entity_id
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -73,6 +74,7 @@ class SeedUpgrades(BaseModel):
     record_edits: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
     page_numbers: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
     page_verifications: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
+    person_details: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
 
 
 class SeedManifest(BaseModel):
@@ -226,20 +228,21 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Recover by the stable ID, even if renamed, so PUT never replaces edits.
             entity = await database.entities.get(fixture_entity_id(person.key))
         if entity is None:
-            request = EntityCreateRequest(
-                entity_type=EntityType.person,
+            # Every fixture is a person, created through the typed person contract.
+            request = PersonCreateRequest(
                 name=person.name,
                 aliases=list(person.aliases),
                 short_description=person.description,
                 description=person.description
                 + " This record belongs to the synthetic preview dataset.",
+                **(person.details.fields() if person.details else {}),
             )
             if person.put:
-                entity = (await database.entities.put(
+                entity = (await database.entities.put_person(
                     fixture_entity_id(person.key), request, actors["reviewer"]
-                )).entity
+                )).person
             else:
-                entity = await database.entities.create(request, actors["reviewer"])
+                entity = await database.entities.create_person(request, actors["reviewer"])
             existing.append(entity)
         manifest.entities[person.key] = entity.entity_id
         active_entities[person.key] = entity.entity_id
@@ -538,6 +541,33 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 ), actors["reviewer"])
             upgrade.complete = True
             await checkpoint_upgrades()
+    # Explicit additive upgrade for #123: people seeded before structured names
+    # and life dates gain them once. Record the precondition first; only a record
+    # unchanged since then with every person field still unknown is patched, so
+    # review edits and cleared values survive and reruns never repeat the write.
+    fixtures = {person.key: person for person in PEOPLE}
+    for key in LIFE_DATE_PEOPLE:
+        details = fixtures[key].details
+        person_id = active_entities.get(key)
+        person = await database.entities.get_person(person_id) if person_id else None
+        if details is None or person is None:
+            continue
+        upgrade_key = "person-details-v1/" + key
+        edit = upgrades.person_details.get(upgrade_key)
+        if edit is None:
+            edit = RecordEditUpgrade(expected_touched_at=person.last_touched_at)
+            upgrades.person_details[upgrade_key] = edit
+            await checkpoint_upgrades()
+        if edit.complete:
+            continue
+        if person.last_touched_at == edit.expected_touched_at and all(
+            getattr(person, name) is None for name in details.fields()
+        ):
+            await database.entities.patch_person(
+                person.entity_id, PersonPatchRequest(**details.fields()), actors["reviewer"],
+            )
+        edit.complete = True
+        await checkpoint_upgrades()
     # Explicit additive upgrade for #52: the curator edits Hana's own record
     # after the reviewer's face link, so her own latest modifier differs from
     # her linked face's. Record the precondition first; never overwrite a later
@@ -718,6 +748,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         "documents-created-range": "/documents?" + urlencode({"library": "preview-creation", **creation_interval}),
         "scans-created-range": "/scans?" + urlencode({"library": "preview-creation", **creation_interval}),
         "people-created-by": "/people?" + urlencode({"q": "Ada", "created_by": actors["reviewer"].user_id}),
+        "people-surname-sort": "/people?" + urlencode({"sort": "surname", "dir": "asc"}),
+        "people-born-1870-1910": "/people?" + urlencode({"born_from": "1870-01-01", "born_to": "1910-12-31", "sort": "birth_date", "dir": "asc"}),
+        "people-died-before-1950": "/people?" + urlencode({"died_to": "1949-12-31", "sort": "death_date", "dir": "desc"}),
+        "person-life-dates": f"/people/{manifest.entities['life-full']}?tab=details",
         "faces-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "faces", "created_key": registered_keys["importer"]}),
         "mentions-created-by": f"/people/{manifest.entities['ada']}?" + urlencode({"tab": "mentions", "created_by": actors["importer"].user_id}),
     }

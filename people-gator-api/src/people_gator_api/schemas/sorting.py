@@ -9,6 +9,9 @@ Text fields compare case- and accent-insensitively (lowercased, unaccented) in
 Unicode code-point order, then by the exact recorded text in code-point order.
 Counts compare numerically and times chronologically. Assignment state orders
 ``verified``, ``manual``, ``automatic``, then unassigned (unknown) last.
+Person ``surname`` orders by surname, first name and then middle names, each
+as text; ``birth_date`` and ``death_date`` compare chronologically. Records
+without those person values sort last.
 Face and mention ``person`` order by the assigned person's name and then
 identity, so each person's annotations are contiguous; unassigned annotations
 are unknown and last.
@@ -42,6 +45,31 @@ class EntitySortField(StrEnum):
     ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
     RELEVANCE = "relevance"
     NAME = "name"
+    ENTITY_ID = "entity_id"
+    LAST_TOUCHED_AT = "last_touched_at"
+    CREATED_AT = "created_at"
+
+
+class PersonSortField(StrEnum):
+    """Entity fields plus the person subtype's names and life dates (#123)."""
+
+    FACES_TOTAL_COUNT = "faces_total_count"
+    FACES_VERIFIED_COUNT = "faces_verified_count"
+    FACES_MANUAL_COUNT = "faces_manual_count"
+    FACES_AUTOMATIC_COUNT = "faces_automatic_count"
+    MENTIONS_TOTAL_COUNT = "mentions_total_count"
+    MENTIONS_VERIFIED_COUNT = "mentions_verified_count"
+    MENTIONS_MANUAL_COUNT = "mentions_manual_count"
+    MENTIONS_AUTOMATIC_COUNT = "mentions_automatic_count"
+    ANNOTATIONS_TOTAL_COUNT = "annotations_total_count"
+    ANNOTATIONS_VERIFIED_COUNT = "annotations_verified_count"
+    ANNOTATIONS_MANUAL_COUNT = "annotations_manual_count"
+    ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
+    RELEVANCE = "relevance"
+    NAME = "name"
+    SURNAME = "surname"
+    BIRTH_DATE = "birth_date"
+    DEATH_DATE = "death_date"
     ENTITY_ID = "entity_id"
     LAST_TOUCHED_AT = "last_touched_at"
     CREATED_AT = "created_at"
@@ -182,6 +210,7 @@ __all__ = [
     "EntitySortField",
     "FaceSortField",
     "PageSortField",
+    "PersonSortField",
     "RELEVANCE",
     "SortDirection",
     "SortableRequest",
