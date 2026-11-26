@@ -29,37 +29,12 @@ from people_gator_api.services.auth_service import (
     BrowseActorDependency,
     DataIngestActorDependency,
 )
-from people_gator_api.media.text_mention_spans import check_text_mention_contexts
-from people_gator_api.schemas.missing import is_missing
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["text mentions"])
 
-
-async def _require_unique_contexts(database, mentions) -> None:
-    """A mention's context locates it at most once on its page, with one exact name (#176)."""
-    if error := await check_text_mention_contexts(database, mentions):
-        raise_api_error(422, "ambiguous_context", error)
-
-
-async def _require_unique_patched_contexts(database, commands) -> None:
-    """Check the text a PATCH leaves, merging omitted fields from the stored mention."""
-    checks = []
-    for command in commands:
-        mention_id, payload = command if isinstance(command, tuple) else (command.mention_id, command)
-        if is_missing(payload.name) and is_missing(payload.context):
-            continue
-        stored = await database.text_mentions.get(mention_id)
-        if stored is None:
-            continue
-        checks.append((
-            stored.source_id,
-            stored.name if is_missing(payload.name) else payload.name,
-            stored.context if is_missing(payload.context) else payload.context,
-        ))
-    await _require_unique_contexts(database, checks)
 
 
 @router.get("/text-mentions", response_model=TextMentionListResponse)
@@ -127,7 +102,6 @@ async def create_text_mention_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> TextMentionResponse:
-    await _require_unique_contexts(database, [(payload.source_id, payload.name, payload.context)])
     try:
         return await database.text_mentions.create(payload, user)
     except ValueError as exc:
@@ -144,9 +118,6 @@ async def create_text_mention_batch_route(
     database: DatabaseDependency,
     user: DataIngestActorDependency,
 ) -> list[TextMentionResponse]:
-    await _require_unique_contexts(
-        database, [(item.source_id, item.name, item.context) for item in payload]
-    )
     try:
         return await database.text_mentions.create_batch(payload, user)
     except ValueError as exc:
@@ -162,7 +133,6 @@ async def patch_text_mention_batch_route(
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
 ) -> list[TextMentionResponse | None]:
-    await _require_unique_patched_contexts(database, list(payload))
     try:
         return await database.text_mentions.patch_batch(payload, user)
     except ValueError as exc:
@@ -204,7 +174,6 @@ async def patch_text_mention_route(
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
 ) -> TextMentionResponse:
-    await _require_unique_patched_contexts(database, [(mention_id, payload)])
     try:
         mention = await database.text_mentions.patch(mention_id, payload, user)
     except ValueError as exc:

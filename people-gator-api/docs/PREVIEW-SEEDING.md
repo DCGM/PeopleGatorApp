@@ -1785,9 +1785,12 @@ Each mention resolves to at most one span. Its context locates it when it
 equals exactly one OCR line, or one run of consecutive lines (compared word by
 word, ignoring case and punctuation), and the name is matched there. A
 missing context, or one found nowhere on the page, uses the best single match
-on the page. Creating or changing a mention through the API is rejected (422,
-`ambiguous_context`) when its context matches several places on the page or
-the name occurs more than once in it; the scan shows that reason. Unlinked
+on the page. The API does not check contexts (it may not know the page text);
+the scan sends a unique one: it starts with the selected lines and adds
+neighbouring lines in the same OCR region until the context occurs once on
+the page and its first exact name match is the selected words. Identical
+surroundings, or a name repeated earlier in its own line, offer no action
+yet (#182). Unlinked
 mentions are served as spans with no entity. Reruns keep reviewer
 reassignments, text changes and mentions created on the scan; integration
 tests check each record's span, the plain-text line and that review edits

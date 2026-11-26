@@ -29,7 +29,6 @@ from people_gator_api.media.text_mention_spans import (
     _TextMentionText,  # pyright: ignore[reportPrivateUsage]
     _fetch_text_mentions,  # pyright: ignore[reportPrivateUsage]
     _match_text_mention_spans,  # pyright: ignore[reportPrivateUsage]
-    text_mention_context_error,
 )
 
 
@@ -164,7 +163,7 @@ def test_text_mention_context_must_equal_whole_lines() -> None:
     assert [span.start_line_id for span in _match_text_mention_spans(layout, [phrase])] == ["line-1"]
 
 
-def test_ambiguous_contexts_and_repeated_names_resolve_to_one_span_and_are_rejected() -> None:
+def test_ambiguous_contexts_and_repeated_names_resolve_to_one_span() -> None:
     layout = _layout(
         _line("line-1", "Jan wrote.", 0),
         _line("line-2", "Jan wrote.", 1),
@@ -177,16 +176,7 @@ def test_ambiguous_contexts_and_repeated_names_resolve_to_one_span_and_are_rejec
         ("line-1", 0),
         ("line-3", 0),
     ]
-    assert text_mention_context_error(layout, "Jan", "Jan wrote.") == (
-        "The context matches several places on the page; include more of its line."
-    )
-    assert text_mention_context_error(layout, "Jan", "Jan met Jan and Jana.") == (
-        "The name occurs more than once in its context."
-    )
-    # One exact match beside a near match ("Jana") is fine, as are unknown contexts.
-    assert text_mention_context_error(layout, "Jana", "Jan met Jan and Jana.") is None
-    assert text_mention_context_error(layout, "Jan", "Not on this page") is None
-    assert text_mention_context_error(layout, "Jan", None) is None
+
 
 
 def test_text_mention_context_can_hold_a_two_line_name() -> None:

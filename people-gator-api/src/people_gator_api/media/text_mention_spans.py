@@ -20,7 +20,6 @@ from people_gator_api.schemas.mentions import (
     TextMentionResponse,
 )
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
-from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.page_layout import get_page_layout
 from people_gator_api.utils.opentelemetry import trace
 
@@ -183,24 +182,6 @@ def _match_text_mention_spans(
     return [span for _position, span in spans]
 
 
-def text_mention_context_error(layout: PageLayoutModel, name: str, context: str | None) -> str | None:
-    """Why a mention's context cannot locate it on this page, or None (#176).
-
-    The context may match at most one place on the page (one line or one run
-    of consecutive lines, compared word by word), and the name may occur at
-    most once, exactly, within it. A context found nowhere on the page is
-    allowed; the mention then resolves to its best single match.
-    """
-    words = _layout_words(layout)
-    locations = _context_locations(words, context)
-    if len(locations) > 1:
-        return "The context matches several places on the page; include more of its line."
-    mention_words = _normalized_words(name)
-    if locations and len(_exact_matches(words, mention_words, locations[0])) > 1:
-        return "The name occurs more than once in its context."
-    return None
-
-
 def _context_locations(words: Sequence[_Word], context: str | None) -> list[frozenset[str]]:
     """Every place whose words equal the context: one line or consecutive lines."""
     target = _normalized_words(context or "")
@@ -339,32 +320,3 @@ def _mention_matches(
             if score >= _MIN_SIMILARITY:
                 matches.append(_Match(start_word, end_word, score))
     return matches
-
-
-@trace()
-async def check_text_mention_contexts(
-    database: Database,
-    mentions: Sequence[tuple[uuid.UUID, str, str | None]],
-) -> str | None:
-    """Check (source_id, name, context) triples against their page layouts (#176).
-
-    Returns the first rule violation, or None. Sources that are not pages, or
-    pages without a stored layout, have nothing to check.
-    """
-    layouts: dict[uuid.UUID, PageLayoutModel | None] = {}
-    for source_id, name, context in mentions:
-        if not context or not context.strip():
-            continue
-        if source_id not in layouts:
-            page = await database.sources.get_page(source_id)
-            layout = None
-            if page is not None:
-                try:
-                    layout = await get_page_layout(page.library, page.document_id, page.page_id)
-                except SourceResolutionError:
-                    layout = None
-            layouts[source_id] = layout
-        layout = layouts[source_id]
-        if layout is not None and (error := text_mention_context_error(layout, name, context)):
-            return error
-    return None
