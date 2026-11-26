@@ -5,9 +5,12 @@ import {
   getPersonRouteApiV1PeopleEntityIdGet,
   listPeopleRouteApiV1PeopleGet,
   patchPersonRouteApiV1PeopleEntityIdPatch,
+  putPersonRouteApiV1PeopleEntityIdPut,
   searchPeopleGetApiV1SearchPeopleGet,
   type ListPeopleRouteApiV1PeopleGetData,
+  type PersonCreateRequest,
   type PersonPatchRequest,
+  type PersonResponse,
   type SearchPeopleGetApiV1SearchPeopleGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
@@ -71,5 +74,42 @@ export function usePatchPersonMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
+  })
+}
+
+/** Cache updates after a person record is created or replaced. */
+function storePerson(queryClient: ReturnType<typeof useQueryClient>, person: PersonResponse) {
+  restartPeoplePages(queryClient)
+  queryClient.setQueryData(queryKeys.entities.person(person.entity_id), person)
+  queryClient.setQueryData(queryKeys.entities.detail(person.entity_id), person)
+  for (const queryKey of [
+    queryKeys.entities.lists(),
+    queryKeys.search.all,
+    queryKeys.documents.all,
+    queryKeys.sources.all,
+    queryKeys.images.all,
+    queryKeys.pages.all,
+    queryKeys.faces.all,
+    queryKeys.textMentions.all,
+  ])
+    void queryClient.invalidateQueries({ queryKey })
+}
+
+/**
+ * Create or replace the person with a client-chosen UUID (#173). Repeating the
+ * same request is idempotent, so a retry never creates a second person.
+ */
+export function usePutPersonMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ entityId, body }: { entityId: string; body: PersonCreateRequest }) =>
+      responseData(
+        putPersonRouteApiV1PeopleEntityIdPut({
+          path: { entity_id: entityId },
+          body,
+          throwOnError: true,
+        }),
+      ),
+    onSuccess: (person) => storePerson(queryClient, person),
   })
 }
