@@ -20,6 +20,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionResponse,
 )
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
+from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.page_layout import get_page_layout
 from people_gator_api.utils.opentelemetry import trace
 
@@ -133,37 +134,44 @@ def _match_text_mention_spans(
     layout: PageLayoutModel,
     mentions: Sequence[_TextMentionText],
 ) -> list[TextMentionSpanModel]:
+    """Resolve each mention to at most one span (#176).
+
+    A context that equals exactly one OCR line, or one run of consecutive
+    lines, locates the mention; its name is matched there, preferring an exact
+    word match. Without such a context, the best single match on the page is
+    used. A mention never covers several places, so selecting it selects
+    exactly the words it records.
+    """
     words = _layout_words(layout)
-    line_texts = _line_texts(layout)
     spans: list[tuple[int, TextMentionSpanModel]] = []
     for mention in mentions:
         mention_words = _normalized_words(mention.name)
         if not mention_words:
             continue
-        matches = _mention_matches(
-            words, mention_words, _context_lines(line_texts, mention.context)
-        )
-
-        for match in _best_non_overlapping(matches):
-            first_word = words[match.start_word]
-            last_word = words[match.end_word - 1]
-            spans.append(
-                (
-                    match.start_word,
-                    TextMentionSpanModel(
-                        mention_id=mention.mention_id,
-                        entity_link_state=mention.entity_link_state,
-                        entity_link_verified_by_user_id=mention.entity_link_verified_by_user_id,
-                        entity_link_verified_at=mention.entity_link_verified_at,
-                        entity_id=mention.entity_id,
-                        entity_type=mention.entity_type,
-                        start_line_id=first_word.line_id,
-                        end_line_id=last_word.line_id,
-                        start_character=first_word.start_character,
-                        end_character=last_word.end_character,
-                    ),
-                )
+        locations = _context_locations(words, mention.context)
+        lines = locations[0] if len(locations) == 1 else None
+        match = _single_match(words, mention_words, lines)
+        if match is None:
+            continue
+        first_word = words[match.start_word]
+        last_word = words[match.end_word - 1]
+        spans.append(
+            (
+                match.start_word,
+                TextMentionSpanModel(
+                    mention_id=mention.mention_id,
+                    entity_link_state=mention.entity_link_state,
+                    entity_link_verified_by_user_id=mention.entity_link_verified_by_user_id,
+                    entity_link_verified_at=mention.entity_link_verified_at,
+                    entity_id=mention.entity_id,
+                    entity_type=mention.entity_type,
+                    start_line_id=first_word.line_id,
+                    end_line_id=last_word.line_id,
+                    start_character=first_word.start_character,
+                    end_character=last_word.end_character,
+                ),
             )
+        )
     spans.sort(
         key=lambda item: (
             item[0],
@@ -173,6 +181,81 @@ def _match_text_mention_spans(
         )
     )
     return [span for _position, span in spans]
+
+
+def text_mention_context_error(layout: PageLayoutModel, name: str, context: str | None) -> str | None:
+    """Why a mention's context cannot locate it on this page, or None (#176).
+
+    The context may match at most one place on the page (one line or one run
+    of consecutive lines, compared word by word), and the name may occur at
+    most once, exactly, within it. A context found nowhere on the page is
+    allowed; the mention then resolves to its best single match.
+    """
+    words = _layout_words(layout)
+    locations = _context_locations(words, context)
+    if len(locations) > 1:
+        return "The context matches several places on the page; include more of its line."
+    mention_words = _normalized_words(name)
+    if locations and len(_exact_matches(words, mention_words, locations[0])) > 1:
+        return "The name occurs more than once in its context."
+    return None
+
+
+def _context_locations(words: Sequence[_Word], context: str | None) -> list[frozenset[str]]:
+    """Every place whose words equal the context: one line or consecutive lines."""
+    target = _normalized_words(context or "")
+    if not target:
+        return []
+    # Line boundaries in reading order; a run may not cross regions.
+    lines: list[tuple[str, str, list[str]]] = []
+    for word in words:
+        if not lines or lines[-1][0] != word.line_id:
+            lines.append((word.line_id, word.region_id, []))
+        lines[-1][2].append(word.normalized)
+    locations: list[frozenset[str]] = []
+    for start in range(len(lines)):
+        collected: list[str] = []
+        ids: list[str] = []
+        for line_id, region_id, line_words in lines[start:]:
+            if region_id != lines[start][1]:
+                break
+            collected.extend(line_words)
+            ids.append(line_id)
+            if len(collected) >= len(target):
+                break
+        if tuple(collected) == target:
+            locations.append(frozenset(ids))
+    return locations
+
+
+def _exact_matches(
+    words: Sequence[_Word], mention_words: tuple[str, ...], lines: frozenset[str]
+) -> list[_Match]:
+    size = len(mention_words)
+    return [
+        _Match(start, start + size, 1.0)
+        for start in range(len(words) - size + 1)
+        if all(word.line_id in lines for word in words[start:start + size])
+        and words[start].region_id == words[start + size - 1].region_id
+        and tuple(word.normalized for word in words[start:start + size]) == mention_words
+    ]
+
+
+def _single_match(
+    words: Sequence[_Word], mention_words: tuple[str, ...], lines: frozenset[str] | None
+) -> _Match | None:
+    """The first exact match in the location, else its best fuzzy match."""
+    if lines is not None:
+        exact = _exact_matches(words, mention_words, lines)
+        if exact:
+            return exact[0]
+    matches = _mention_matches(words, mention_words, lines)
+    if not matches:
+        return None
+    return min(
+        matches,
+        key=lambda item: (-item.score, -(item.end_word - item.start_word), item.start_word),
+    )
 
 
 def _layout_words(layout: PageLayoutModel) -> list[_Word]:
@@ -207,39 +290,6 @@ def _layout_words(layout: PageLayoutModel) -> list[_Word]:
                     )
                 )
     return words
-
-
-def _line_texts(layout: PageLayoutModel) -> dict[str, str]:
-    return {
-        line.id: _normalized_text(line.transcription)
-        for region in layout.regions
-        for line in region.lines
-    }
-
-
-def _normalized_text(value: str) -> str:
-    return " ".join(_normalized_words(value))
-
-
-def _context_lines(line_texts: dict[str, str], context: str | None) -> frozenset[str] | None:
-    """Lines a mention's context points to, or None to match the whole page.
-
-    A context holding whole lines (such as the OCR line text recorded with the
-    mention) or a phrase within one line limits the name to those lines, so a
-    mention covers its own words rather than every same-named word on the page.
-    Contexts that match no line keep the page-wide match.
-    """
-    target = _normalized_text(context or "")
-    if not target:
-        return None
-    # Whole words only: padding keeps "ovak" from matching inside "novak".
-    padded = f" {target} "
-    lines = frozenset(
-        line_id
-        for line_id, text in line_texts.items()
-        if text and (f" {text} " in padded or padded in f" {text} ")
-    )
-    return lines or None
 
 
 def _normalized_words(value: str) -> tuple[str, ...]:
@@ -291,22 +341,30 @@ def _mention_matches(
     return matches
 
 
-def _best_non_overlapping(matches: Sequence[_Match]) -> list[_Match]:
-    """Keep the strongest candidate for each overlapping entity occurrence."""
-    accepted: list[_Match] = []
-    for match in sorted(
-        matches,
-        key=lambda item: (
-            -item.score,
-            -(item.end_word - item.start_word),
-            item.start_word,
-        ),
-    ):
-        if any(
-            match.start_word < existing.end_word
-            and existing.start_word < match.end_word
-            for existing in accepted
-        ):
+@trace()
+async def check_text_mention_contexts(
+    database: Database,
+    mentions: Sequence[tuple[uuid.UUID, str, str | None]],
+) -> str | None:
+    """Check (source_id, name, context) triples against their page layouts (#176).
+
+    Returns the first rule violation, or None. Sources that are not pages, or
+    pages without a stored layout, have nothing to check.
+    """
+    layouts: dict[uuid.UUID, PageLayoutModel | None] = {}
+    for source_id, name, context in mentions:
+        if not context or not context.strip():
             continue
-        accepted.append(match)
-    return sorted(accepted, key=lambda item: item.start_word)
+        if source_id not in layouts:
+            page = await database.sources.get_page(source_id)
+            layout = None
+            if page is not None:
+                try:
+                    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+                except SourceResolutionError:
+                    layout = None
+            layouts[source_id] = layout
+        layout = layouts[source_id]
+        if layout is not None and (error := text_mention_context_error(layout, name, context)):
+            return error
+    return None

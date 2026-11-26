@@ -6,7 +6,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from people_gator_api.media import text_mention_spans
 from people_gator_api.routes.v1 import router as v1_router
+from people_gator_api.schemas.pero import PageLayoutModel, RegionLayoutModel, TextLineModel
 from people_gator_api.schemas.mentions import (
     TextMentionPatchBatchItem,
     TextMentionResponse,
@@ -71,8 +73,12 @@ def _mention(**fields) -> TextMentionResponse:
 def _client(**repository) -> TestClient:
     app = FastAPI()
     app.include_router(v1_router)
+    stored = repository.pop("stored", None)
+    page = repository.pop("page", None)
+    repository.setdefault("get", AsyncMock(return_value=stored))
     app.dependency_overrides[get_database] = lambda: SimpleNamespace(
-        text_mentions=SimpleNamespace(**repository)
+        text_mentions=SimpleNamespace(**repository),
+        sources=SimpleNamespace(get_page=AsyncMock(return_value=page)),
     )
     app.dependency_overrides[get_auth_context] = lambda: SimpleNamespace(user_id=uuid.uuid4())
     return TestClient(app)
@@ -149,3 +155,65 @@ def test_patch_rejects_an_empty_name(name, batch) -> None:
     )
 
     assert response.status_code == 422
+
+
+# --- #176: a context locates its mention at most once ------------------------
+
+def _page_layout(monkeypatch, *texts: str):
+    layout = PageLayoutModel(
+        id="p", page_size=(10, 10), reading_order={"r": 0},
+        regions=[RegionLayoutModel(id="r", polygon=[], lines=[
+            TextLineModel(id=f"l{i}", baseline=[], polygon=[], heights=[], transcription=text, index=i)
+            for i, text in enumerate(texts)
+        ])],
+    )
+    monkeypatch.setattr(text_mention_spans, "get_page_layout", AsyncMock(return_value=layout))
+    return SimpleNamespace(library="lib", document_id=uuid.uuid4(), page_id=uuid.uuid4())
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_create_rejects_a_context_found_twice_or_a_repeated_name(monkeypatch, batch) -> None:
+    page = _page_layout(monkeypatch, "Jan wrote.", "Jan wrote.", "Jan met Jan.", "Eva left.")
+    create, create_batch = AsyncMock(return_value=_mention()), AsyncMock(return_value=[_mention()])
+    client = _client(create=create, create_batch=create_batch, page=page)
+
+    def post(name, context):
+        body = {"name": name, "context": context, "source_id": str(uuid.uuid4())}
+        return client.post(
+            "/api/v1/text-mentions:batch" if batch else "/api/v1/text-mentions",
+            json=[body] if batch else body,
+        )
+
+    for name, context, message in (
+        ("Jan", "Jan wrote.", "several places"),
+        ("Jan", "Jan met Jan.", "more than once"),
+    ):
+        response = post(name, context)
+        assert response.status_code == 422
+        assert message in response.text
+    assert post("Eva", "Eva left.").status_code == 201
+    assert post("Jan", "Not on this page").status_code == 201
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_patch_checks_the_text_it_leaves(monkeypatch, batch) -> None:
+    page = _page_layout(monkeypatch, "Jan wrote.", "Jan wrote.", "Eva met Eva.")
+    mention_id = uuid.uuid4()
+    stored = _mention(mention_id=mention_id, name="Eva", context="Eva met Eva.")
+    patch = AsyncMock(return_value=stored)
+    patch_batch = AsyncMock(return_value=[stored])
+    client = _client(patch=patch, patch_batch=patch_batch, stored=stored, page=page)
+
+    def send(body):
+        return (
+            client.patch("/api/v1/text-mentions:batch", json=[{"mention_id": str(mention_id), **body}])
+            if batch
+            else client.patch(f"/api/v1/text-mentions/{mention_id}", json=body)
+        )
+
+    # The stored context repeats the new name; a context found twice is rejected too.
+    assert send({"name": "Eva"}).status_code == 422
+    assert send({"context": "Jan wrote.", "name": "Jan"}).status_code == 422
+    # Link-only changes are not checked.
+    assert send({"entity_id": None}).status_code == 200
+    assert send({"name": "Eva", "context": "Somewhere else"}).status_code == 200

@@ -1195,7 +1195,7 @@ The additive **Teleprompter reading practice** document (`teleprompter`,
 mentions repeat on L3, L16 and L29 and one spans L33–L34. Viktor Marek's verified
 mentions are on L10 and L25 and Nora Svoboda's manual mention is on L20. The other
 lines stay unannotated. One unembedded Ada face sits beside the text. Since #176
-each repeat is its own record, because a mention's spans stay on the lines its
+each repeat is its own record, because a mention resolves only on the line its
 context names (see [Scan mention editing](#scan-mention-editing-176)); previews
 seeded earlier keep their L3/L10 records and gain the four repeat records once.
 
@@ -1762,23 +1762,30 @@ The additive **Mention editing practice** document (`mention-editing`,
 
 Open `mention-editing`:
 
-- Click a name in the transcription to open its person card with Search,
-  Reassign/Link, Create, Unlink, Verify and Delete. Ctrl/Cmd-click adds or
-  removes a mention; Shift-click selects every mention from the last clicked one,
-  across lines. Enter/Space with the same modifiers works on a focused mention.
+- Click a name in the transcription to open its person card, which floats
+  above or below the mention like a face's card and hides when the mention
+  scrolls out of view. Only the clicked mention is selected, and its line is
+  marked on the scan. Ctrl/Cmd-click adds or removes a mention; Shift-click
+  selects every shown mention from the last clicked one, in text order and
+  across lines. Enter/Space with the same modifiers work on a focused mention.
   The card counts the selection and applies its actions to all selected mentions.
 - Select the three **Jan Bulk** mentions, choose Search to fill People with
   their name, then **Assign to mentions** on another result; or Create a new
   person in place, pre-filled with the name. A face can stay selected at the
   same time; **Assign to face** targets only it.
 - Select the words **Marta Plain** to get **Create mention**: the new unlinked
-  mention is selected and its card opens. Select **Bulk** inside a mention to get
-  **Change mention**, which keeps its person and verification state.
+  mention is selected and its card opens. A selection across consecutive lines
+  creates one mention whose context is those lines. Select **Bulk** inside a
+  mention to get **Change mention**, which keeps its person and verification state.
 
-Spans are matched per record: a mention whose context contains whole OCR lines
-(or is a phrase within one) is matched only on those lines, so repeated names
-need one record per occurrence. A missing context, or one that matches no line,
-still matches the name anywhere on the page. Unlinked mentions are served as
-spans with no entity. Reruns keep reviewer reassignments, text changes and
-mentions created on the scan; integration tests check each record's span,
-the plain-text line and that review edits survive two reruns.
+Each mention resolves to at most one span. Its context locates it when it
+equals exactly one OCR line, or one run of consecutive lines (compared word by
+word, ignoring case and punctuation), and the name is matched there. A
+missing context, or one found nowhere on the page, uses the best single match
+on the page. Creating or changing a mention through the API is rejected (422,
+`ambiguous_context`) when its context matches several places on the page or
+the name occurs more than once in it; the scan shows that reason. Unlinked
+mentions are served as spans with no entity. Reruns keep reviewer
+reassignments, text changes and mentions created on the scan; integration
+tests check each record's span, the plain-text line and that review edits
+survive two reruns.
