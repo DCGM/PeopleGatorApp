@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterGroup from './FilterGroup.vue'
 import SharedFilterControls from './SharedFilterControls.vue'
 import CountRangeControl from './CountRangeControl.vue'
 import DocumentFilterTags from './DocumentFilterTags.vue'
@@ -13,8 +14,7 @@ import {
 } from '@/viewmodels/document-counts'
 
 // The Documents filter set (#111), shown in the desktop sidebar or the mobile drawer.
-// The sidebar lists applied filters below the selectors; mobile shows them under search.
-defineProps<{ tags?: boolean }>()
+// Applied filters are listed below the selectors; mobile also shows them under search.
 const counts = useDocumentCounts()
 const { verification } = useDocumentFilters()
 const verificationOptions = [
@@ -27,39 +27,46 @@ const apply = (field: string, lower: string, upper: string) =>
 </script>
 
 <template>
-  <div
-    class="flex w-full min-w-0 flex-row flex-wrap items-start gap-2"
-    role="group"
-    aria-label="Filters"
-  >
-    <SharedFilterControls
-      :controls="['libraries', 'creators', 'creationDates', 'actors', 'dates']"
-    />
-    <FilterSingleSelect
-      v-model="verification"
-      class="max-w-full flex-none"
-      label="Verification"
-      :options="verificationOptions"
-    />
-    <CountRangeControl
-      v-for="category in DOCUMENT_COUNT_CATEGORIES"
-      :key="category.value"
-      :label="category.label"
-      :states="DOCUMENT_COUNT_STATES"
-      :field-for="(state) => `${category.value}_${state}_count`"
-      :params="counts.params.value"
-      trigger-class="max-w-full"
-      @apply="apply"
-    />
-    <CountRangeControl
-      label="People"
-      :field-for="() => LINKED_PEOPLE_FIELD"
-      :params="counts.params.value"
-      trigger-class="max-w-full"
-      @apply="apply"
-    />
+  <div class="flex w-full min-w-0 flex-col gap-4" role="group" aria-label="Filters">
+    <FilterGroup title="Source">
+      <SharedFilterControls :controls="['libraries']" />
+    </FilterGroup>
+    <FilterGroup title="Review">
+      <FilterSingleSelect
+        v-model="verification"
+        class="max-w-full flex-none"
+        label="Verification"
+        :options="verificationOptions"
+      />
+    </FilterGroup>
+    <FilterGroup title="Counts">
+      <CountRangeControl
+        v-for="category in DOCUMENT_COUNT_CATEGORIES"
+        :key="category.value"
+        :label="category.label"
+        :states="DOCUMENT_COUNT_STATES"
+        :field-for="(state) => `${category.value}_${state}_count`"
+        :params="counts.params.value"
+        trigger-class="max-w-full"
+        @apply="apply"
+      />
+      <CountRangeControl
+        label="People"
+        :field-for="() => LINKED_PEOPLE_FIELD"
+        :params="counts.params.value"
+        trigger-class="max-w-full"
+        @apply="apply"
+      />
+    </FilterGroup>
+    <FilterGroup title="Created">
+      <SharedFilterControls :controls="['creators', 'creationDates']" />
+    </FilterGroup>
+    <FilterGroup title="Modified">
+      <SharedFilterControls :controls="['actors', 'dates']" />
+    </FilterGroup>
   </div>
-  <div v-if="tags" class="flex min-w-0 flex-col gap-2 pt-2">
+  <!-- Applied filters always follow the selectors, in the sidebar and in the drawer. -->
+  <div class="flex min-w-0 flex-col gap-2 pt-2">
     <DocumentFilterTags />
   </div>
 </template>

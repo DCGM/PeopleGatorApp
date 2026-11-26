@@ -103,7 +103,7 @@ useAutomaticPagination({
         class="w-60 shrink-0 overflow-y-auto pb-1"
         aria-label="Document filters"
       >
-        <DocumentFilters tags />
+        <DocumentFilters />
       </aside>
       <div class="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1">
         <div class="flex min-w-0 flex-col gap-2 lg:shrink-0">

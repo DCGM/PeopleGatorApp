@@ -107,7 +107,9 @@ and sort above its table; its filter sidebar (a drawer from the sliders button
 below 1024px) holds Libraries, Modified by/via key/from/to and **All
 annotations**, **Faces**, **Text mentions** and **People** ranges (State, Min, Max).
 People uses the same layout (#178): search and sort above the cards, and every
-People filter in the sidebar or drawer with its applied tags.
+People filter in the sidebar or drawer. Both panels group selectors under short
+titles (Source, Counts, Created, Modified…), list applied tags below them and
+scroll separately from the results.
 Use several minima together, remove their tags individually, and sort by the
 same counts. Document count headers offer the same ordering as the selector.
 See [count rules and URL fields](SEARCH_FILTERS.md#annotation-count-ordering-and-minima-78)

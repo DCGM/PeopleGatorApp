@@ -59,6 +59,9 @@ import PeopleSearchView from '@/views/PeopleSearchView.vue'
 import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 
 const body = () => new DOMWrapper(document.body)
+// Pickers are grouped by meaning (#178), so tests address them by label.
+const picker = (wrapper: ReturnType<typeof mount>, label: string) =>
+  wrapper.findAllComponents(FilterDateTimePicker).find((item) => item.props('label') === label)!
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -215,9 +218,7 @@ describe('people filter controls and URL restoration', () => {
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Modified by: user Two')
-    expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
-      'Pick date and time',
-    )
+    expect(picker(wrapper, 'Modified to').get('button').text()).not.toContain('Pick date and time')
     expect(
       body()
         .findAll('[role="option"]')
@@ -233,7 +234,7 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-02T12:00:00.123Z',
       touched_to: '2026-01-04T12:00:00Z',
     })
-    const pickers = wrapper.findAllComponents(FilterDateTimePicker)
+    const pickers = [picker(wrapper, 'Modified from'), picker(wrapper, 'Modified to')]
     await pickers[0]!.get('button').trigger('click')
     await flushPromises()
     expect(body().find('[data-value="2026-01-03"]').exists()).toBe(true)
@@ -296,6 +297,12 @@ describe('people filter controls and URL restoration', () => {
       api_key: id('api-key', 1),
     })
     const controls = wrapper.get('aside[aria-label="People filters"]')
+    expect(
+      controls
+        .get('[role="group"][aria-label="Filters"]')
+        .findAll('[role="group"]')
+        .map((section) => section.attributes('aria-label')),
+    ).toEqual(['Source', 'Evidence', 'Counts', 'Life dates', 'Created', 'Modified'])
     expect(wrapper.find('button[aria-label="Show filters"]').exists()).toBe(false)
     expect(wrapper.get('[role="search"]').find('button[aria-label="Assignment"]').exists()).toBe(
       false,

@@ -310,20 +310,24 @@ describe('document table results', () => {
       .map((button) => button.attributes('aria-label') || button.text().trim())
     expect(names).toEqual([
       'Libraries',
-      'Created by',
-      'Created via key',
-      'Modified by',
-      'Modified via key',
-      'Modified from',
-      'Modified to',
-      'Created from',
-      'Created to',
       'Verification',
       'All annotations',
       'Faces',
       'Text mentions',
       'People',
+      'Created by',
+      'Created via key',
+      'Created from',
+      'Created to',
+      'Modified by',
+      'Modified via key',
+      'Modified from',
+      'Modified to',
     ])
+    // Related selectors are grouped under short titles (#178).
+    expect(
+      group.findAll('[role="group"]').map((section) => section.attributes('aria-label')),
+    ).toEqual(['Source', 'Review', 'Counts', 'Created', 'Modified'])
     // Search and sort stay above the table; there is no drawer toggle on desktop.
     const search = wrapper.get('[role="search"]')
     expect(search.find('input[aria-label="Search documents"]').exists()).toBe(true)

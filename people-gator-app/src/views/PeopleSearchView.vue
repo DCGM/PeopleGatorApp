@@ -89,24 +89,18 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main
-    class="mx-auto w-full min-w-0 px-2 md:px-4"
-    :class="{ 'pb-56 sm:pb-32': allowed && selected.length }"
-  >
-    <header class="pb-4 pt-6">
+  <main class="mx-auto w-full min-w-0 px-2 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <header class="pb-4 pt-6 lg:shrink-0">
       <small class="font-semibold uppercase text-secondary">People index</small>
       <h1>Browse people</h1>
     </header>
 
-    <div class="lg:flex lg:items-start lg:gap-4">
-      <aside
-        v-if="desktop"
-        class="sticky top-13 max-h-[calc(100dvh-3.25rem)] w-60 shrink-0 overflow-y-auto pb-1"
-        aria-label="People filters"
-      >
-        <PeopleFilters tags />
+    <!-- From 1024px the page fills the viewport: filters and results scroll separately. -->
+    <div class="lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
+      <aside v-if="desktop" class="w-60 shrink-0 overflow-y-auto pb-4" aria-label="People filters">
+        <PeopleFilters />
       </aside>
-      <div class="min-w-0 lg:flex-1">
+      <div class="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
         <PeopleSearchBar
           v-model:search-term="searchTerm"
           v-model:filters-open="filtersOpen"
@@ -152,91 +146,95 @@ useAutomaticPagination({
             >
           </Button>
         </SelectedEvidenceActions>
-        <p
-          v-if="!selected.length && message"
-          :role="message === 'People merged.' ? 'status' : 'alert'"
+        <div
+          class="min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+          :class="{ 'pb-56 sm:pb-32': allowed && selected.length }"
         >
-          {{ message }}
-        </p>
-
-        <section class="stable-search-results pt-6" aria-live="polite">
-          <h2 class="mb-4">Search Results</h2>
-          <Separator orientation="horizontal" />
-
-          <div
-            v-if="people.length || isLoading"
-            class="grid gap-0 pt-6 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4"
+          <p
+            v-if="!selected.length && message"
+            :role="message === 'People merged.' ? 'status' : 'alert'"
           >
-            <div v-for="person in people" :key="person.id" class="group relative min-w-0">
-              <RouterLink
-                v-if="!allowed || !selectedIds.size"
-                class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                :aria-label="`Open ${person.name}`"
-                :to="{
-                  name: 'person-detail',
-                  params: { personId: person.id },
-                }"
-              />
-              <button
-                v-else
-                type="button"
-                class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                :disabled="busy || isFetching"
-                :aria-label="
-                  selectedIds.has(person.id)
-                    ? `${person.name} is selected`
-                    : `Add ${person.name} to selection`
-                "
-                @click="add(person.id, $event)"
-              ></button>
-              <PersonSelectionControl
-                v-if="allowed"
-                :name="person.name"
-                :selected="selectedIds.has(person.id)"
-                :disabled="busy || isFetching"
-                @toggle="toggle(person.id, $event)"
-              />
-              <PeopleCard
-                :selected="allowed && selectedIds.has(person.id)"
-                :thumbnail-face-id="person.thumbnailFaceId"
-                :name="person.name"
-                :faces="person.faces"
-                :names="person.names"
-                :life-span="person.lifeSpan"
-                :count-details="person.countDetails"
+            {{ message }}
+          </p>
+
+          <section class="stable-search-results pt-6" aria-live="polite">
+            <h2 class="mb-4">Search Results</h2>
+            <Separator orientation="horizontal" />
+
+            <div
+              v-if="people.length || isLoading"
+              class="grid gap-0 pt-6 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4"
+            >
+              <div v-for="person in people" :key="person.id" class="group relative min-w-0">
+                <RouterLink
+                  v-if="!allowed || !selectedIds.size"
+                  class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  :aria-label="`Open ${person.name}`"
+                  :to="{
+                    name: 'person-detail',
+                    params: { personId: person.id },
+                  }"
+                />
+                <button
+                  v-else
+                  type="button"
+                  class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  :disabled="busy || isFetching"
+                  :aria-label="
+                    selectedIds.has(person.id)
+                      ? `${person.name} is selected`
+                      : `Add ${person.name} to selection`
+                  "
+                  @click="add(person.id, $event)"
+                ></button>
+                <PersonSelectionControl
+                  v-if="allowed"
+                  :name="person.name"
+                  :selected="selectedIds.has(person.id)"
+                  :disabled="busy || isFetching"
+                  @toggle="toggle(person.id, $event)"
+                />
+                <PeopleCard
+                  :selected="allowed && selectedIds.has(person.id)"
+                  :thumbnail-face-id="person.thumbnailFaceId"
+                  :name="person.name"
+                  :faces="person.faces"
+                  :names="person.names"
+                  :life-span="person.lifeSpan"
+                  :count-details="person.countDetails"
+                />
+              </div>
+              <PeopleCardSkeleton
+                v-for="index in isLoading || isFetchingNextPage ? 3 : 0"
+                :key="`loading-${index}`"
               />
             </div>
-            <PeopleCardSkeleton
-              v-for="index in isLoading || isFetchingNextPage ? 3 : 0"
-              :key="`loading-${index}`"
-            />
-          </div>
 
-          <div
-            v-else-if="error"
-            class="flex flex-col items-center py-16 text-center text-destructive"
-          >
-            <UserRound class="mb-3 size-8" aria-hidden="true" />
-            <p class="text-sm">Could not load people.</p>
-          </div>
-          <div v-else class="flex flex-col items-center py-16 text-center text-muted-foreground">
-            <UserRound class="mb-3 size-8" aria-hidden="true" />
-            <p class="text-sm">No people match this search.</p>
-          </div>
-          <div ref="listEnd" class="h-px" aria-hidden="true" />
-        </section>
+            <div
+              v-else-if="error"
+              class="flex flex-col items-center py-16 text-center text-destructive"
+            >
+              <UserRound class="mb-3 size-8" aria-hidden="true" />
+              <p class="text-sm">Could not load people.</p>
+            </div>
+            <div v-else class="flex flex-col items-center py-16 text-center text-muted-foreground">
+              <UserRound class="mb-3 size-8" aria-hidden="true" />
+              <p class="text-sm">No people match this search.</p>
+            </div>
+            <div ref="listEnd" class="h-px" aria-hidden="true" />
+          </section>
 
-        <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-8">
-          <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
-            {{ isFetchingNextPage ? 'Loading people…' : 'Load more people' }}
-          </Button>
+          <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-8">
+            <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
+              {{ isFetchingNextPage ? 'Loading people…' : 'Load more people' }}
+            </Button>
+          </div>
+          <footer class="pb-4 pt-6">
+            <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
+          </footer>
         </div>
       </div>
     </div>
-
-    <footer class="pb-4 pt-6">
-      <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
-    </footer>
     <Sheet v-if="!desktop" v-model:open="filtersOpen">
       <SheetContent side="left" class="overflow-y-auto" :aria-describedby="undefined">
         <SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader>
