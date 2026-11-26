@@ -1299,9 +1299,7 @@ describe('scan name mentions and their person card (#176)', () => {
   const teleprompter = (wrapper: Awaited<ReturnType<typeof mountView>>) =>
     wrapper.findComponent({ name: 'DocumentTeleprompter' })
   const mentionCard = (wrapper: Awaited<ReturnType<typeof mountView>>) =>
-    wrapper
-      .findAllComponents({ name: 'SelectedFaceItem' })
-      .find((card) => card.props('mentions'))
+    wrapper.findAllComponents({ name: 'SelectedFaceItem' }).find((card) => card.props('mentions'))
   async function choose(
     wrapper: Awaited<ReturnType<typeof mountView>>,
     index: number,
@@ -1319,7 +1317,11 @@ describe('scan name mentions and their person card (#176)', () => {
     await choose(wrapper, 0, m1)
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1'])
     expect(teleprompter(wrapper).props('selectedEntityKey')).toBe('m1:l1:0')
-    expect(lastQuery(mocks.replace)).toMatchObject({ person: 'a', selectedPerson: 'jan', line: 'l1' })
+    expect(lastQuery(mocks.replace)).toMatchObject({
+      person: 'a',
+      selectedPerson: 'jan',
+      line: 'l1',
+    })
     // The face keeps its own card; the mention gets the shared person card.
     const cards = wrapper.findAllComponents({ name: 'SelectedFaceItem' })
     expect(cards.map((card) => Boolean(card.props('face')))).toEqual([false, true])
@@ -1336,6 +1338,10 @@ describe('scan name mentions and their person card (#176)', () => {
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1', 'm3'])
     await choose(wrapper, 0, m1, 'range')
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1', 'm2', 'm3'])
+    // The scan marks each selected mention's line, without the person's other lines.
+    const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+    expect(overlay.attributes('selected-mention-lines')).toBe('0,1')
+    expect(overlay.attributes('selected-person-id')).toBeUndefined()
     expect(mentionCard(wrapper)!.props('mentions')).toMatchObject({
       texts: ['Jan Bulk', 'Eva'],
       personId: null,
@@ -1351,7 +1357,9 @@ describe('scan name mentions and their person card (#176)', () => {
     await flushPromises()
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual([])
     expect(mentionCard(wrapper)).toBeUndefined()
-    expect(wrapper.findComponent({ name: 'SelectedFaceItem' }).props('face')).toMatchObject({ id: 'a' })
+    expect(wrapper.findComponent({ name: 'SelectedFaceItem' }).props('face')).toMatchObject({
+      id: 'a',
+    })
     expect(lastQuery(mocks.replace)).toMatchObject({ person: 'a', selectedPerson: 'ada' })
     // People gets both targets with permission to assign.
     await choose(wrapper, 1, m2)
@@ -1382,7 +1390,11 @@ describe('scan name mentions and their person card (#176)', () => {
     await mentionCard(wrapper)!.get('[aria-label="Unassign current profile"]').trigger('click')
     await flushPromises()
     expect(mocks.patchMentions.mock.lastCall![0].body).toEqual(
-      ['m1', 'm2', 'm3'].map((mention_id) => ({ mention_id, entity_id: null, entity_link_state: null })),
+      ['m1', 'm2', 'm3'].map((mention_id) => ({
+        mention_id,
+        entity_id: null,
+        entity_link_state: null,
+      })),
     )
     // Verify skips unlinked and already verified mentions.
     await mentionCard(wrapper)!.get('[aria-label="Verify this link"]').trigger('click')
@@ -1407,7 +1419,10 @@ describe('scan name mentions and their person card (#176)', () => {
     expect(wrapper.text()).toContain('Delete 3 mentions?')
     await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
     await flushPromises()
-    expect(mocks.deleteMentions).toHaveBeenCalledWith({ body: ['m1', 'm2', 'm3'], throwOnError: true })
+    expect(mocks.deleteMentions).toHaveBeenCalledWith({
+      body: ['m1', 'm2', 'm3'],
+      throwOnError: true,
+    })
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual([])
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
     wrapper.unmount()
@@ -1513,6 +1528,23 @@ describe('scan name mentions and their person card (#176)', () => {
     teleprompter(wrapper).vm.$emit('create-mention', { lineIndex: 0, name: 'Jan', context: 'x' })
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe('Could not create mention.')
+    // A rejected, ambiguous context explains itself.
+    mocks.createMention.mockRejectedValue(
+      new AxiosError('Unprocessable', '422', undefined, undefined, {
+        status: 422,
+        data: {
+          detail: {
+            code: 'ambiguous_context',
+            message: 'The name occurs more than once in its context.',
+          },
+        },
+      } as AxiosResponse),
+    )
+    teleprompter(wrapper).vm.$emit('create-mention', { lineIndex: 0, name: 'Jan', context: 'x' })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'The name occurs more than once in its context.',
+    )
     wrapper.unmount()
   })
 })

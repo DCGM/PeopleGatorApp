@@ -40,6 +40,7 @@ import {
   useTextMentionQuery,
 } from '@/query/text-mentions'
 import { useQueryClient } from '@tanstack/vue-query'
+import { apiErrorCode, apiErrorMessage } from '@/query/api'
 import { linkMetadata } from '@/lib/entity-links'
 import {
   mentionOrder,
@@ -691,11 +692,13 @@ function selectEntity(
   index: number,
   entity: TranscriptionEntitySpan,
   mode: MentionSelectMode = 'replace',
+  shown?: string[],
 ) {
   const key = transcriptionEntityKey(entity)
   const id = entity.mention_id
+  const order = mentionOrder(transcription.value)
   mentionSelection.value = id
-    ? nextMentionSelection(mentionOrder(transcription.value), mentionSelection.value, id, mode)
+    ? nextMentionSelection(order, mentionSelection.value, id, mode, shown ?? order)
     : NO_MENTIONS
   selectedLineIndex.value = index
   const selected = !id || mentionSelection.value.ids.includes(id)
@@ -948,6 +951,13 @@ provide(
 const selectedMentionList = computed(() =>
   selectedMentions(transcription.value, mentionSelection.value.ids),
 )
+// Every line a selected mention covers is marked on the scan, like the current line.
+const selectedMentionLines = computed(() => {
+  const ids = new Set(mentionSelection.value.ids)
+  return transcription.value.flatMap((line, index) =>
+    line.entities?.some((span) => span.mention_id && ids.has(span.mention_id)) ? [index] : [],
+  )
+})
 const mentionCardPerson = useEntityQuery(
   computed(() => {
     const ids = new Set(selectedMentionList.value.map((mention) => mention.entityId))
@@ -1074,6 +1084,12 @@ async function createPersonForMentions(person: NewPerson) {
   }
 }
 const mentionCreateError = ref('')
+// A context that would locate the mention twice is explained, so it can be fixed.
+function mentionWriteError(error: unknown, action: 'create' | 'change') {
+  return apiErrorCode(error) === 'ambiguous_context'
+    ? (apiErrorMessage(error) ?? `Could not ${action} mention.`)
+    : `Could not ${action} mention.`
+}
 function createMention(mention: { lineIndex: number; name: string; context: string }) {
   const sourceId = page.value?.source_id
   if (!sourceId || actionBusy.value) return
@@ -1081,7 +1097,7 @@ function createMention(mention: { lineIndex: number; name: string; context: stri
   createMentionMutation
     .mutateAsync({ name: mention.name, context: mention.context, source_id: sourceId })
     .then((created) => (pendingMention.value = created.mention_id))
-    .catch(() => (mentionCreateError.value = 'Could not create mention.'))
+    .catch((error) => (mentionCreateError.value = mentionWriteError(error, 'create')))
 }
 function changeMention(mention: { mentionId: string; name: string; context: string }) {
   if (actionBusy.value) return
@@ -1089,7 +1105,7 @@ function changeMention(mention: { mentionId: string; name: string; context: stri
   patchMentionTextMutation
     .mutateAsync(mention)
     .then(() => (pendingMention.value = mention.mentionId))
-    .catch(() => (mentionCreateError.value = 'Could not change mention.'))
+    .catch((error) => (mentionCreateError.value = mentionWriteError(error, 'change')))
 }
 // Select a created or changed mention as soon as the refreshed spans show it.
 watch([pendingMention, transcription], ([id]) => {
@@ -1390,7 +1406,8 @@ onBeforeUnmount(() => {
                   :faces="overlayFaces"
                   :selected-line-index="selectedLineIndex"
                   :selected-face-id="selectedFace?.id ?? null"
-                  :selected-person-id="selectedPersonId"
+                  :selected-person-id="mentionSelection.ids.length ? null : selectedPersonId"
+                  :selected-mention-lines="selectedMentionLines"
                   :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
                   :show-badge-names="showBadgeNames"
                   @select-line="selectLine"

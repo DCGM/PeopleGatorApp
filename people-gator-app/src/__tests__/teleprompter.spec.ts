@@ -731,6 +731,17 @@ describe('DocumentTeleprompter', () => {
       await mark.trigger('keydown', { key: 'Enter' })
       await mark.trigger('keydown', { key: 'Enter', ctrlKey: true })
       await mark.trigger('keydown', { key: ' ', shiftKey: true })
+      // Each activation reports the shown mentions in reading order for Shift ranges.
+      expect(wrapper.emitted('select-entity')![0]![3]).toEqual([
+        'ada-L2-0',
+        'other-ada-L4-0',
+        'ada-L7-0',
+        'multi',
+      ])
+      await wrapper.setProps({ annotationHighlight: ['verified'] })
+      await wrapper.get('[data-line-index="1"] mark').trigger('click', { shiftKey: true })
+      expect(wrapper.emitted('select-entity')!.slice(-1)[0]![3]).toEqual(['ada-L2-0'])
+      wrapper.emitted('select-entity')!.splice(-1)
       expect(wrapper.emitted('select-entity')!.map(([index, entity, mode]) => [index, (entity as TranscriptionEntitySpan).mention_id, mode])).toEqual([
         [3, 'other-ada-L4-0', 'replace'],
         [3, 'other-ada-L4-0', 'toggle'],
@@ -749,7 +760,7 @@ describe('DocumentTeleprompter', () => {
       expect(plain.defaultPrevented).toBe(false)
     })
 
-    it('highlights every selected mention, docks its card and clears on Escape or a text click', async () => {
+    it('highlights every selected mention, floats its card and clears on Escape or a text click', async () => {
       const wrapper = render({
         selectedMentionIds: ['other-ada-L4-0', 'multi'],
         selectedEntityKey: 'multi',
@@ -760,22 +771,29 @@ describe('DocumentTeleprompter', () => {
         .map((mark) => mark.element.closest('[data-line-index]')!.getAttribute('data-line-index'))
       // Both fragments of the two-line mention, and the mention on L4.
       expect(pressed).toEqual(['3', '8', '9'])
-      expect(wrapper.find('[data-mention-card]').exists()).toBe(false)
+      // Only the selected mentions are outlined, not the selected person's others.
+      expect(wrapper.get('[data-line-index="1"] mark').attributes('data-selection')).toBe('default')
+      expect(document.querySelector('[data-mention-card]')).toBeNull()
       const withCard = mount(DocumentTeleprompter, {
         attachTo: document.body,
         props: {
           transcription: sample(),
           selectedLineIndex: 8,
           selectedEntityKey: 'multi',
-          relatedEntityId: null,
+          relatedEntityId: 'ada',
           selectedMentionIds: ['multi'],
         },
         slots: { 'mention-card': () => h('button', { 'aria-label': 'Card action' }) },
       })
       cleanup.push(() => withCard.unmount())
-      const card = withCard.get('[data-mention-card]')
-      expect(card.attributes('aria-label')).toBe('Selected mentions')
-      await withCard.get('[aria-label="Card action"]').trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      // The card floats beside the mention, outside the text, like a face's card.
+      const card = document.querySelector<HTMLElement>('[data-mention-card]')!
+      expect(card.getAttribute('aria-label')).toBe('Selected mentions')
+      expect(withCard.element.contains(card)).toBe(false)
+      card.querySelector('button')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      )
       await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Escape' })
       // A click on the selected line's text outside a mention clears too.
       await withCard.get('[data-line-index="8"]').trigger('click')
@@ -784,7 +802,8 @@ describe('DocumentTeleprompter', () => {
       // A plain keyboard activation moves focus into the card.
       await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Enter' })
       await nextTick()
-      expect(document.activeElement).toBe(card.element)
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      expect(document.activeElement).toBe(card)
     })
 
     it('offers Create mention for whole words selected in one line', async () => {
@@ -826,11 +845,39 @@ describe('DocumentTeleprompter', () => {
       ])
     })
 
-    it('offers nothing across lines, for blanks, for unchanged words or without permission', async () => {
+    it('creates one mention across consecutive lines, with those lines as context', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
       const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      // From "context." on L5 to "Even" on L6.
+      await select(text(4), 5, 4, text(5))
+      const action = wrapper.get('[data-selection-action]')
+      expect(action.text()).toBe('Create mention')
+      await action.trigger('click')
+      expect(wrapper.emitted('create-mention')).toEqual([
+        [
+          {
+            lineIndex: 4,
+            name: 'context. Even',
+            context: 'More context.\nEven more context.',
+          },
+        ],
+      ])
+      // Exactly an existing two-line mention: nothing to change.
+      await select(text(8).querySelector('mark')!, 0, 5, text(9).querySelector('mark')!)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+      // Widening it changes that mention.
+      await select(text(8), 6, 5, text(9).querySelector('mark')!)
+      expect(wrapper.get('[data-selection-action]').text()).toBe('Change mention')
+    })
+
+    it('offers nothing across a gap, for blanks, for unchanged words or without permission', async () => {
+      const wrapper = render({ canCreateMention: true, canChangeMention: true })
+      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      // Across a collapsed gap (L3 to L5 with L4 hidden) there is nothing to offer.
+      await wrapper.setProps({ included: sample().map((_line, index) => index !== 3) })
       await select(text(2), 0, 5, text(4))
       expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+      await wrapper.setProps({ included: undefined })
       await select(text(2), 5, 6)
       expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
       // Exactly the mention's own words: nothing to change.

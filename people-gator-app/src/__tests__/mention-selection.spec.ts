@@ -93,6 +93,30 @@ describe('scan mention selection (#176)', () => {
     })
   })
 
+  it('ranges over the shown mentions only, keeping hidden selected ones on toggle', () => {
+    const order = ['eva', 'jan', 'ada', 'zoe']
+    // "jan" is on a hidden line or filtered out of the text.
+    const shown = ['eva', 'ada', 'zoe']
+    const anchored = { ids: ['eva'], anchor: 'eva' }
+    expect(nextMentionSelection(order, anchored, 'zoe', 'range', shown)).toEqual({
+      ids: ['eva', 'ada', 'zoe'],
+      anchor: 'eva',
+    })
+    const withHidden = { ids: ['jan', 'eva'], anchor: 'eva' }
+    expect(nextMentionSelection(order, withHidden, 'ada', 'toggle', shown).ids).toEqual([
+      'eva',
+      'jan',
+      'ada',
+    ])
+    // An anchor no longer shown starts a new selection.
+    expect(
+      nextMentionSelection(order, { ids: ['jan'], anchor: 'jan' }, 'zoe', 'range', shown),
+    ).toEqual({
+      ids: ['zoe'],
+      anchor: 'zoe',
+    })
+  })
+
   it('drops deleted mentions and moves a missing anchor to the first one kept', () => {
     expect(
       pruneMentionSelection(['eva', 'ada'], { ids: ['jan', 'ada', 'eva'], anchor: 'jan' }),

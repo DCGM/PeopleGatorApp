@@ -141,6 +141,10 @@ watch(
     const viewed = results.value?.querySelector<HTMLElement>('[data-person-viewed="true"]')
     if (!viewed) return
     revealPending = false
+    // Below 1024px the list grows with the page instead of scrolling inside its
+    // panel; revealing there would scroll the page away from the selected scan
+    // evidence and its card (#176).
+    if (window.matchMedia?.('(max-width: 1023.98px)').matches) return
     viewed.scrollIntoView?.({ block: 'nearest' })
   },
   { flush: 'post', immediate: true },

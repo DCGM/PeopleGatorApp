@@ -38,14 +38,16 @@ export type MentionSelection = { ids: string[]; anchor: string | null }
 
 /**
  * The next selection. Toggle moves the anchor to the clicked mention, even when
- * it removes it; a range spans the anchor and the clicked mention inclusively,
- * including mentions on the lines in between, and keeps the anchor.
+ * it removes it; a range selects every shown mention from the anchor to the
+ * clicked one in text order, across lines, and keeps the anchor.
  */
 export function nextMentionSelection(
   order: readonly string[],
   current: MentionSelection,
   clicked: string,
   mode: MentionSelectMode,
+  /** Mentions shown in the text, in reading order; a range covers only these. */
+  shown: readonly string[] = order,
 ): MentionSelection {
   const inOrder = (ids: Iterable<string>) => {
     const chosen = new Set(ids)
@@ -57,11 +59,11 @@ export function nextMentionSelection(
     else ids.add(clicked)
     return { ids: inOrder(ids), anchor: clicked }
   }
-  const from = current.anchor ? order.indexOf(current.anchor) : -1
-  const to = order.indexOf(clicked)
+  const from = current.anchor ? shown.indexOf(current.anchor) : -1
+  const to = shown.indexOf(clicked)
   if (mode === 'range' && from >= 0 && to >= 0) {
     const [start, end] = from <= to ? [from, to] : [to, from]
-    return { ids: order.slice(start, end + 1), anchor: current.anchor }
+    return { ids: inOrder(shown.slice(start, end + 1)), anchor: current.anchor }
   }
   return { ids: [clicked], anchor: clicked }
 }
