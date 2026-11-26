@@ -669,8 +669,10 @@ describe('DocumentTeleprompter', () => {
     // L2 is 200px high; all others are 20px. A 60px viewport starts with
     // L1 and the first 40px of L2. Selecting L2 must not reveal its far edge.
     lines.forEach((line, index) => {
-      Object.defineProperty(line, 'offsetTop', { get: () => index < 2 ? index * 20 : 220 + (index - 2) * 20 })
-      Object.defineProperty(line, 'offsetHeight', { get: () => index === 1 ? 200 : 20 })
+      Object.defineProperty(line, 'offsetTop', {
+        get: () => (index < 2 ? index * 20 : 220 + (index - 2) * 20),
+      })
+      Object.defineProperty(line, 'offsetHeight', { get: () => (index === 1 ? 200 : 20) })
     })
     Object.defineProperty(scroller, 'clientHeight', { get: () => 60 })
     Object.defineProperty(scroller, 'scrollHeight', { get: () => 380, configurable: true })
@@ -742,7 +744,15 @@ describe('DocumentTeleprompter', () => {
       await wrapper.get('[data-line-index="1"] mark').trigger('click', { shiftKey: true })
       expect(wrapper.emitted('select-entity')!.slice(-1)[0]![3]).toEqual(['ada-L2-0'])
       wrapper.emitted('select-entity')!.splice(-1)
-      expect(wrapper.emitted('select-entity')!.map(([index, entity, mode]) => [index, (entity as TranscriptionEntitySpan).mention_id, mode])).toEqual([
+      expect(
+        wrapper
+          .emitted('select-entity')!
+          .map(([index, entity, mode]) => [
+            index,
+            (entity as TranscriptionEntitySpan).mention_id,
+            mode,
+          ]),
+      ).toEqual([
         [3, 'other-ada-L4-0', 'replace'],
         [3, 'other-ada-L4-0', 'toggle'],
         [3, 'other-ada-L4-0', 'toggle'],
@@ -791,13 +801,16 @@ describe('DocumentTeleprompter', () => {
       const card = document.querySelector<HTMLElement>('[data-mention-card]')!
       expect(card.getAttribute('aria-label')).toBe('Selected mentions')
       expect(withCard.element.contains(card)).toBe(false)
-      card.querySelector('button')!.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      )
+      card
+        .querySelector('button')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Escape' })
       // A click on the selected line's text outside a mention clears too.
       await withCard.get('[data-line-index="8"]').trigger('click')
       expect(withCard.emitted('clear-mentions')).toHaveLength(3)
+      // So does a click in the text pane outside every line.
+      await withCard.get('[aria-label="Transcription teleprompter"]').trigger('click')
+      expect(withCard.emitted('clear-mentions')).toHaveLength(4)
       expect(withCard.emitted('select-line')).toBeUndefined()
       // Holding Ctrl/Cmd/Shift lets clicks pass through the card to covered mentions.
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }))
@@ -854,7 +867,8 @@ describe('DocumentTeleprompter', () => {
 
     it('creates one mention across consecutive lines, with those lines as context', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
-      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      const text = (index: number) =>
+        wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
       // From "context." on L5 to "Even" on L6.
       await select(text(4), 5, 4, text(5))
       const action = wrapper.get('[data-selection-action]')
@@ -879,7 +893,8 @@ describe('DocumentTeleprompter', () => {
 
     it('offers nothing across a gap, for blanks, for unchanged words or without permission', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
-      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      const text = (index: number) =>
+        wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
       // Across a collapsed gap (L3 to L5 with L4 hidden) there is nothing to offer.
       await wrapper.setProps({ included: sample().map((_line, index) => index !== 3) })
       await select(text(2), 0, 5, text(4))

@@ -85,7 +85,7 @@ describe('scan Mentions and face card (#103)', () => {
     expect(scan.findAll('[role="checkbox"]')).toHaveLength(0)
   })
 
-  it('shows the selected face card without a Current badge', () => {
+  it('shows the selected face card without a Current badge', async () => {
     const face = {
       id: 'face',
       personId: 'person',
@@ -102,6 +102,9 @@ describe('scan Mentions and face card (#103)', () => {
     })
     expect(wrapper.text()).toContain('Hana Sidebar')
     expect(wrapper.text()).not.toMatch(/current/i)
+    // The floating card can be dismissed with its own X button.
+    await wrapper.get('button[aria-label="Close"]').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
   describe('selected mention card (#176)', () => {
@@ -139,6 +142,7 @@ describe('scan Mentions and face card (#103)', () => {
         'Unassign current profile',
         'Verify this link',
         'Delete mention',
+        'Close',
       ])
       expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
         name: 'person-detail',
@@ -176,7 +180,13 @@ describe('scan Mentions and face card (#103)', () => {
 
     it('links unlinked mentions and creates a person pre-filled with the text', async () => {
       const wrapper = mountCard(
-        target({ ids: ['m1', 'm2'], personId: null, anyLinked: false, anyUnverified: false, linkState: null }),
+        target({
+          ids: ['m1', 'm2'],
+          personId: null,
+          anyLinked: false,
+          anyUnverified: false,
+          linkState: null,
+        }),
       )
       expect(wrapper.text()).toContain('Unlinked mentions')
       expect(labels(wrapper)).not.toContain('Unassign current profile')
@@ -184,12 +194,14 @@ describe('scan Mentions and face card (#103)', () => {
       await wrapper.get('[aria-label="Create and assign a new profile"]').trigger('click')
       expect(wrapper.get('[aria-label="New person name"]').text()).toBe('Jan Bulk')
       await wrapper.get('form').trigger('submit')
-      expect(wrapper.emitted('createProfile')).toEqual([[{ name: 'Jan Bulk', shortDescription: undefined }]])
+      expect(wrapper.emitted('createProfile')).toEqual([
+        [{ name: 'Jan Bulk', shortDescription: undefined }],
+      ])
     })
 
     it('hides annotation and delete actions without permission', () => {
       const wrapper = mountCard(target(), { canAnnotate: false, canDelete: false })
-      expect(labels(wrapper)).toEqual(['Search people by this name'])
+      expect(labels(wrapper)).toEqual(['Search people by this name', 'Close'])
     })
   })
 })

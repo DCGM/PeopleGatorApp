@@ -410,6 +410,13 @@ function selectLine(index: number) {
   else if (props.selectedMentionIds.length) emit('clear-mentions')
 }
 
+/** A click in the text pane outside every line clears the mentions too. */
+function clearOutsideLines(event: MouseEvent) {
+  if (!props.selectedMentionIds.length || textSelection()) return
+  if ((event.target as Element).closest('[data-line-index], .teleprompter-gap')) return
+  emit('clear-mentions')
+}
+
 /**
  * Click and Enter/Space select mentions as faces are selected: plain replaces
  * the selection, Ctrl/Cmd toggles one mention and Shift selects a range (#176).
@@ -942,6 +949,7 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
       <section ref="scrollElement" tabindex="0"
         class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); mentionBadge = null" @keydown="handleKeydown"
+        @click="clearOutsideLines"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
         <!-- Every line stays in the DOM; hidden lines only stop being displayed, so

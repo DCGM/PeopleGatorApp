@@ -45,6 +45,8 @@ const emit = defineEmits<{
   createProfile: [profile: { name: string; shortDescription?: string }]
   unassign: []
   delete: []
+  /** Dismiss the floating card, clearing its selection. */
+  close: []
 }>()
 
 const count = computed(() => props.mentions?.ids.length ?? 1)
@@ -119,7 +121,7 @@ watch(() => subject.value.key, cancelCreating)
 <template>
   <Item
     :as="isCreating ? 'form' : 'div'"
-    class="w-full items-center gap-x-3 gap-y-2 px-3 py-2.5"
+    class="relative w-full items-center gap-x-3 gap-y-2 px-3 py-2.5"
     @submit.prevent="createProfile"
     @keydown.esc="isCreating && ($event.stopPropagation(), cancelCreating())"
   >
@@ -156,7 +158,7 @@ watch(() => subject.value.key, cancelCreating)
     </ItemMedia>
 
     <ItemContent v-if="isCreating" class="min-w-0 gap-1 overflow-hidden">
-      <ItemTitle class="min-w-0 w-full max-w-full">
+      <ItemTitle class="min-w-0 w-full max-w-full pr-5">
         <ContentEditable
           v-model="draftName"
           as="h4"
@@ -180,7 +182,7 @@ watch(() => subject.value.key, cancelCreating)
     </ItemContent>
 
     <ItemContent v-else class="min-w-0 items-start gap-1 overflow-hidden">
-      <ItemTitle class="min-w-0 w-full max-w-full">
+      <ItemTitle class="min-w-0 w-full max-w-full pr-5">
         <RouterLink
           v-if="subject.personId"
           :to="{
@@ -337,5 +339,15 @@ watch(() => subject.value.key, cancelCreating)
         {{ actionError }}
       </p>
     </ItemFooter>
+    <!-- Last in tab order, shown in the card's top corner. -->
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      class="absolute right-1 top-1 rounded-full"
+      aria-label="Close"
+      @click="emit('close')"
+      ><X aria-hidden="true"
+    /></Button>
   </Item>
 </template>

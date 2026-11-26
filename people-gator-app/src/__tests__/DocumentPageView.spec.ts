@@ -596,7 +596,7 @@ describe('detection mutation coordination', () => {
     expect(mocks.patchFace).toHaveBeenCalledTimes(1)
     // Search remains available; every assignment action waits.
     for (const button of card().findAll('button[aria-label]'))
-      if (button.attributes('aria-label') !== 'Search people by this face')
+      if (!['Search people by this face', 'Close'].includes(button.attributes('aria-label')!))
         expect(button.attributes('disabled')).toBeDefined()
     expect(candidates.props('assignmentPending')).toBe(true)
     // Stale events cannot bypass the guard at the mutation boundary.

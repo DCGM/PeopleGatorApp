@@ -42,6 +42,7 @@ describe('selected face card (#103)', () => {
       'Unassign current profile',
       'Verify this link',
       'Delete detection',
+      'Close',
     ])
     await wrapper.get('[aria-label="Search people by this face"]').trigger('click')
     await wrapper.get('[aria-label="Reassign to another profile"]').trigger('click')
@@ -82,7 +83,7 @@ describe('selected face card (#103)', () => {
     // The assignment-state badge states it; no person info is repeated.
     expect(wrapper.get('[data-face-status-badge]').text()).toBe('Unassigned')
     // Browsing keeps Search; it needs a face embedding.
-    expect(labels(wrapper)).toEqual(['Search people by this face'])
+    expect(labels(wrapper)).toEqual(['Search people by this face', 'Close'])
     expect(
       wrapper.get('[aria-label="Search people by this face"]').attributes('disabled'),
     ).toBeDefined()
@@ -340,7 +341,9 @@ describe('People panel (#103)', () => {
     expect(mentions().attributes('disabled')).toBeDefined()
     expect(faceButton().attributes('disabled')).toBeDefined()
 
-    await wrapper.setProps({ selectedMentions: [{ entityId: null }, { entityId: 'ada' }, { entityId: 'x' }] })
+    await wrapper.setProps({
+      selectedMentions: [{ entityId: null }, { entityId: 'ada' }, { entityId: 'x' }],
+    })
     expect(mentions().attributes('aria-label')).toBe('Assign 3 mentions to Ada')
     expect(mentions().text()).toBe('Assign to mentions')
     expect(faceButton().attributes('disabled')).toBeDefined()
