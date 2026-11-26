@@ -15,6 +15,7 @@ import SortControl from './SortControl.vue'
 import VerificationBadge from './VerificationBadge.vue'
 import VerificationProgress from './VerificationProgress.vue'
 import type { SortOption, SortState } from '@/lib/sorting'
+import { sourceLinkClass, sourceLinkTextClass } from '@/lib/source-link'
 
 const props = defineProps<{
   items: PageGalleryItem[]
@@ -152,10 +153,12 @@ useAutomaticPagination({
                 :href="documentUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex max-w-full items-center gap-1 rounded-sm align-bottom outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                :class="sourceLinkClass"
                 :aria-label="`${props.documentName || 'Document'}: open document in Digitální knihovna (new tab)`"
                 data-slot="document-source-link"
-                ><span class="truncate">{{ props.documentName || 'Document pages' }}</span
+                ><span :class="sourceLinkTextClass">{{
+                  props.documentName || 'Document pages'
+                }}</span
                 ><ExternalLink class="size-3 shrink-0" aria-hidden="true"
               /></a>
               <template v-else>{{ props.documentName || 'Document pages' }}</template>
