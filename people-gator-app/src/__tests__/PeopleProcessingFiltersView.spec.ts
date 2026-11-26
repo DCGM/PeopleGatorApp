@@ -59,6 +59,9 @@ import PeopleSearchView from '@/views/PeopleSearchView.vue'
 import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 
 const body = () => new DOMWrapper(document.body)
+// Pickers are grouped by meaning (#178), so tests address them by label.
+const picker = (wrapper: ReturnType<typeof mount>, label: string) =>
+  wrapper.findAllComponents(FilterDateTimePicker).find((item) => item.props('label') === label)!
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -94,7 +97,7 @@ async function mountedView(query: Record<string, string | string[]> = {}) {
 }
 
 describe('people filter controls and URL restoration', () => {
-  it('shows only search on mobile and preserves filters when opening, closing and resizing', async () => {
+  it('shows only search on mobile and keeps filters in a drawer when opening, closing and resizing', async () => {
     desktopViewport.value = false
     const { wrapper, router } = await mountedView({
       q: 'Novak',
@@ -113,17 +116,21 @@ describe('people filter controls and URL restoration', () => {
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
     await flushPromises()
-    expect(wrapper.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
-    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Modified by"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Modified via key"]').exists()).toBe(true)
+    // The drawer is a dialog rendered outside the page content (#178).
+    const drawer = body().get('[role="dialog"]')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(drawer.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
+    expect(drawer.find('button[aria-label="Documents"]').exists()).toBe(true)
+    expect(drawer.find('button[aria-label="Modified by"]').exists()).toBe(true)
+    expect(drawer.find('button[aria-label="Modified via key"]').exists()).toBe(true)
     // Shared modified/created ranges plus People birth/death ranges (#123).
     expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(8)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
     await flushPromises()
-    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(body().find('button[aria-label="Documents"]').exists()).toBe(false)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(router.currentRoute.value.query).toEqual(originalQuery)
     await search.setValue('Ada')
@@ -180,7 +187,10 @@ describe('people filter controls and URL restoration', () => {
     await wrapper.get('input[aria-label="Search people"]').setValue('Ada')
     await flushPromises()
     expect(router.currentRoute.value.query.page).toBe(id('page', 1))
-    wrapper.findComponent({ name: 'PeopleSearchBar' }).vm.$emit('update:assignment', 'mentions')
+    wrapper
+      .findAllComponents({ name: 'FilterSingleSelect' })
+      .find((select) => select.props('label') === 'Assignment')!
+      .vm.$emit('update:modelValue', 'mentions')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({
       page: id('page', 1),
@@ -208,9 +218,7 @@ describe('people filter controls and URL restoration', () => {
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Modified by: user Two')
-    expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
-      'Pick date and time',
-    )
+    expect(picker(wrapper, 'Modified to').get('button').text()).not.toContain('Pick date and time')
     expect(
       body()
         .findAll('[role="option"]')
@@ -226,7 +234,7 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-02T12:00:00.123Z',
       touched_to: '2026-01-04T12:00:00Z',
     })
-    const pickers = wrapper.findAllComponents(FilterDateTimePicker)
+    const pickers = [picker(wrapper, 'Modified from'), picker(wrapper, 'Modified to')]
     await pickers[0]!.get('button').trigger('click')
     await flushPromises()
     expect(body().find('[data-value="2026-01-03"]').exists()).toBe(true)
@@ -288,12 +296,26 @@ describe('people filter controls and URL restoration', () => {
       touched_by: id('user', 1),
       api_key: id('api-key', 1),
     })
-    const controls = wrapper.get('[aria-label="Search people filter controls"]')
+    const controls = wrapper.get('aside[aria-label="People filters"]')
+    expect(
+      controls
+        .get('[role="group"][aria-label="Filters"]')
+        .findAll('[role="group"]')
+        .map((section) => section.attributes('aria-label')),
+    ).toEqual(['Source', 'Evidence', 'Counts', 'Life dates', 'Created', 'Modified'])
+    expect(wrapper.find('button[aria-label="Show filters"]').exists()).toBe(false)
+    expect(wrapper.get('[role="search"]').find('button[aria-label="Assignment"]').exists()).toBe(
+      false,
+    )
     expect(controls.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
     for (const label of ['Libraries', 'Documents', 'Pages', 'Modified by', 'Modified via key'])
       expect(controls.find(`button[aria-label="${label}"]`).exists()).toBe(true)
     expect(wrapper.find('[data-slot="collapsible-trigger"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
+    expect(controls.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
+    // The tags form the last titled group of the sidebar.
+    expect(controls.get('[role="group"][aria-label="Applied filters"]').text()).toMatch(
+      /^Applied filters/,
+    )
     await wrapper.get('button[aria-label="Remove Modified by: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()

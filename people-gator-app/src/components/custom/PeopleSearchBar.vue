@@ -1,101 +1,66 @@
 <script setup lang="ts">
-import PeopleCountControl from './PeopleCountControl.vue'
+import { useMediaQuery } from '@vueuse/core'
+import { Search, SlidersHorizontal, X } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import {
-  PEOPLE_COUNT_CATEGORIES,
-  PEOPLE_COUNT_KEYS,
-  usePeopleCounts,
-} from '@/viewmodels/people-counts'
-import { computed } from 'vue'
-import SharedFilterControls from './SharedFilterControls.vue'
-import SharedFilterTags from './SharedFilterTags.vue'
-import SearchFilterPanel from './SearchFilterPanel.vue'
-import FilterSingleSelect from './FilterSingleSelect.vue'
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
+import PeopleFilterTags from './PeopleFilterTags.vue'
 import SortControl from './SortControl.vue'
-import FilterDateTimePicker from './FilterDateTimePicker.vue'
-import {
-  LIFE_DATE_FILTERS,
-  LIFE_DATE_KEYS,
-  usePeopleLifeDates,
-} from '@/viewmodels/people-life-dates'
-import type { ActiveFilter } from './ActiveFilters.vue'
 import type { PersonSortField } from '@/client'
 import type { SortOption, SortState } from '@/lib/sorting'
-import type { AssignmentFilter } from '@/viewmodels/assignment'
 
-defineProps<{
-  resultCount: number
-  hasMoreResults?: boolean
-  sortOptions?: SortOption<PersonSortField>[]
-}>()
+// Only search and sort sit above the People results; filters live in the sidebar or drawer.
+const desktop = useMediaQuery('(min-width: 1024px)')
+
+defineProps<{ resultCount: number; sortOptions?: SortOption<PersonSortField>[] }>()
 const sort = defineModel<SortState<PersonSortField>>('sort')
 const searchTerm = defineModel<string>('searchTerm', { required: true })
-const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
-const counts = usePeopleCounts()
-const lifeDates = usePeopleLifeDates()
-const assignmentTags = computed<ActiveFilter[]>(() =>
-  assignment.value === 'all'
-    ? []
-    : [
-        {
-          key: 'assignment',
-          value: assignment.value,
-          label: assignment.value === 'faces' ? 'Assigned faces' : 'Assigned mentions',
-        },
-      ],
-)
-const specific = computed(() => [
-  ...assignmentTags.value,
-  ...counts.tags.value,
-  ...lifeDates.tags.value,
-])
-const lifeDateKeys = new Set<string>(LIFE_DATE_KEYS)
-function removeSpecific(tag: ActiveFilter) {
-  if (tag.key === 'assignment') assignment.value = 'all'
-  else if (lifeDateKeys.has(tag.key)) lifeDates.remove(tag)
-  else counts.remove(tag)
-}
+const filtersOpen = defineModel<boolean>('filtersOpen', { default: false })
 </script>
 
 <template>
-  <SearchFilterPanel
-    v-model="searchTerm"
-    label="Search people"
-    placeholder="Search a person or alias…"
-    :result-count="resultCount"
-    :has-more-results="hasMoreResults"
+  <div
+    class="flex w-full min-w-0 flex-row flex-wrap items-center gap-2"
+    aria-label="Search people panel"
+    role="search"
   >
-    <SharedFilterControls />
-    <FilterSingleSelect
-      v-model="assignment"
-      label="Assignment"
-      :options="[
-        { value: 'all', label: 'All people' },
-        { value: 'faces', label: 'Assigned faces' },
-        { value: 'mentions', label: 'Assigned mentions' },
-      ]"
-    />
-    <PeopleCountControl
-      v-for="category in PEOPLE_COUNT_CATEGORIES"
-      :key="category.value"
-      :category="category.value"
-      :label="category.label"
-    />
-    <FilterDateTimePicker
-      v-for="filter in LIFE_DATE_FILTERS"
-      :key="filter.key"
-      date-only
-      :label="filter.label"
-      :invalid="!!lifeDates.error.value"
-      :model-value="lifeDates.values.value[filter.key]"
-      @update:model-value="lifeDates.set(filter.key, $event)"
-    />
+    <div class="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-0">
+      <InputGroup class="min-w-0 flex-1">
+        <InputGroupInput
+          v-model="searchTerm"
+          aria-label="Search people"
+          placeholder="Search a person or alias…"
+        />
+        <InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon>
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            v-if="searchTerm"
+            size="icon-sm"
+            aria-label="Clear search people"
+            @click="searchTerm = ''"
+            ><X aria-hidden="true"
+          /></InputGroupButton>
+          <small class="whitespace-nowrap" role="status">{{ resultCount }} results</small>
+        </InputGroupAddon>
+      </InputGroup>
+      <Button
+        v-if="!desktop"
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-haspopup="dialog"
+        :aria-expanded="filtersOpen"
+        :aria-label="filtersOpen ? 'Hide filters' : 'Show filters'"
+        @click="filtersOpen = !filtersOpen"
+        ><SlidersHorizontal aria-hidden="true"
+      /></Button>
+    </div>
     <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
-  </SearchFilterPanel>
-  <p v-if="counts.error.value" role="alert">{{ counts.error.value }}</p>
-  <p v-if="lifeDates.error.value" role="alert">{{ lifeDates.error.value }}</p>
-  <SharedFilterTags
-    :specific-filters="specific"
-    :specific-keys="['assignment', 'filters', ...PEOPLE_COUNT_KEYS, ...LIFE_DATE_KEYS]"
-    @remove-specific="removeSpecific"
-  />
+  </div>
+  <!-- With the drawer closed, applied filters stay visible and removable under search. -->
+  <PeopleFilterTags v-if="!desktop" />
 </template>

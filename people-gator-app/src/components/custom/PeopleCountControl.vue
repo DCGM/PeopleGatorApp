@@ -6,7 +6,11 @@ import {
   type PeopleCountState,
 } from '@/viewmodels/people-counts'
 import CountRangeControl from './CountRangeControl.vue'
-const props = defineProps<{ category: PeopleCountCategory; label: string }>()
+const props = defineProps<{
+  category: PeopleCountCategory
+  label: string
+  triggerClass?: string
+}>()
 const counts = usePeopleCounts()
 </script>
 <template>
@@ -15,6 +19,7 @@ const counts = usePeopleCounts()
     :states="PEOPLE_COUNT_STATES"
     :field-for="(state) => `${props.category}_${state}_count`"
     :params="counts.params.value"
+    :trigger-class="props.triggerClass"
     @apply="
       (_field, lower, upper, state) =>
         counts.set(props.category, lower, upper, state as PeopleCountState)
