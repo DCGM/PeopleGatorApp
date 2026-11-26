@@ -552,7 +552,7 @@ selector or active-filter tags. While enabled, the toggle follows changes to the
 selected person. Turn it off to restore all pages. Without a selected person it
 is disabled.
 
-The header stays on one line: document name · current/total page position ·
+The header stays on one line: document name, current/total page position,
 face and mention verification progress, then the person-only toggle and Sort.
 The name opens the document, and the position the current page, in the digital
 library in a new tab. It scrolls horizontally in narrow panes

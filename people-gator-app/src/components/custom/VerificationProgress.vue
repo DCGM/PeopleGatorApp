@@ -6,7 +6,7 @@ const props = defineProps<{
   verified?: number | null
   total?: number | null
   hideCount?: boolean
-  /** What is being verified; the default slot may show its icon before the ring. */
+  /** What is being verified; the default slot may show its icon after the ring. */
   noun?: string
 }>()
 const RADIUS = 6
@@ -28,7 +28,6 @@ const label = computed(() =>
     :title="label"
     data-verification-progress
   >
-    <slot />
     <svg viewBox="0 0 16 16" class="size-4 -rotate-90" aria-hidden="true">
       <circle cx="8" cy="8" :r="RADIUS" fill="none" stroke-width="2.5" class="stroke-muted" />
       <circle
@@ -43,6 +42,7 @@ const label = computed(() =>
         :stroke-dasharray="`${share * CIRCUMFERENCE} ${CIRCUMFERENCE}`"
       />
     </svg>
+    <slot />
     <span v-if="!hideCount" aria-hidden="true">{{ known ? `${verified}/${total}` : '–/–' }}</span>
   </span>
 </template>

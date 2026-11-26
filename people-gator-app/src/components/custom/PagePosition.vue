@@ -20,7 +20,7 @@ defineProps<{ number?: number | null; total?: number | null; url?: string | null
       ><span :class="sourceLinkTextClass" aria-hidden="true">{{ pagePosition(number, total) }}</span
       ><span class="sr-only"
         >{{ pagePositionLabel(number, total) }}: open page in Digitální knihovna (new tab)</span
-      ><ExternalLink class="size-3 shrink-0" aria-hidden="true"
+      ><ExternalLink class="size-3.5 shrink-0" aria-hidden="true"
     /></a>
     <template v-else
       ><span aria-hidden="true">{{ pagePosition(number, total) }}</span

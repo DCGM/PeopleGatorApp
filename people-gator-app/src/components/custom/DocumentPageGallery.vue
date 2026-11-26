@@ -136,7 +136,8 @@ useAutomaticPagination({
     <div class="px-3 pt-2 sm:px-5" :class="expanded && 'flex min-h-0 flex-1 flex-col'">
       <div class="flex shrink-0 items-start gap-2">
         <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 pb-1">
-          <div class="flex min-h-7 min-w-0 flex-[1_1_12rem] items-center gap-2">
+          <!-- One icon size for links, rings and glyphs, matched to the 12px text. -->
+          <div class="flex min-h-7 min-w-0 flex-[1_1_12rem] items-center gap-2 [&_svg]:size-3.5">
             <VerificationProgress
               v-if="verifiedPageCount != null && documentPageCount != null"
               :verified="verifiedPageCount"
@@ -159,11 +160,10 @@ useAutomaticPagination({
                 ><span :class="sourceLinkTextClass">{{
                   props.documentName || 'Document pages'
                 }}</span
-                ><ExternalLink class="size-3 shrink-0" aria-hidden="true"
+                ><ExternalLink class="shrink-0" aria-hidden="true"
               /></a>
               <template v-else>{{ props.documentName || 'Document pages' }}</template>
             </h2>
-            <span aria-hidden="true">·</span>
             <PagePosition
               class="shrink-0"
               :number="pageNumber"
@@ -171,7 +171,6 @@ useAutomaticPagination({
               :url="pageUrl"
             />
             <template v-if="linkStats">
-              <span aria-hidden="true">·</span>
               <VerificationProgress
                 v-for="kind in LINK_KINDS"
                 :key="kind.key"
@@ -181,7 +180,7 @@ useAutomaticPagination({
                 hide-count
                 class="text-muted-foreground"
                 :data-link-progress="kind.key"
-                ><component :is="kind.icon" class="size-4" aria-hidden="true"
+                ><component :is="kind.icon" aria-hidden="true"
               /></VerificationProgress>
             </template>
           </div>
