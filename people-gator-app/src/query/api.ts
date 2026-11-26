@@ -17,13 +17,6 @@ export function apiErrorCode(error: unknown): string | undefined {
   return typeof detail?.code === 'string' ? detail.code : undefined
 }
 
-/** The `message` of an API error body, if any. */
-export function apiErrorMessage(error: unknown): string | undefined {
-  if (!isAxiosError(error)) return undefined
-  const detail = (error.response?.data as { detail?: { message?: unknown } } | undefined)?.detail
-  return typeof detail?.message === 'string' ? detail.message : undefined
-}
-
 const TRANSIENT_CLIENT_ERRORS = new Set([408, 429])
 
 /** Retry like Vue Query's default, but not a request the API rejected as invalid. */

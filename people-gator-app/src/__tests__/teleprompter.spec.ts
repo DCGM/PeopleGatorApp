@@ -915,6 +915,26 @@ describe('DocumentTeleprompter', () => {
       expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
     })
 
+    it('sends a context that locates the mention once, growing past identical lines', async () => {
+      const lines = ['Opening.', 'Jan wrote.', 'Jan wrote.', 'Jan wrote.'].map((text, index) => ({
+        id: `I${index}`,
+        text,
+        position,
+        entities: [],
+        regionId: 'r',
+      }))
+      const wrapper = render({ transcription: lines, canCreateMention: true, selectedLineIndex: 0 })
+      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      await select(text(1), 0, 3)
+      await wrapper.get('[data-selection-action]').trigger('click')
+      expect(wrapper.emitted('create-mention')).toEqual([
+        [{ lineIndex: 1, name: 'Jan', context: 'Opening.\nJan wrote.' }],
+      ])
+      // The middle copy has identical surroundings: nothing is offered (#182).
+      await select(text(2), 0, 3)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+    })
+
     it('offers nothing across a gap, for blanks, for unchanged words or without permission', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
       const text = (index: number) =>

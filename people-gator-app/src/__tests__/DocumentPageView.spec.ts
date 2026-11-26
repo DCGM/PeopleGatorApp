@@ -1600,23 +1600,6 @@ describe('scan name mentions and their person card (#176)', () => {
     teleprompter(wrapper).vm.$emit('create-mention', { lineIndex: 0, name: 'Jan', context: 'x' })
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe('Could not create mention.')
-    // A rejected, ambiguous context explains itself.
-    mocks.createMention.mockRejectedValue(
-      new AxiosError('Unprocessable', '422', undefined, undefined, {
-        status: 422,
-        data: {
-          detail: {
-            code: 'ambiguous_context',
-            message: 'The name occurs more than once in its context.',
-          },
-        },
-      } as AxiosResponse),
-    )
-    teleprompter(wrapper).vm.$emit('create-mention', { lineIndex: 0, name: 'Jan', context: 'x' })
-    await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toBe(
-      'The name occurs more than once in its context.',
-    )
     wrapper.unmount()
   })
 })

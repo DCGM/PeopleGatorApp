@@ -119,3 +119,89 @@ export function selectedMentions(
   })
   return ids.flatMap((id) => found.get(id) ?? [])
 }
+
+// --- Unique mention contexts (#176) -----------------------------------------
+
+/** Words as the API matches them: letters and digits joined by apostrophes or hyphens. */
+const WORD = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu
+
+type Word = { text: string; start: number; end: number }
+
+function words(value: string): Word[] {
+  return [...value.matchAll(WORD)].map((match) => ({
+    text: match[0].normalize('NFKC').toLowerCase(),
+    start: match.index,
+    end: match.index + match[0].length,
+  }))
+}
+
+type ContextLine = { text: string; regionId?: string }
+
+function sameWords(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((word, index) => word === right[index])
+}
+
+/**
+ * The context for a mention selected from `startChar` on line `first` through
+ * line `last`, or null when no context locates it exactly once.
+ *
+ * The API places a mention where its context equals exactly one line or run of
+ * consecutive lines in one OCR region, at the first exact match of its name
+ * there. Starting with the selected lines, neighbouring lines are added (fewest
+ * first, earlier lines first) until the context occurs once on the page and
+ * its first exact name match is the selected one. Identical surroundings, or a
+ * name repeated before the selection in its own line, have no such context.
+ */
+export function uniqueMentionContext(
+  lines: readonly ContextLine[],
+  first: number,
+  last: number,
+  startChar: number,
+  name: string,
+): string | null {
+  const region = lines[first]?.regionId
+  if (lines.slice(first, last + 1).some((line) => line.regionId !== region)) return null
+  const lineWords = lines.map((line) => words(line.text).map((word) => word.text))
+  const nameWords = words(name).map((word) => word.text)
+  if (!nameWords.length) return null
+  const selectedInFirst = words(lines[first]!.text).findIndex((word) => word.end > startChar)
+  if (selectedInFirst < 0) return null
+
+  // How many places on the page equal these words, as the API looks for them.
+  function locations(target: readonly string[]) {
+    let count = 0
+    for (let start = 0; start < lines.length; start += 1) {
+      if (!lineWords[start]!.length) continue
+      const collected: string[] = []
+      for (let index = start; index < lines.length; index += 1) {
+        if (lines[index]!.regionId !== lines[start]!.regionId) break
+        collected.push(...lineWords[index]!)
+        if (collected.length >= target.length) break
+      }
+      if (sameWords(collected, target)) count += 1
+    }
+    return count
+  }
+
+  for (let extra = 0; extra < lines.length; extra += 1) {
+    for (let before = extra; before >= 0; before -= 1) {
+      const start = first - before
+      const end = last + extra - before
+      if (start < 0 || end >= lines.length) continue
+      if (lines.slice(start, end + 1).some((line) => line.regionId !== region)) continue
+      const run = lineWords.slice(start, end + 1).flat()
+      if (locations(run) !== 1) continue
+      const selected =
+        lineWords.slice(start, first).reduce((sum, line) => sum + line.length, 0) + selectedInFirst
+      const firstMatch = run.findIndex((_word, index) =>
+        sameWords(run.slice(index, index + nameWords.length), nameWords),
+      )
+      if (firstMatch !== selected) continue
+      return lines
+        .slice(start, end + 1)
+        .map((line) => line.text)
+        .join('\n')
+    }
+  }
+  return null
+}

@@ -107,7 +107,12 @@ function makeTranscription(layout?: PageLayoutModel, spans: TextMentionSpanModel
     [...region.lines]
       .sort((left, right) => (left.index ?? 0) - (right.index ?? 0))
       .filter((line) => line.transcription?.trim())
-      .map((line) => ({ id: line.id, text: line.transcription ?? '', polygon: line.polygon })),
+      .map((line) => ({
+        id: line.id,
+        text: line.transcription ?? '',
+        polygon: line.polygon,
+        regionId: region.id,
+      })),
   )
   const fragments = spans.flatMap((span) => spanFragments(span, rawLines))
 
@@ -116,6 +121,7 @@ function makeTranscription(layout?: PageLayoutModel, spans: TextMentionSpanModel
     return {
       id: line.id,
       text: line.text,
+      regionId: line.regionId,
       position: {
         left: (box.left / pageWidth) * 100,
         top: (box.top / pageHeight) * 100,

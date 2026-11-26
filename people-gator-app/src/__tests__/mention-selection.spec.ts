@@ -7,6 +7,7 @@ import {
   nextMentionSelection,
   pruneMentionSelection,
   selectedMentions,
+  uniqueMentionContext,
 } from '@/viewmodels/mention-selection'
 
 const box = { left: 0, top: 0, width: 1, height: 1 }
@@ -139,5 +140,56 @@ describe('scan mention selection (#176)', () => {
       { id: 'ada', text: 'Ada Novak', entityId: 'p-ada', state: 'automatic', lineIndex: 2 },
       { id: 'eva', text: 'Eva', entityId: null, state: 'unassigned', lineIndex: 0 },
     ])
+  })
+})
+
+describe('unique mention contexts (#176)', () => {
+  const page = (...texts: string[]) => texts.map((text) => ({ text, regionId: 'r' }))
+
+  it('uses the selected line when it is unique on the page', () => {
+    const lines = page('Jan wrote.', 'Eva read.')
+    expect(uniqueMentionContext(lines, 0, 0, 0, 'Jan')).toBe('Jan wrote.')
+  })
+
+  it('adds neighbouring lines until an identical line becomes unique', () => {
+    const lines = page('Opening.', 'Jan wrote.', 'Middle.', 'Jan wrote.', 'Closing.')
+    // Earlier neighbours first; the second copy needs the line before it too.
+    expect(uniqueMentionContext(lines, 1, 1, 0, 'Jan')).toBe('Opening.\nJan wrote.')
+    expect(uniqueMentionContext(lines, 3, 3, 0, 'Jan')).toBe('Middle.\nJan wrote.')
+    // Matching ignores case and punctuation, as the API does: the lines are equal,
+    // so the first needs both, and the second has no context of its own.
+    const loose = page('JAN wrote', 'jan, wrote!')
+    expect(uniqueMentionContext(loose, 0, 0, 0, 'Jan')).toBe('JAN wrote\njan, wrote!')
+    expect(uniqueMentionContext(loose, 1, 1, 0, 'jan')).toBeNull()
+  })
+
+  it('skips a neighbour that holds the name before the selection', () => {
+    const lines = page('Jan arrived.', 'Jan wrote.', 'End.', 'Jan wrote.')
+    // "Jan arrived. Jan wrote." would resolve to the first Jan; the next line is used instead.
+    expect(uniqueMentionContext(lines, 1, 1, 0, 'Jan')).toBe('Jan wrote.\nEnd.')
+  })
+
+  it('offers no context for identical surroundings or a repeated name before the selection', () => {
+    expect(uniqueMentionContext(page('Jan wrote.', 'Jan wrote.'), 1, 1, 0, 'Jan')).toBeNull()
+    const repeated = page('Jan met Jan.')
+    expect(uniqueMentionContext(repeated, 0, 0, 0, 'Jan')).toBe('Jan met Jan.')
+    expect(uniqueMentionContext(repeated, 0, 0, 8, 'Jan')).toBeNull()
+  })
+
+  it('keeps contexts inside one OCR region', () => {
+    const lines = [
+      { text: 'Head.', regionId: 'a' },
+      { text: 'Jan wrote.', regionId: 'b' },
+      { text: 'Jan wrote.', regionId: 'c' },
+    ]
+    // The only neighbours are in other regions, so neither copy can be told apart.
+    expect(uniqueMentionContext(lines, 1, 1, 0, 'Jan')).toBeNull()
+    // A selection across regions is never offered.
+    expect(uniqueMentionContext(lines, 0, 1, 0, 'Head Jan')).toBeNull()
+  })
+
+  it('covers a two-line selection', () => {
+    const lines = page('Written by Ada', 'Novak today.', 'Ada Novak again.')
+    expect(uniqueMentionContext(lines, 0, 1, 11, 'Ada Novak')).toBe('Written by Ada\nNovak today.')
   })
 })

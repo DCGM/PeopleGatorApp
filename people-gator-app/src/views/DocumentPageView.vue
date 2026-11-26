@@ -40,7 +40,6 @@ import {
   useTextMentionQuery,
 } from '@/query/text-mentions'
 import { useQueryClient } from '@tanstack/vue-query'
-import { apiErrorCode, apiErrorMessage } from '@/query/api'
 import { linkMetadata } from '@/lib/entity-links'
 import {
   mentionOrder,
@@ -1104,12 +1103,6 @@ async function createPersonForMentions(person: NewPerson) {
   }
 }
 const mentionCreateError = ref('')
-// A context that would locate the mention twice is explained, so it can be fixed.
-function mentionWriteError(error: unknown, action: 'create' | 'change' | 'merge') {
-  return apiErrorCode(error) === 'ambiguous_context'
-    ? (apiErrorMessage(error) ?? `Could not ${action} mention.`)
-    : `Could not ${action} mention.`
-}
 function createMention(mention: { lineIndex: number; name: string; context: string }) {
   const sourceId = page.value?.source_id
   if (!sourceId || actionBusy.value) return
@@ -1117,7 +1110,7 @@ function createMention(mention: { lineIndex: number; name: string; context: stri
   createMentionMutation
     .mutateAsync({ name: mention.name, context: mention.context, source_id: sourceId })
     .then((created) => (pendingMention.value = created.mention_id))
-    .catch((error) => (mentionCreateError.value = mentionWriteError(error, 'create')))
+    .catch(() => (mentionCreateError.value = 'Could not create mention.'))
 }
 function changeMention(mention: { mentionId: string; name: string; context: string }) {
   if (actionBusy.value) return
@@ -1125,7 +1118,7 @@ function changeMention(mention: { mentionId: string; name: string; context: stri
   patchMentionTextMutation
     .mutateAsync(mention)
     .then(() => (pendingMention.value = mention.mentionId))
-    .catch((error) => (mentionCreateError.value = mentionWriteError(error, 'change')))
+    .catch(() => (mentionCreateError.value = 'Could not change mention.'))
 }
 /**
  * Several overlapped mentions become one covering the selected words (#176).
@@ -1171,8 +1164,8 @@ async function mergeSelectedMentions() {
       name: merge.name,
       context: merge.context,
     })
-  } catch (error) {
-    mergeError.value = mentionWriteError(error, 'merge')
+  } catch {
+    mergeError.value = 'Could not merge mention.'
     return
   }
   try {

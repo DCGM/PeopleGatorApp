@@ -26,7 +26,11 @@ import type {
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
-import { mentionSelectMode, type MentionSelectMode } from '@/viewmodels/mention-selection'
+import {
+  mentionSelectMode,
+  uniqueMentionContext,
+  type MentionSelectMode,
+} from '@/viewmodels/mention-selection'
 import {
   EXPAND_STEP,
   LINE_VISIBILITIES,
@@ -629,6 +633,9 @@ function measureSelectionAction(): SelectionAction | null {
       tail.span.end_index === end
     if (!props.canChangeMention || unchanged) return null
   } else if (!props.canCreateMention) return null
+  // The context grows to neighbouring lines until it locates this mention once.
+  const context = uniqueMentionContext(props.transcription, indices[0]!, indices[indices.length - 1]!, start, name)
+  if (context === null) return null
   const bounds = body.getBoundingClientRect()
   // Older engines (and jsdom) lack Range geometry; the line still places the action.
   const rect =
@@ -640,7 +647,7 @@ function measureSelectionAction(): SelectionAction | null {
     kind: overlappedIds.length > 1 ? 'merge' : target ? 'change' : 'create',
     lineIndex: indices[0]!,
     name,
-    context: lines.map((line) => line!.text).join('\n'),
+    context,
     mentionId: target?.mention_id,
     mentionIds: overlappedIds.length > 1 ? overlappedIds : undefined,
     left: Math.max(0, rect.left - bounds.left),

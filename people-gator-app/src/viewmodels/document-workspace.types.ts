@@ -51,6 +51,8 @@ export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
 export type TranscriptionLine = {
   id: string
   text: string
+  /** OCR region of the line; a mention's context never crosses regions. */
+  regionId?: string
   position: { left: number; top: number; width: number; height: number }
   entities?: TranscriptionEntitySpan[]
 }
