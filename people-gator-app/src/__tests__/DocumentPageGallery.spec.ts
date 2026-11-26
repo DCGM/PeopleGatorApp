@@ -56,16 +56,53 @@ afterEach(() => {
 })
 
 describe('DocumentPageGallery', () => {
-  it('exposes the API document target beside the title, without nesting page links', async () => {
+  it('links the title to the API document target, without nesting page links', async () => {
     const url = 'https://archive.example/document-from-api'
-    const { wrapper } = await mountGallery({ documentUrl: url })
-    const link = wrapper.get('a[target="_blank"]')
+    const { wrapper } = await mountGallery({ documentUrl: url, documentName: 'Ledger' })
+    const link = wrapper.get('#document-pages-title a[target="_blank"]')
     expect(link.attributes('href')).toBe(url)
-    expect(link.attributes('aria-label')).toContain('document in Digitální knihovna (new tab)')
-    expect(link.element.parentElement?.querySelector('h2')?.textContent).toContain('Document pages')
+    expect(link.attributes('rel')).toBe('noopener noreferrer')
+    expect(link.text()).toBe('Ledger')
+    expect(link.attributes('aria-label')).toBe(
+      'Ledger: open document in Digitální knihovna (new tab)',
+    )
+    // The icon follows the title inside the link, so it takes the title's colour.
+    expect(link.element.lastElementChild?.tagName.toLowerCase()).toBe('svg')
     expect(wrapper.find('a a').exists()).toBe(false)
     await wrapper.setProps({ documentUrl: undefined })
     expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
+    expect(wrapper.get('#document-pages-title').text()).toBe('Ledger')
+    wrapper.unmount()
+  })
+
+  it('links the page counter to the API page target', async () => {
+    const url = 'https://archive.example/page-from-api'
+    const { wrapper } = await mountGallery({ pageUrl: url, pageNumber: 2, documentPageCount: 3 })
+    const link = wrapper.get('[data-slot="page-source-link"]')
+    expect(link.attributes('href')).toBe(url)
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.text()).toBe(
+      '2/3Page 2 of 3 registered pages: open page in Digitální knihovna (new tab)',
+    )
+    await wrapper.setProps({ pageUrl: null })
+    expect(wrapper.find('[data-slot="page-source-link"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('2/3')
+    wrapper.unmount()
+  })
+
+  it('shows document-wide face and mention verification progress', async () => {
+    const { wrapper } = await mountGallery()
+    expect(wrapper.find('[data-link-progress]').exists()).toBe(false)
+    await wrapper.setProps({
+      linkStats: { faces: { verified: 2, total: 5 }, mentions: { total: 4 } },
+    })
+    const rings = wrapper.findAll('[data-link-progress]')
+    expect(rings.map((ring) => ring.attributes('aria-label'))).toEqual([
+      '2 of 5 faces verified',
+      '0 of 4 mentions verified',
+    ])
+    expect(rings[0]!.findAll('circle')).toHaveLength(2)
+    expect(rings[1]!.findAll('circle')).toHaveLength(1)
     wrapper.unmount()
   })
 

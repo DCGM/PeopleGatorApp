@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { ImageOff, Maximize2, Minimize2 } from '@lucide/vue'
+import { ExternalLink, ImageOff, Maximize2, Minimize2, ScanFace, TextQuote } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
-import ArchiveLink from './ArchiveLink.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Toggle } from '@/components/ui/toggle'
 import PagePosition from './PagePosition.vue'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PageGalleryItem } from '@/viewmodels/document-page-gallery'
-import type { PageSortField } from '@/client'
+import type { EntityLinkStats, PageSortField } from '@/client'
 import SortControl from './SortControl.vue'
 import VerificationBadge from './VerificationBadge.vue'
 import VerificationProgress from './VerificationProgress.vue'
@@ -26,6 +25,10 @@ const props = defineProps<{
   selectedPersonId?: string | null
   selectedPersonName?: string | null
   documentUrl?: string
+  /** Digital-library address of the current page. */
+  pageUrl?: string | null
+  /** Document-wide face and mention link counts. */
+  linkStats?: EntityLinkStats
   totalCount: number | null
   loading?: boolean
   error?: boolean
@@ -45,6 +48,11 @@ const emit = defineEmits<{
   retry: []
   retryHighlights: []
 }>()
+
+const LINK_KINDS = [
+  { key: 'faces', icon: ScanFace },
+  { key: 'mentions', icon: TextQuote },
+] as const
 
 const list = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
@@ -139,18 +147,40 @@ useAutomaticPagination({
               class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
               :title="props.documentName || 'Document pages'"
             >
-              {{ props.documentName || 'Document pages' }}
+              <a
+                v-if="documentUrl"
+                :href="documentUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex max-w-full items-center gap-1 rounded-sm align-bottom outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                :aria-label="`${props.documentName || 'Document'}: open document in Digitální knihovna (new tab)`"
+                data-slot="document-source-link"
+                ><span class="truncate">{{ props.documentName || 'Document pages' }}</span
+                ><ExternalLink class="size-3 shrink-0" aria-hidden="true"
+              /></a>
+              <template v-else>{{ props.documentName || 'Document pages' }}</template>
             </h2>
-            <template v-if="documentUrl">
-              <span aria-hidden="true">·</span>
-              <ArchiveLink :url="documentUrl" kind="document" />
-            </template>
             <span aria-hidden="true">·</span>
             <PagePosition
               class="shrink-0"
               :number="pageNumber"
               :total="documentPageCount ?? (personOnly || notVerifiedOnly ? undefined : totalCount)"
+              :url="pageUrl"
             />
+            <template v-if="linkStats">
+              <span aria-hidden="true">·</span>
+              <VerificationProgress
+                v-for="kind in LINK_KINDS"
+                :key="kind.key"
+                :verified="linkStats[kind.key]?.verified ?? 0"
+                :total="linkStats[kind.key]?.total ?? 0"
+                :noun="kind.key"
+                hide-count
+                class="text-muted-foreground"
+                :data-link-progress="kind.key"
+                ><component :is="kind.icon" class="size-4" aria-hidden="true"
+              /></VerificationProgress>
+            </template>
           </div>
           <div class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
             <Toggle
