@@ -121,7 +121,7 @@ watch(() => subject.value.key, cancelCreating)
 <template>
   <Item
     :as="isCreating ? 'form' : 'div'"
-    class="relative w-full items-center gap-x-3 gap-y-2 px-3 py-2.5"
+    class="w-full items-center gap-x-3 gap-y-2 px-3 py-2.5"
     @submit.prevent="createProfile"
     @keydown.esc="isCreating && ($event.stopPropagation(), cancelCreating())"
   >
@@ -158,7 +158,7 @@ watch(() => subject.value.key, cancelCreating)
     </ItemMedia>
 
     <ItemContent v-if="isCreating" class="min-w-0 gap-1 overflow-hidden">
-      <ItemTitle class="min-w-0 w-full max-w-full pr-5">
+      <ItemTitle class="min-w-0 w-full max-w-full">
         <ContentEditable
           v-model="draftName"
           as="h4"
@@ -182,7 +182,7 @@ watch(() => subject.value.key, cancelCreating)
     </ItemContent>
 
     <ItemContent v-else class="min-w-0 items-start gap-1 overflow-hidden">
-      <ItemTitle class="min-w-0 w-full max-w-full pr-5">
+      <ItemTitle class="min-w-0 w-full max-w-full">
         <RouterLink
           v-if="subject.personId"
           :to="{
@@ -222,7 +222,7 @@ watch(() => subject.value.key, cancelCreating)
     </ItemContent>
 
     <ItemFooter class="w-full shrink-0 flex-wrap items-center justify-start gap-2 border-t pt-2">
-      <div v-if="isCreating" class="flex min-w-0 flex-wrap items-center gap-1">
+      <div v-if="isCreating" class="flex min-w-0 w-full flex-wrap items-center gap-1">
         <Button
           type="submit"
           size="xs"
@@ -248,6 +248,18 @@ watch(() => subject.value.key, cancelCreating)
           <X aria-hidden="true" />
           Cancel
         </Button>
+        <!-- Closing sits at the end of the action row. -->
+        <UiTooltip text="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            class="ml-auto rounded-full"
+            aria-label="Close"
+            @click="emit('close')"
+            ><X aria-hidden="true"
+          /></Button>
+        </UiTooltip>
       </div>
 
       <div v-else class="flex min-w-0 w-full flex-wrap items-center gap-1">
@@ -334,20 +346,22 @@ watch(() => subject.value.key, cancelCreating)
             </Button>
           </UiTooltip>
         </div>
+        <!-- Closing sits at the end of the action row. -->
+        <UiTooltip text="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            class="ml-auto rounded-full"
+            aria-label="Close"
+            @click="emit('close')"
+            ><X aria-hidden="true"
+          /></Button>
+        </UiTooltip>
       </div>
       <p v-if="actionError" role="alert" class="basis-full text-xs text-destructive">
         {{ actionError }}
       </p>
     </ItemFooter>
-    <!-- Last in tab order, shown in the card's top corner. -->
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      class="absolute right-1 top-1 rounded-full"
-      aria-label="Close"
-      @click="emit('close')"
-      ><X aria-hidden="true"
-    /></Button>
   </Item>
 </template>

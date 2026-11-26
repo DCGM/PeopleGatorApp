@@ -199,6 +199,20 @@ describe('scan Mentions and face card (#103)', () => {
       ])
     })
 
+    it('closes from the end of the bottom action row', async () => {
+      const wrapper = mountCard(target())
+      const close = wrapper.get('[aria-label="Close"]')
+      expect(close.element.closest('[data-slot="item-footer"]')).not.toBeNull()
+      expect(labels(wrapper).slice(-1)).toEqual(['Close'])
+      await close.trigger('click')
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      // The create form keeps it in the same row.
+      await wrapper.get('[aria-label="Create and assign a new profile"]').trigger('click')
+      expect(
+        wrapper.get('[aria-label="Close"]').element.closest('[data-slot="item-footer"]'),
+      ).not.toBeNull()
+    })
+
     it('hides annotation and delete actions without permission', () => {
       const wrapper = mountCard(target(), { canAnnotate: false, canDelete: false })
       expect(labels(wrapper)).toEqual(['Search people by this name', 'Close'])

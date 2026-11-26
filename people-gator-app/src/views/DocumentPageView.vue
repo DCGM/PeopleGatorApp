@@ -94,9 +94,11 @@ import { useRouteSort } from '@/lib/sorting'
 import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
   effectivePeopleOrder,
+  effectivePeopleScope,
   resolveSearchModel,
   SCAN_SELECTED_MENTION,
   useScanSidebarState,
+  type PeopleScope,
   type ScanSidebarState,
 } from '@/viewmodels/scan-sidebar'
 import { useScanPeople } from '@/viewmodels/scan-people'
@@ -205,7 +207,12 @@ const mentionView = setting('mentionView')
 const mentionSort = setting('mentionSort')
 const mentionGroupSort = setting('mentionGroupSort')
 const activityDirection = setting('activityDirection')
-const peopleScope = setting('peopleScope')
+// Searching shows and queries all people; the stored scope returns when search is cleared.
+const peopleScopeSetting = setting('peopleScope')
+const peopleScope = computed({
+  get: () => effectivePeopleScope(peopleScopeSetting.value, peopleScored.value),
+  set: (value: PeopleScope) => (peopleScopeSetting.value = value),
+})
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
 const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
@@ -455,7 +462,7 @@ const peopleOrder = computed({
 const people = reactive(
   useScanPeople({
     sources,
-    scope: () => sidebarState.value.peopleScope,
+    scope: () => effectivePeopleScope(sidebarState.value.peopleScope, peopleScored.value),
     order: peopleOrder,
     search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
     searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,

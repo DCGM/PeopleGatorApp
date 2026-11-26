@@ -205,7 +205,14 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
       <div class="flex min-w-0 flex-row flex-nowrap items-center gap-1" aria-label="Search options">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <Button type="button" variant="ghost" size="sm" :aria-label="`Scope: ${scopeLabel}`">
+            <!-- A name or face search always covers all people. -->
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              :aria-label="`Scope: ${scopeLabel}`"
+              :disabled="scored"
+            >
               {{ scopeLabel }}<ChevronDown aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

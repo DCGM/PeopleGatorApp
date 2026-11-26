@@ -979,6 +979,23 @@ describe('scan sidebar (#103)', () => {
     wrapper.unmount()
   })
 
+  it('searches all people while a name or face search is active, keeping the stored scope', async () => {
+    route.query = { people_scope: 'page' }
+    const wrapper = await mountView()
+    const people = () => wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    expect(people().props('scope')).toBe('page')
+    route.query = { people_scope: 'page', candidate_text: 'Ada' }
+    await flushPromises()
+    expect(people().props('scope')).toBe('all')
+    route.query = { people_scope: 'page', candidate_face: 'a' }
+    await flushPromises()
+    expect(people().props('scope')).toBe('all')
+    route.query = { people_scope: 'page' }
+    await flushPromises()
+    expect(people().props('scope')).toBe('page')
+    wrapper.unmount()
+  })
+
   it('attaches the selected face from the People context menu', async () => {
     route.query = { candidate_text: 'Ada' }
     faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))

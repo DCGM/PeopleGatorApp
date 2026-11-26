@@ -319,6 +319,15 @@ describe('People panel (#103)', () => {
     expect(wrapper.findComponent({ name: 'IdentityFacePreview' }).props('name')).toBe('Hana')
   })
 
+  it('shows All people and locks the scope while searching', async () => {
+    const wrapper = panel({ scope: 'document', scored: false })
+    const scope = () => wrapper.get('button[aria-label^="Scope:"]')
+    expect(scope().attributes('disabled')).toBeUndefined()
+    await wrapper.setProps({ scored: true, scope: 'all' })
+    expect(scope().attributes('aria-label')).toBe('Scope: All people')
+    expect(scope().attributes('disabled')).toBeDefined()
+  })
+
   it('assigns only a selected face, separately from preview', async () => {
     const wrapper = panel({ canAssign: true })
     const faceButton = () => wrapper.get('button[aria-label*="ace "][aria-label$=" to Ada"]')
