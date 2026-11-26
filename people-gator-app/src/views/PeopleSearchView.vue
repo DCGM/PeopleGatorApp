@@ -18,7 +18,6 @@ import PeopleFilters from '@/components/custom/PeopleFilters.vue'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import SelectedEvidenceActions from '@/components/custom/SelectedEvidenceActions.vue'
 import { Button } from '@/components/ui/button'
-import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
 import { usePeopleFilters } from '@/viewmodels/people-filters'
 import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
@@ -155,12 +154,9 @@ useAutomaticPagination({
           </p>
 
           <section class="stable-search-results pt-6" aria-live="polite">
-            <h2 class="mb-4">Search Results</h2>
-            <Separator orientation="horizontal" />
-
             <div
               v-if="people.length || isLoading"
-              class="grid gap-0 pt-6 grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]"
+              class="grid gap-0 grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]"
             >
               <div v-for="person in people" :key="person.id" class="group relative min-w-0">
                 <RouterLink
@@ -226,9 +222,6 @@ useAutomaticPagination({
               {{ isFetchingNextPage ? 'Loading people…' : 'Load more people' }}
             </Button>
           </div>
-          <footer class="pb-4 pt-6">
-            <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
-          </footer>
         </div>
       </div>
     </div>
