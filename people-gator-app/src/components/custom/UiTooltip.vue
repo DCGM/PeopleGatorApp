@@ -16,7 +16,7 @@ defineProps<{ text: string }>()
         ><TooltipContent
           side="top"
           :side-offset="5"
-          class="z-50 max-w-xs whitespace-pre-line rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md"
+          class="z-50 max-w-xs rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md"
           >{{ text }}</TooltipContent
         ></TooltipPortal
       >

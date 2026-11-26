@@ -15,7 +15,7 @@ import SortControl from './SortControl.vue'
 import VerificationBadge from './VerificationBadge.vue'
 import VerificationProgress from './VerificationProgress.vue'
 import type { SortOption, SortState } from '@/lib/sorting'
-import { linkProgressDetails, pageProgressDetails } from '@/lib/verification'
+import { linkProgressBreakdown, pageProgressBreakdown } from '@/lib/verification'
 import { sourceLinkClass, sourceLinkTextClass } from '@/lib/source-link'
 
 const props = defineProps<{
@@ -144,7 +144,7 @@ useAutomaticPagination({
               :verified="verifiedPageCount"
               :total="documentPageCount"
               hide-count
-              :details="pageProgressDetails(verifiedPageCount, documentPageCount)"
+              :breakdown="pageProgressBreakdown(verifiedPageCount, documentPageCount)"
             />
             <h2
               id="document-pages-title"
@@ -179,7 +179,7 @@ useAutomaticPagination({
                 :verified="linkStats[kind.key]?.verified ?? 0"
                 :total="linkStats[kind.key]?.total ?? 0"
                 :noun="kind.key"
-                :details="linkProgressDetails(kind.key, linkStats[kind.key])"
+                :breakdown="linkProgressBreakdown(kind.key, linkStats[kind.key])"
                 hide-count
                 class="text-muted-foreground"
                 :data-link-progress="kind.key"

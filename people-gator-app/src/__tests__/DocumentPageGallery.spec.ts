@@ -103,6 +103,14 @@ describe('DocumentPageGallery', () => {
     ])
     expect(rings[0]!.findAll('circle')).toHaveLength(2)
     expect(rings[1]!.findAll('circle')).toHaveLength(1)
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
     // Focus explains the ring and breaks the total down by link state.
     await wrapper.setProps({
       linkStats: { faces: { verified: 2, manual: 1, automatic: 1, unassigned: 1, total: 5 } },
@@ -114,9 +122,21 @@ describe('DocumentPageGallery', () => {
     expect(pages!.attributes('tabindex')).toBe('0')
     await faces!.trigger('focus')
     await flushPromises()
-    expect(document.body.textContent).toContain(
-      'Faces verified in this document: 2 of 5 (40%)\nManual: 1\nAutomatic: 1\nUnassigned: 1',
-    )
+    const panel = document.body.querySelector('[data-progress-breakdown]')!
+    expect(panel.querySelector('div')!.textContent).toBe('Faces5')
+    expect(
+      [...panel.querySelectorAll('dt')].map((term) => [
+        term.textContent,
+        term.nextElementSibling!.textContent,
+        term.nextElementSibling!.nextElementSibling!.textContent!.trim(),
+      ]),
+    ).toEqual([
+      ['Verified', '2', '40%'],
+      ['Manual', '1', '20%'],
+      ['Automatic', '1', '20%'],
+      ['Unassigned', '1', '20%'],
+    ])
+    vi.unstubAllGlobals()
     wrapper.unmount()
   })
 
