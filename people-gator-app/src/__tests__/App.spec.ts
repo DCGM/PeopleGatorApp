@@ -261,7 +261,9 @@ describe('App', () => {
     expect(router.currentRoute.value.params).toEqual({ libraryId: 'library', documentId: archive })
     expect(router.currentRoute.value.query).toEqual({ pages_view: 'expanded' })
     expect(wrapper.find('a[aria-label="Scans"]').exists()).toBe(false)
-    expect(wrapper.find('input[placeholder="Search a person, page or document…"]').exists()).toBe(false)
+    expect(wrapper.find('input[placeholder="Search a person, page or document…"]').exists()).toBe(
+      false,
+    )
     wrapper.unmount()
   })
 
@@ -469,6 +471,17 @@ describe('document-first navigation after Scans retirement (#141)', () => {
     await flushPromises()
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="People"]').attributes('href')).toBe('/people')
+    expect(wrapper.get('a[aria-label="People"]').attributes('aria-current')).toBeUndefined()
+    // Breadcrumbs, then the section selector, then the account control.
+    const selector = wrapper.get('[data-slot="section-selector"]').element
+    expect(
+      selector.previousElementSibling?.querySelector('[aria-label="Breadcrumb"]'),
+    ).not.toBeNull()
+    expect(selector.querySelectorAll('a')).toHaveLength(2)
+    await router.push('/people')
+    await flushPromises()
+    expect(wrapper.get('a[aria-label="People"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
   })
   it.each(['/scans', '/scans?q=Ada&library=preview-mzk', '/scans?document=a&document=b'])(
     'retires global/multiple-document scan search at %s',
