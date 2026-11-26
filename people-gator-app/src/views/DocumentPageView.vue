@@ -577,26 +577,39 @@ watch(selectedFaceId, () => {
 })
 function closeDeletion(open: boolean) {
   if (open || deleteMutation.isPending.value || deleteMentionsMutation.isPending.value) return
+  if (patchMentionTextMutation.isPending.value) return
   deletionTarget.value = null
   mentionDeletion.value = null
+  mentionMerge.value = null
+  mergeError.value = ''
   deleteMutation.reset()
   deleteMentionsMutation.reset()
 }
-const deletionOpen = computed(() => Boolean(deletionTarget.value || mentionDeletion.value))
+const deletionOpen = computed(() =>
+  Boolean(deletionTarget.value || mentionDeletion.value || mentionMerge.value),
+)
 const deletionTitle = computed(() => {
+  if (mentionMerge.value) return `Merge ${mentionMerge.value.others.length + 1} mentions?`
   const count = mentionDeletion.value?.length
   if (!count) return 'Delete this detection?'
   return count === 1 ? 'Delete this mention?' : `Delete ${count} mentions?`
 })
-const deletionFailed = computed(() =>
-  deleteMutation.error.value
-    ? 'Could not delete detection. Try again.'
-    : deleteMentionsMutation.error.value
-      ? `Could not delete ${mentionDeletion.value?.length === 1 ? 'mention' : 'mentions'}. Try again.`
-      : '',
-)
+const deletionDescription = computed(() => {
+  const merge = mentionMerge.value
+  if (!merge) return 'This cannot be undone. Any link to a person is removed.'
+  const kept = merge.personName ? ` It keeps the link to ${merge.personName}.` : ''
+  return `They become one mention for “${merge.name}”; the others are deleted.${kept}`
+})
+const deletionFailed = computed(() => {
+  if (mergeError.value) return mergeError.value
+  if (deleteMutation.error.value) return 'Could not delete detection. Try again.'
+  if (deleteMentionsMutation.error.value)
+    return `Could not delete ${mentionDeletion.value?.length === 1 ? 'mention' : 'mentions'}. Try again.`
+  return ''
+})
 function confirmDeletion() {
-  if (mentionDeletion.value) void deleteSelectedMentions()
+  if (mentionMerge.value) void mergeSelectedMentions()
+  else if (mentionDeletion.value) void deleteSelectedMentions()
   else void deleteDetection()
 }
 function requestDeletion(face: Face | null) {
@@ -1092,7 +1105,7 @@ async function createPersonForMentions(person: NewPerson) {
 }
 const mentionCreateError = ref('')
 // A context that would locate the mention twice is explained, so it can be fixed.
-function mentionWriteError(error: unknown, action: 'create' | 'change') {
+function mentionWriteError(error: unknown, action: 'create' | 'change' | 'merge') {
   return apiErrorCode(error) === 'ambiguous_context'
     ? (apiErrorMessage(error) ?? `Could not ${action} mention.`)
     : `Could not ${action} mention.`
@@ -1114,6 +1127,64 @@ function changeMention(mention: { mentionId: string; name: string; context: stri
     .then(() => (pendingMention.value = mention.mentionId))
     .catch((error) => (mentionCreateError.value = mentionWriteError(error, 'change')))
 }
+/**
+ * Several overlapped mentions become one covering the selected words (#176).
+ * The kept mention is the first verified, else the first linked, else the
+ * first in text order; it takes the new words and keeps its link. The others
+ * are deleted after confirmation. The change is saved before the deletion,
+ * so a failure never loses a mention.
+ */
+type MentionMerge = {
+  keeper: string
+  others: string[]
+  name: string
+  context: string
+  personName?: string
+}
+const mentionMerge = ref<MentionMerge | null>(null)
+const mergeError = ref('')
+function mergeMentions(merge: { mentionIds: string[]; name: string; context: string }) {
+  if (actionBusy.value || merge.mentionIds.length < 2) return
+  const found = selectedMentions(transcription.value, merge.mentionIds)
+  const rank = (mention: (typeof found)[number]) =>
+    mention.state === 'verified' ? 0 : mention.entityId ? 1 : 2
+  const keeper = [...found].sort((a, b) => rank(a) - rank(b))[0]
+  const keeperId = keeper?.id ?? merge.mentionIds[0]!
+  mergeError.value = ''
+  mentionMerge.value = {
+    keeper: keeperId,
+    others: merge.mentionIds.filter((id) => id !== keeperId),
+    name: merge.name,
+    context: merge.context,
+    personName: keeper?.entityId
+      ? (entityNames?.value?.get(keeper.entityId) ?? 'Unknown person')
+      : undefined,
+  }
+}
+async function mergeSelectedMentions() {
+  const merge = mentionMerge.value
+  if (!merge || actionBusy.value) return
+  mergeError.value = ''
+  try {
+    await patchMentionTextMutation.mutateAsync({
+      mentionId: merge.keeper,
+      name: merge.name,
+      context: merge.context,
+    })
+  } catch (error) {
+    mergeError.value = mentionWriteError(error, 'merge')
+    return
+  }
+  try {
+    await deleteMentionsMutation.mutateAsync(merge.others)
+  } catch {
+    mergeError.value = 'Could not delete the other mentions. Try again.'
+    return
+  }
+  pendingMention.value = merge.keeper
+  closeDeletion(false)
+}
+
 // Select a created or changed mention as soon as the refreshed spans show it.
 watch([pendingMention, transcription], ([id]) => {
   if (!id) return
@@ -1248,11 +1319,13 @@ onBeforeUnmount(() => {
                   :selected-mention-ids="mentionSelection.ids"
                   :can-create-mention="canAnnotate && canIngest"
                   :can-change-mention="canAnnotate"
+                  :can-merge-mentions="canAnnotate && canDelete"
                   @select-line="selectLine"
                   @select-entity="selectEntity"
                   @clear-mentions="clearMentions"
                   @create-mention="createMention"
                   @change-mention="changeMention"
+                  @merge-mentions="mergeMentions"
                   @expand="expandContext"
                 >
                   <template v-if="mentionCard" #mention-card>
@@ -1612,9 +1685,7 @@ onBeforeUnmount(() => {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{{ deletionTitle }}</AlertDialogTitle>
-          <AlertDialogDescription
-            >This cannot be undone. Any link to a person is removed.</AlertDialogDescription
-          >
+          <AlertDialogDescription>{{ deletionDescription }}</AlertDialogDescription>
         </AlertDialogHeader>
         <p v-if="deletionFailed" role="alert" class="text-sm text-destructive">
           {{ deletionFailed }}
@@ -1624,9 +1695,9 @@ onBeforeUnmount(() => {
             :disabled="deleteMutation.isPending.value || deleteMentionsMutation.isPending.value"
             >Cancel</AlertDialogCancel
           >
-          <Button variant="destructive" :disabled="actionBusy" @click="confirmDeletion"
-            >Delete</Button
-          >
+          <Button variant="destructive" :disabled="actionBusy" @click="confirmDeletion">{{
+            mentionMerge ? 'Merge' : 'Delete'
+          }}</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

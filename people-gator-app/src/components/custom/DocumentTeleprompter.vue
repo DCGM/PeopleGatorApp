@@ -77,6 +77,8 @@ const props = withDefaults(
     canCreateMention?: boolean
     /** Offer Change mention for selected text that overlaps a mention. */
     canChangeMention?: boolean
+    /** Offer Merge mentions for selected text that overlaps several (it deletes all but one). */
+    canMergeMentions?: boolean
   }>(),
   { included: undefined, selectedMentionIds: () => [] },
 )
@@ -98,6 +100,8 @@ const emit = defineEmits<{
   'clear-mentions': []
   'create-mention': [mention: { lineIndex: number; name: string; context: string }]
   'change-mention': [mention: { mentionId: string; name: string; context: string }]
+  /** Several overlapped mentions become one covering the selected words. */
+  'merge-mentions': [mention: { mentionIds: string[]; name: string; context: string }]
   expand: [passage: Passage, direction: 'before' | 'after', count: number]
 }>()
 
@@ -516,15 +520,17 @@ function clearMentions() {
 }
 
 type SelectionAction = {
-  kind: 'create' | 'change'
+  kind: 'create' | 'change' | 'merge'
   lineIndex: number
   name: string
   context: string
   mentionId?: string
+  /** Overlapped mentions, in text order, when merging. */
+  mentionIds?: string[]
   left: number
   top: number
 }
-/** Create or Change mention for text selected within one line. */
+/** Create, Change or Merge mentions for text selected in the transcription. */
 const selectionAction = ref<SelectionAction | null>(null)
 const WORD_CHARACTER = /[\p{L}\p{N}]/u
 
@@ -542,7 +548,7 @@ function lineOffset(element: HTMLElement, container: Node, offset: number) {
  * selected lines' text, which locates the mention exactly once (#176).
  */
 function measureSelectionAction(): SelectionAction | null {
-  if (!props.canCreateMention && !props.canChangeMention) return null
+  if (!props.canCreateMention && !props.canChangeMention && !props.canMergeMentions) return null
   const current = textSelection()
   const body = bodyElement.value
   if (!current || !body) return null
@@ -598,8 +604,14 @@ function measureSelectionAction(): SelectionAction | null {
       (span) => span.mention_id && span.start_index < to && span.end_index > from,
     )
   })
+  const overlappedIds = [
+    ...new Set(overlapping.flatMap((span) => (span.mention_id ? [span.mention_id] : []))),
+  ]
   const target = overlapping[0]
-  if (target) {
+  // Several overlapped mentions merge into one covering the selection.
+  if (overlappedIds.length > 1) {
+    if (!props.canMergeMentions) return null
+  } else if (target) {
     // Exactly the mention's own words: nothing to change.
     const fragments = props.transcription.flatMap((line, index) =>
       (line.entities ?? [])
@@ -625,11 +637,12 @@ function measureSelectionAction(): SelectionAction | null {
       : first.getBoundingClientRect()
   const above = rect.top - bounds.top - MENTION_BADGE_HEIGHT - 4
   return {
-    kind: target ? 'change' : 'create',
+    kind: overlappedIds.length > 1 ? 'merge' : target ? 'change' : 'create',
     lineIndex: indices[0]!,
     name,
     context: lines.map((line) => line!.text).join('\n'),
     mentionId: target?.mention_id,
+    mentionIds: overlappedIds.length > 1 ? overlappedIds : undefined,
     left: Math.max(0, rect.left - bounds.left),
     top: above >= 0 ? above : rect.bottom - bounds.top + 4,
   }
@@ -638,7 +651,9 @@ function measureSelectionAction(): SelectionAction | null {
 function applySelectionAction() {
   const action = selectionAction.value
   if (!action) return
-  if (action.kind === 'change' && action.mentionId)
+  if (action.kind === 'merge' && action.mentionIds)
+    emit('merge-mentions', { mentionIds: action.mentionIds, name: action.name, context: action.context })
+  else if (action.kind === 'change' && action.mentionId)
     emit('change-mention', { mentionId: action.mentionId, name: action.name, context: action.context })
   else emit('create-mention', { lineIndex: action.lineIndex, name: action.name, context: action.context })
   window.getSelection()?.removeAllRanges()
@@ -1032,7 +1047,7 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
         <Button type="button" size="xs" variant="outline" class="bg-background shadow-xs" data-selection-action
           @mousedown.prevent @click="applySelectionAction">
           <TextCursor aria-hidden="true" />
-          {{ selectionAction.kind === 'change' ? 'Change mention' : 'Create mention' }}
+          {{ { create: 'Create mention', change: 'Change mention', merge: 'Merge mentions' }[selectionAction.kind] }}
         </Button>
       </div>
       <div class="min-h-0 select-none overflow-hidden py-2">

@@ -218,6 +218,7 @@ async function mountView(renderActions = false, mentionCard = false) {
                       'relatedEntityId',
                       'canCreateMention',
                       'canChangeMention',
+                      'canMergeMentions',
                     ],
                     methods: { focusMentionCard: () => undefined },
                     template: '<div><slot name="mention-card" /></div>',
@@ -1536,6 +1537,60 @@ describe('scan name mentions and their person card (#176)', () => {
     await flushPromises()
     expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m3'])
     expect(teleprompter(wrapper).props('selectedEntityKey')).toBe('m3:l2:12')
+    wrapper.unmount()
+  })
+
+  it('merges overlapped mentions into the verified one after confirmation', async () => {
+    mocks.patchMention.mockResolvedValue({ data: { mention_id: 'm3' } })
+    mocks.deleteMentions.mockResolvedValue({ data: 2 })
+    const wrapper = await mountView(true, true)
+    expect(teleprompter(wrapper).props('canMergeMentions')).toBe(true)
+    teleprompter(wrapper).vm.$emit('merge-mentions', {
+      mentionIds: ['m1', 'm2', 'm3'],
+      name: 'Jan Bulk wrote Eva and Jan Bulk',
+      context: 'Jan Bulk wrote\nEva and Jan Bulk',
+    })
+    await flushPromises()
+    // Nothing is written before the confirmation.
+    expect(mocks.patchMention).not.toHaveBeenCalled()
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
+    expect(wrapper.text()).toContain('Merge 3 mentions?')
+    expect(wrapper.text()).toContain('It keeps the link to Jan Bulk.')
+    await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
+    await flushPromises()
+    // m3 is the verified one: it takes the words, then the others are deleted.
+    expect(mocks.patchMention).toHaveBeenCalledWith({
+      path: { mention_id: 'm3' },
+      body: {
+        name: 'Jan Bulk wrote Eva and Jan Bulk',
+        context: 'Jan Bulk wrote\nEva and Jan Bulk',
+      },
+      throwOnError: true,
+    })
+    expect(mocks.deleteMentions).toHaveBeenCalledWith({ body: ['m1', 'm2'], throwOnError: true })
+    expect(mocks.patchMention.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteMentions.mock.invocationCallOrder[0]!,
+    )
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps every mention when the merge change fails', async () => {
+    mocks.patchMention.mockRejectedValue(new Error('offline'))
+    const wrapper = await mountView(true, true)
+    teleprompter(wrapper).vm.$emit('merge-mentions', {
+      mentionIds: ['m2', 'm1'],
+      name: 'x',
+      context: 'y',
+    })
+    await flushPromises()
+    await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
+    await flushPromises()
+    // The linked m1 was chosen over the unlinked m2; nothing was deleted.
+    expect(mocks.patchMention.mock.calls[0]![0].path).toEqual({ mention_id: 'm1' })
+    expect(mocks.deleteMentions).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Could not merge mention.')
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
     wrapper.unmount()
   })
 

@@ -1777,6 +1777,9 @@ Open `mention-editing`:
   mention is selected and its card opens. A selection across consecutive lines
   creates one mention whose context is those lines. Select **Bulk** inside a
   mention to get **Change mention**, which keeps its person and verification state.
+  A selection across several mentions offers **Merge mentions** (with delete
+  permission): after confirmation one mention covers the selected words, keeping
+  the first verified, else the first linked, mention's link, and the others are deleted.
 
 Each mention resolves to at most one span. Its context locates it when it
 equals exactly one OCR line, or one run of consecutive lines (compared word by

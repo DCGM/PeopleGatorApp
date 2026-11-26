@@ -891,6 +891,30 @@ describe('DocumentTeleprompter', () => {
       expect(wrapper.get('[data-selection-action]').text()).toBe('Change mention')
     })
 
+    it('offers Merge mentions for a selection overlapping several mentions', async () => {
+      const wrapper = render({ canCreateMention: true, canChangeMention: true, canMergeMentions: true })
+      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      // From inside Ada's L2 mention to inside L4's "Ada Novak" mention.
+      await select(text(1).querySelector('mark')!, 4, 3, text(3).querySelector('mark')!)
+      const action = wrapper.get('[data-selection-action]')
+      expect(action.text()).toBe('Merge mentions')
+      await action.trigger('click')
+      expect(wrapper.emitted('merge-mentions')).toEqual([
+        [
+          {
+            mentionIds: ['ada-L2-0', 'other-ada-L4-0'],
+            name: 'Novak signed it. Plain context line. Ada',
+            context: 'Ada Novak signed it.\nPlain context line.\nAda Novak of another family.',
+          },
+        ],
+      ])
+      expect(wrapper.emitted('change-mention')).toBeUndefined()
+      // Without delete permission there is no merge.
+      await wrapper.setProps({ canMergeMentions: false })
+      await select(text(1).querySelector('mark')!, 4, 3, text(3).querySelector('mark')!)
+      expect(wrapper.find('[data-selection-action]').exists()).toBe(false)
+    })
+
     it('offers nothing across a gap, for blanks, for unchanged words or without permission', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
       const text = (index: number) =>
