@@ -1714,8 +1714,9 @@ so they sort last and fall outside date ranges:
 | Emil Dvorak (`emil`) | Emil / — / Dvorak | 1898-12-05 | — |
 
 - `person-life-dates` opens Karel's **Details** tab. Edit first name, middle
-  names, surname and both dates; clearing a field stores it as unknown, and a
-  death date before the birth date is rejected. People cards show life dates,
+  names, surname and both dates; clearing a field stores it as unknown. Dates
+  take `YYYY-MM-DD` or a bare year (saved as 1 January); an incomplete date or
+  a death date before the birth date is rejected without saving. People cards show life dates,
   for example `1890–1962`, or `b. 1948` and `d. 1931` when one date is known.
 - `people-surname-sort` sorts People by **Surname** (then first and middle
   names): Bartošová, Dvorak, Hrubý, Novak, Vrba, then Zdeněk and everyone
