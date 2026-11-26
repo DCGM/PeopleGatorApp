@@ -141,7 +141,7 @@ beforeEach(() => {
     resetAssignment: vi.fn(() => (assignmentError.value = null)),
     referenceFace,
     transcription: lines,
-    page: ref({ page_id: 'one', source_id: 'source' }),
+    page: ref({ page_id: 'one', source_id: 'source', url: 'https://archive.example/page' }),
     pageImageReady: ready,
     annotationsLoading: ref(false),
     isLoading: ref(false),
@@ -334,6 +334,21 @@ describe('document page gallery navigation', () => {
         gallery_dir: 'desc',
       },
     })
+    wrapper.unmount()
+  })
+
+  it('gives the page browser the API archive links and the document link statistics', async () => {
+    const stats = { faces: { verified: 1, total: 2 }, mentions: { total: 3 } }
+    mocks.documentLookup.mockReturnValue({
+      isPending: ref(false),
+      error: ref(null),
+      data: ref({ url: 'https://archive.example/document', entity_link_stats: stats }),
+    })
+    const wrapper = await mountView()
+    const gallery = wrapper.findComponent({ name: 'DocumentPageGallery' })
+    expect(gallery.props('documentUrl')).toBe('https://archive.example/document')
+    expect(gallery.props('pageUrl')).toBe('https://archive.example/page')
+    expect(gallery.props('linkStats')).toEqual(stats)
     wrapper.unmount()
   })
 

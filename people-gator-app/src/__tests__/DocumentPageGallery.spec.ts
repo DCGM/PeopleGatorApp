@@ -136,6 +136,10 @@ describe('DocumentPageGallery', () => {
       ['Automatic', '1', '20%'],
       ['Unassigned', '1', '20%'],
     ])
+    // The gallery stops keys from reaching the viewer; Escape must still close the tooltip.
+    await faces!.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(document.body.querySelector('[data-progress-breakdown]')).toBeNull()
     vi.unstubAllGlobals()
     wrapper.unmount()
   })

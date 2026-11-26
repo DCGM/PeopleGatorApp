@@ -148,7 +148,7 @@ useAutomaticPagination({
             />
             <h2
               id="document-pages-title"
-              class="min-w-0 truncate font-mono text-xs font-semibold text-secondary"
+              class="min-w-0 font-mono text-xs font-semibold text-secondary"
               :title="props.documentName || 'Document pages'"
             >
               <a
@@ -157,14 +157,16 @@ useAutomaticPagination({
                 target="_blank"
                 rel="noopener noreferrer"
                 :class="sourceLinkClass"
-                :aria-label="`${props.documentName || 'Document'}: open document in Digitální knihovna (new tab)`"
+                :aria-label="`${props.documentName || 'Document pages'}: open document in Digitální knihovna (new tab)`"
                 data-slot="document-source-link"
                 ><span :class="sourceLinkTextClass">{{
                   props.documentName || 'Document pages'
                 }}</span
                 ><ExternalLink class="shrink-0" aria-hidden="true"
               /></a>
-              <template v-else>{{ props.documentName || 'Document pages' }}</template>
+              <span v-else class="block truncate">{{
+                props.documentName || 'Document pages'
+              }}</span>
             </h2>
             <PagePosition
               class="shrink-0"

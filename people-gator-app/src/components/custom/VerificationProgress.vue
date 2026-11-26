@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { verificationProgress, type ProgressBreakdown } from '@/lib/verification'
 import ProgressBreakdownPanel from './ProgressBreakdown.vue'
@@ -15,6 +15,8 @@ const props = defineProps<{
   /** Tooltip explaining the ring and splitting its total; makes the ring focusable. */
   breakdown?: ProgressBreakdown
 }>()
+// Closed here on Escape too: a parent may stop the key before it reaches the tooltip layer.
+const open = ref(false)
 const RADIUS = 6
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 const share = computed(() => verificationProgress(props.verified, props.total))
@@ -28,7 +30,7 @@ const label = computed(() =>
 
 <template>
   <TooltipProvider v-if="breakdown" :delay-duration="200">
-    <Tooltip>
+    <Tooltip v-model:open="open">
       <TooltipTrigger as-child>
         <span
           class="inline-flex shrink-0 items-center gap-1 text-sm tabular-nums"
@@ -36,6 +38,7 @@ const label = computed(() =>
           :aria-label="label"
           tabindex="0"
           data-verification-progress
+          @keydown.esc="open = false"
           v-bind="$attrs"
         >
           <svg viewBox="0 0 16 16" class="size-4 -rotate-90" aria-hidden="true">
@@ -63,7 +66,7 @@ const label = computed(() =>
   </TooltipProvider>
   <span
     v-else
-    class="inline-flex shrink-0 items-center gap-1 text-sm tabular-nums"
+    class="inline-flex shrink-0 items-center gap-1.5 text-sm tabular-nums"
     role="img"
     :aria-label="label"
     :title="label"
