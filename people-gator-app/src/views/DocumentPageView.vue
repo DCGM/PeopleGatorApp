@@ -680,8 +680,15 @@ function selectFace(faceId: string) {
 
 function clearFace() {
   selectedFaceId.value = null
-  selectedPersonId.value = null
+  // Selected mentions stay; their person remains the page's context.
+  selectedPersonId.value = anchorMentionPerson()
   syncRoute()
+}
+
+function anchorMentionPerson() {
+  const anchor = mentionSelection.value.anchor
+  if (!anchor || !mentionSelection.value.ids.includes(anchor)) return null
+  return selectedMentions(transcription.value, [anchor])[0]?.entityId ?? null
 }
 
 function unassignSelectedFace() {
@@ -823,7 +830,9 @@ function handleNavigationKeydown(event: KeyboardEvent) {
         'input, select, textarea, button, a, [role=tablist], [role=dialog], [role=alertdialog]',
       ) &&
         // Detection boxes and their card keep face and line navigation.
-        !event.target.closest('[data-region-type="face"], [data-detection-card]')))
+        !event.target.closest(
+          '[data-region-type="face"], [data-detection-card], [data-mention-card]',
+        )))
   )
     return
   const navigate = {
@@ -1020,25 +1029,29 @@ const mentionCard = computed<MentionCardTarget | null>(() => {
 watch(
   () => mentionSelection.value.ids.join(),
   () => {
-    // A pending new person belongs to the mentions it was created for.
-    mentionPersonFlow.cancel()
     mentionActionError.value = ''
   },
 )
 
-function mentionAction(error: string, action: () => Promise<unknown>) {
+function mentionAction(error: string, action: () => Promise<unknown>, done?: () => void) {
   if (actionBusy.value) return
   mentionActionError.value = ''
-  action().catch(() => (mentionActionError.value = error))
+  action()
+    .then(() => done?.())
+    .catch(() => (mentionActionError.value = error))
 }
 function assignMentionsTo(entityId: string | null) {
   const ids = mentionSelection.value.ids
   if (!ids.length) return
-  mentionAction('Could not update link.', () =>
-    assignMentionsMutation.mutateAsync({ mentionIds: ids, entityId }),
+  // The page's person follows only a saved assignment.
+  mentionAction(
+    'Could not update link.',
+    () => assignMentionsMutation.mutateAsync({ mentionIds: ids, entityId }),
+    () => {
+      selectedPersonId.value = entityId ?? selectedFace.value?.personId ?? null
+      syncRoute()
+    },
   )
-  selectedPersonId.value = entityId ?? selectedFace.value?.personId ?? null
-  syncRoute()
 }
 function assignSimilarPersonToMentions(person: SimilarPersonCandidate) {
   if (!actionBusy.value) assignMentionsTo(person.id)
@@ -1089,7 +1102,7 @@ async function createPersonForMentions(person: NewPerson) {
   if (!ids.length || actionBusy.value) return
   mentionActionError.value = ''
   try {
-    const created = await mentionPersonFlow.createAndLink(person, async (entityId) => {
+    const created = await mentionPersonFlow.createAndLink(person, ids, async (entityId) => {
       try {
         return await assignTextMentions(ids, entityId)
       } finally {
@@ -1099,7 +1112,7 @@ async function createPersonForMentions(person: NewPerson) {
     selectedPersonId.value = created.entity_id
     syncRoute()
   } catch {
-    mentionActionError.value = 'Could not create and link the person. Save again to retry.'
+    mentionActionError.value = 'Could not create and link the person. Try again.'
   }
 }
 const mentionCreateError = ref('')

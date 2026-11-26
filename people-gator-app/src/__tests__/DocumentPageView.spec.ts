@@ -1446,14 +1446,45 @@ describe('scan name mentions and their person card (#176)', () => {
     wrapper.unmount()
   })
 
-  it('reports a failed update and keeps the selection', async () => {
+  it('reports a failed update and keeps the selection and its person', async () => {
     const wrapper = await mountView(true, true)
-    await choose(wrapper, 1, m2)
+    await choose(wrapper, 0, m1)
     mocks.patchMentions.mockRejectedValueOnce(new Error('Forbidden'))
     wrapper.findComponent({ name: 'ScanPeoplePanel' }).vm.$emit('assignMentions', { id: 'ada' })
     await flushPromises()
     expect(mentionCard(wrapper)!.text()).toContain('Could not update link.')
-    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m2'])
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1'])
+    // The page's person follows only a saved assignment.
+    expect(lastQuery(mocks.replace)).toMatchObject({ selectedPerson: 'jan' })
+    wrapper.findComponent({ name: 'ScanPeoplePanel' }).vm.$emit('assignMentions', { id: 'ada' })
+    await flushPromises()
+    expect(lastQuery(mocks.replace)).toMatchObject({ selectedPerson: 'ada' })
+    wrapper.unmount()
+  })
+
+  it('keeps arrow-key line navigation from the floating mention card', async () => {
+    const wrapper = await mountView(true, true)
+    const card = document.createElement('div')
+    card.setAttribute('data-mention-card', '')
+    const button = document.createElement('button')
+    card.append(button)
+    document.body.append(card)
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await flushPromises()
+    expect(teleprompter(wrapper).props('selectedLineIndex')).toBe(1)
+    card.remove()
+    wrapper.unmount()
+  })
+
+  it('clears only the face on an empty scan click, keeping the mentions and their person', async () => {
+    const wrapper = await mountView(true, true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    await choose(wrapper, 0, m1)
+    wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('clearFace')
+    await flushPromises()
+    expect(teleprompter(wrapper).props('selectedMentionIds')).toEqual(['m1'])
+    expect(lastQuery(mocks.replace)).toMatchObject({ person: undefined, selectedPerson: 'jan' })
     wrapper.unmount()
   })
 

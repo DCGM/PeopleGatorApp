@@ -55,10 +55,14 @@ describe('in-place person creation (#176)', () => {
     api.putPerson.mockImplementation(({ path }) => Promise.resolve(person(path.entity_id)))
     const link = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue([])
 
-    await expect(flow.createAndLink({ name: 'Jan Bulk' }, link)).rejects.toThrow('offline')
+    await expect(flow.createAndLink({ name: 'Jan Bulk' }, ['m1', 'm2'], link)).rejects.toThrow(
+      'offline',
+    )
     expect(flow.pending.value).toBe(false)
+    // One mention disappeared meanwhile; the remaining targets still overlap.
     const created = await flow.createAndLink(
       { name: 'Jan Bulk', shortDescription: 'Parish clerk' },
+      ['m2'],
       link,
     )
 
@@ -80,19 +84,19 @@ describe('in-place person creation (#176)', () => {
     expect(api.createEntity).not.toHaveBeenCalled()
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['search'] })
 
-    // After success, the next person gets a new UUID.
-    await flow.createAndLink({ name: 'Eva' }, link)
+    // After success, the next person gets a new UUID, even for the same targets.
+    await flow.createAndLink({ name: 'Eva' }, ['m2'], link)
     expect(api.putPerson.mock.lastCall![0].path.entity_id).toBe('second-uuid')
   })
 
-  it('forgets the pending UUID when cancelled', async () => {
+  it('never reuses a pending UUID for unrelated targets', async () => {
     const ids = ['a', 'b']
     const { result: flow } = run(() => usePersonCreateFlow(() => ids.shift()!))
-    api.putPerson.mockRejectedValueOnce(new Error('down'))
-    await expect(flow.createAndLink({ name: 'Jan' }, vi.fn())).rejects.toThrow('down')
-    flow.cancel()
     api.putPerson.mockImplementation(({ path }) => Promise.resolve(person(path.entity_id)))
-    await flow.createAndLink({ name: 'Jan' }, vi.fn())
+    const failing = vi.fn().mockRejectedValue(new Error('down'))
+    await expect(flow.createAndLink({ name: 'Jan' }, ['m1'], failing)).rejects.toThrow('down')
+    // Other mentions get their own person instead of renaming the first one.
+    await flow.createAndLink({ name: 'Eva' }, ['m9'], vi.fn())
     expect(api.putPerson.mock.lastCall![0].path.entity_id).toBe('b')
   })
 })

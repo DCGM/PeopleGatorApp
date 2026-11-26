@@ -281,8 +281,6 @@ export function useDocumentWorkspace(
 
   const assignFaceMutation = useAssignFaceMutation()
   const createFlow = usePersonCreateFlow()
-  // A pending person UUID belongs to the face it was created for.
-  watch(() => toValue(selectedFaceId), createFlow.cancel)
 
   function assignFace(detectionId: string, entityId: string | null) {
     assignFaceMutation.mutate({ detectionId, entityId })
@@ -290,7 +288,7 @@ export function useDocumentWorkspace(
 
   /** Create the person through the typed API, then link the face (#176). */
   function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
-    return createFlow.createAndLink({ name, shortDescription }, (entityId) =>
+    return createFlow.createAndLink({ name, shortDescription }, [detectionId], (entityId) =>
       assignFaceMutation.mutateAsync({ detectionId, entityId }),
     )
   }

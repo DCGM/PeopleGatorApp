@@ -109,7 +109,11 @@ describe('scan mention selection (#176)', () => {
       'jan',
       'ada',
     ])
-    // An anchor no longer shown starts a new selection.
+    // An anchor no longer shown hands over to the first selected mention still shown.
+    expect(
+      nextMentionSelection(order, { ids: ['jan', 'eva'], anchor: 'jan' }, 'zoe', 'range', shown),
+    ).toEqual({ ids: ['eva', 'ada', 'zoe'], anchor: 'eva' })
+    // With no selected mention shown, Shift starts a new selection.
     expect(
       nextMentionSelection(order, { ids: ['jan'], anchor: 'jan' }, 'zoe', 'range', shown),
     ).toEqual({

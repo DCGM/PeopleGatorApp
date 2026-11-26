@@ -8,25 +8,30 @@ export type NewPerson = { name: string; shortDescription?: string }
 /**
  * Create a person in place and link evidence to it (#176), shared by the face
  * and mention cards. The client picks the person's UUID and creates it with
- * `PUT /people/{entity_id}`, then links the targets. If linking fails, the next
- * attempt reuses the same UUID: the PUT is idempotent and no duplicate person
- * appears. The UUID is dropped once the flow succeeds or is cancelled.
+ * `PUT /people/{entity_id}`, then links the targets (face or mention IDs).
+ *
+ * If linking fails, the UUID is kept for the next attempt on overlapping
+ * targets, even when some of them disappeared meanwhile. The PUT is idempotent,
+ * so a retry never makes a second person. Unrelated targets get a new UUID, so
+ * they never rename a person created for others. Success forgets the UUID.
  */
 export function usePersonCreateFlow(newId: () => string = () => crypto.randomUUID()) {
   const put = usePutPersonMutation()
   const pending = ref(false)
-  let pendingId: string | null = null
+  let unfinished: { id: string; targets: Set<string> } | null = null
 
   async function createAndLink(
     person: NewPerson,
+    targets: readonly string[],
     link: (entityId: string) => Promise<unknown>,
   ): Promise<PersonResponse> {
-    pendingId ??= newId()
-    const entityId = pendingId
+    if (!unfinished || !targets.some((target) => unfinished!.targets.has(target)))
+      unfinished = { id: newId(), targets: new Set(targets) }
+    const attempt = unfinished
     pending.value = true
     try {
       const created = await put.mutateAsync({
-        entityId,
+        entityId: attempt.id,
         body: {
           entity_type: 'person',
           name: person.name,
@@ -34,17 +39,12 @@ export function usePersonCreateFlow(newId: () => string = () => crypto.randomUUI
         },
       })
       await link(created.entity_id)
-      if (pendingId === entityId) pendingId = null
+      if (unfinished === attempt) unfinished = null
       return created
     } finally {
       pending.value = false
     }
   }
 
-  /** Forget the pending UUID, for example when the card's target changes. */
-  function cancel() {
-    if (!pending.value) pendingId = null
-  }
-
-  return { createAndLink, cancel, pending }
+  return { createAndLink, pending }
 }

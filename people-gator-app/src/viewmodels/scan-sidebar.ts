@@ -172,12 +172,12 @@ export function resolveSearchModel(chosen: string | null, available: readonly st
   return chosen && available.includes(chosen) ? chosen : (available[0] ?? null)
 }
 
-/** Similarity needs a name or face to score; without one, Context applies. */
 /** A name or face search always looks through all people; browsing keeps the chosen scope. */
 export function effectivePeopleScope(scope: PeopleScope, scored: boolean): PeopleScope {
   return scored ? 'all' : scope
 }
 
+/** Similarity needs a name or face to score; without one, Context applies. */
 export function effectivePeopleOrder(order: PeopleOrder, scored: boolean): PeopleOrder {
   return order === 'relevance' && !scored ? 'context' : order
 }

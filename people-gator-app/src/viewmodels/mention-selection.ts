@@ -59,11 +59,16 @@ export function nextMentionSelection(
     else ids.add(clicked)
     return { ids: inOrder(ids), anchor: clicked }
   }
-  const from = current.anchor ? shown.indexOf(current.anchor) : -1
+  // An anchor no longer shown hands over to the first selected mention still shown.
+  const anchor =
+    current.anchor && shown.includes(current.anchor)
+      ? current.anchor
+      : (shown.find((id) => current.ids.includes(id)) ?? null)
+  const from = anchor ? shown.indexOf(anchor) : -1
   const to = shown.indexOf(clicked)
   if (mode === 'range' && from >= 0 && to >= 0) {
     const [start, end] = from <= to ? [from, to] : [to, from]
-    return { ids: inOrder(shown.slice(start, end + 1)), anchor: current.anchor }
+    return { ids: inOrder(shown.slice(start, end + 1)), anchor }
   }
   return { ids: [clicked], anchor: clicked }
 }

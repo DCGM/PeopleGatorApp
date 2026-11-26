@@ -136,9 +136,9 @@ def _match_text_mention_spans(
     """Resolve each mention to at most one span (#176).
 
     A context that equals exactly one OCR line, or one run of consecutive
-    lines, locates the mention; its name is matched there, preferring an exact
-    word match. Without such a context, the best single match on the page is
-    used. A mention never covers several places, so selecting it selects
+    lines, locates the mention; its name is matched only there, preferring an
+    exact word match, and a name not found there is not shown. Without such a
+    context, the best single match on the page is used. A mention never covers several places, so selecting it selects
     exactly the words it records.
     """
     words = _layout_words(layout)
