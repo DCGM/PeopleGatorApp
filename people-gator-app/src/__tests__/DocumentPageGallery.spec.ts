@@ -103,6 +103,20 @@ describe('DocumentPageGallery', () => {
     ])
     expect(rings[0]!.findAll('circle')).toHaveLength(2)
     expect(rings[1]!.findAll('circle')).toHaveLength(1)
+    // Focus explains the ring and breaks the total down by link state.
+    await wrapper.setProps({
+      linkStats: { faces: { verified: 2, manual: 1, automatic: 1, unassigned: 1, total: 5 } },
+      documentPageCount: 4,
+      verifiedPageCount: 1,
+    })
+    expect(wrapper.find('[data-verification-progress][title]').exists()).toBe(false)
+    const [pages, faces] = wrapper.findAll('[data-verification-progress]')
+    expect(pages!.attributes('tabindex')).toBe('0')
+    await faces!.trigger('focus')
+    await flushPromises()
+    expect(document.body.textContent).toContain(
+      'Faces verified in this document: 2 of 5 (40%)\nManual: 1\nAutomatic: 1\nUnassigned: 1',
+    )
     wrapper.unmount()
   })
 
