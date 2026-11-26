@@ -5,6 +5,7 @@ import TeleprompterHighlightFilter from './TeleprompterHighlightFilter.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
 import { linkTooltip, mentionStateClasses } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
@@ -13,6 +14,7 @@ import {
   ArrowUpFromLine,
   Highlighter,
   ListPlus,
+  TextCursor,
   UnfoldVertical,
   UserRound,
   X,
@@ -24,6 +26,11 @@ import type {
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
+import {
+  mentionSelectMode,
+  uniqueMentionContext,
+  type MentionSelectMode,
+} from '@/viewmodels/mention-selection'
 import {
   EXPAND_STEP,
   LINE_VISIBILITIES,
@@ -68,8 +75,16 @@ const props = withDefaults(
     selectedLanguage?: Language
     currentTranslation?: string
     translationLoading?: boolean
+    /** Name mentions selected for the person card, by mention ID (#176). */
+    selectedMentionIds?: readonly string[]
+    /** Offer Create mention for selected plain text. */
+    canCreateMention?: boolean
+    /** Offer Change mention for selected text that overlaps a mention. */
+    canChangeMention?: boolean
+    /** Offer Merge mentions for selected text that overlaps several (it deletes all but one). */
+    canMergeMentions?: boolean
   }>(),
-  { included: undefined },
+  { included: undefined, selectedMentionIds: () => [] },
 )
 
 const lineVisibility = defineModel<LineVisibility>('lineVisibility', { default: 'all' })
@@ -79,7 +94,18 @@ const annotationHighlight = defineModel<HighlightState[]>('annotationHighlight',
 
 const emit = defineEmits<{
   'select-line': [index: number]
-  'select-entity': [index: number, entity: TranscriptionEntitySpan]
+  'select-entity': [
+    index: number,
+    entity: TranscriptionEntitySpan,
+    mode: MentionSelectMode,
+    /** Mention IDs as shown in the text, in reading order, for Shift ranges. */
+    shown: string[],
+  ]
+  'clear-mentions': []
+  'create-mention': [mention: { lineIndex: number; name: string; context: string }]
+  'change-mention': [mention: { mentionId: string; name: string; context: string }]
+  /** Several overlapped mentions become one covering the selected words. */
+  'merge-mentions': [mention: { mentionIds: string[]; name: string; context: string }]
   expand: [passage: Passage, direction: 'before' | 'after', count: number]
 }>()
 
@@ -127,6 +153,8 @@ function mentionLabel(entity: TranscriptionEntitySpan) {
 
 function showMentionBadge(event: Event, entity: TranscriptionEntitySpan) {
   hoveredEntityKey.value = entityKey(entity)
+  // A selected mention already shows its card.
+  if (isSelectedMention(entity) && slots['mention-card']) return
   const body = bodyElement.value
   const mark = event.currentTarget as HTMLElement | null
   if (!body || !mark) return
@@ -254,12 +282,21 @@ const emptyMessage = computed(() => {
   return 'No transcription.'
 })
 
+/**
+ * The selected person's other mentions are outlined, except while mentions are
+ * selected for editing: then only the selected mentions are marked, so the
+ * selection is never mistaken for every mention of that person (#176).
+ */
+const highlightedPersonId = computed(() =>
+  props.selectedMentionIds.length ? null : props.relatedEntityId,
+)
+
 const minimap = computed(() =>
   minimapLines(
     props.transcription,
     includedLines.value,
     annotationHighlight.value,
-    props.relatedEntityId,
+    highlightedPersonId.value,
   ),
 )
 
@@ -299,10 +336,18 @@ const mentionSelectionClasses = {
   default: 'bg-transparent hover:bg-accent/10',
 } as const
 
+const selectedMentions = computed(() => new Set(props.selectedMentionIds))
+function isSelectedMention(entity: TranscriptionEntitySpan) {
+  return (
+    props.selectedEntityKey === entityKey(entity) ||
+    Boolean(entity.mention_id && selectedMentions.value.has(entity.mention_id))
+  )
+}
+
 function mentionSelectionState(entity: TranscriptionEntitySpan) {
   const key = entityKey(entity)
-  const mentioned = Boolean(entity.entity_id) && props.relatedEntityId === entity.entity_id
-  if (props.selectedEntityKey === key) return mentioned ? 'selectedMentioned' : 'selected'
+  const mentioned = Boolean(entity.entity_id) && highlightedPersonId.value === entity.entity_id
+  if (isSelectedMention(entity)) return mentioned ? 'selectedMentioned' : 'selected'
   if (mentioned) return 'mentioned'
   // All fragments of a multiline mention respond to hovering any one of them.
   return hoveredEntityKey.value === key ? 'hovered' : 'default'
@@ -369,10 +414,257 @@ function selectLine(index: number) {
   // Finishing a drag selection must not also move the selected line.
   if (textSelection()) return
   if (index !== props.selectedLineIndex) emit('select-line', index)
+  // Clicking text outside the mentions clears them, as an empty scan click does for faces.
+  else if (props.selectedMentionIds.length) emit('clear-mentions')
 }
 
-function activateEntity(index: number, entity: TranscriptionEntitySpan) {
-  if (!textSelection()) emit('select-entity', index, entity)
+/** A click in the text pane outside every line clears the mentions too. */
+function clearOutsideLines(event: MouseEvent) {
+  if (!props.selectedMentionIds.length || textSelection()) return
+  if ((event.target as Element).closest('[data-line-index], .teleprompter-gap')) return
+  emit('clear-mentions')
+}
+
+/**
+ * Click and Enter/Space select mentions as faces are selected: plain replaces
+ * the selection, Ctrl/Cmd toggles one mention and Shift selects a range (#176).
+ * A plain keyboard activation moves focus into the person card.
+ */
+function activateEntity(
+  index: number,
+  entity: TranscriptionEntitySpan,
+  event: MouseEvent | KeyboardEvent,
+) {
+  if (event instanceof MouseEvent && textSelection()) return
+  const mode = mentionSelectMode(event)
+  emit('select-entity', index, entity, mode, shownMentionOrder())
+  if (mode === 'replace' && event instanceof KeyboardEvent) focusMentionCard()
+}
+
+/** Mentions shown in the text (displayed lines, current highlights), in reading order. */
+function shownMentionOrder() {
+  const ids: string[] = []
+  for (const mark of scrollElement.value?.querySelectorAll<HTMLElement>('mark[data-mention-id]') ?? []) {
+    const id = mark.dataset.mentionId
+    if (id && !mark.closest('[data-hidden]') && !ids.includes(id)) ids.push(id)
+  }
+  return ids
+}
+
+/** Shift/Ctrl-click must not extend or start a native text selection. */
+function keepTextSelection(event: MouseEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey) event.preventDefault()
+}
+
+/**
+ * The selected mentions' person card floats above or below the anchor mention,
+ * like the face card on the scan (#176): the last clicked mention, else the
+ * first selected one still shown.
+ */
+/** A value safe inside a double-quoted attribute selector. */
+function quoted(value: string) {
+  return value.replace(/["\\]/g, '\\$&')
+}
+const cardAnchor = ref<HTMLElement | null>(null)
+function updateCardAnchor() {
+  const scroller = scrollElement.value
+  const visible = (element: HTMLElement | null | undefined) =>
+    element && !element.closest('[data-hidden]') ? element : null
+  const key = props.selectedEntityKey
+  cardAnchor.value =
+    (props.selectedMentionIds.length &&
+      ((key &&
+        visible(scroller?.querySelector<HTMLElement>(`mark[data-occurrence="${quoted(key)}"]`))) ||
+        visible(
+          [...(scroller?.querySelectorAll<HTMLElement>('mark[aria-pressed="true"]') ?? [])].find(
+            (mark) => !mark.closest('[data-hidden]'),
+          ),
+        ))) ||
+    null
+}
+watch(
+  () => [props.selectedEntityKey, props.selectedMentionIds, props.transcription, includedLines.value],
+  () => void nextTick(updateCardAnchor),
+  { flush: 'post', immediate: true },
+)
+const slots = defineSlots<{ 'mention-card'?: () => unknown; 'panel-actions'?: () => unknown }>()
+const cardOpen = computed(() => Boolean(cardAnchor.value && slots['mention-card']))
+
+/**
+ * The card may cover nearby mentions. While Ctrl, Cmd or Shift is held, it
+ * fades and lets clicks through, so those mentions can still be added.
+ */
+const selectingMore = ref(false)
+function trackModifiers(event: KeyboardEvent) {
+  selectingMore.value = event.shiftKey || event.ctrlKey || event.metaKey
+}
+function releaseModifiers() {
+  selectingMore.value = false
+}
+
+function mentionCardElement() {
+  return document.querySelector<HTMLElement>('[data-mention-card]')
+}
+/** Move focus into the card once it is shown, as a keyboard face selection does. */
+function focusMentionCard() {
+  void nextTick(() =>
+    requestAnimationFrame(() => mentionCardElement()?.focus({ preventScroll: true })),
+  )
+}
+
+function clearMentions() {
+  const key = props.selectedEntityKey
+  const fromCard = mentionCardElement()?.contains(document.activeElement)
+  emit('clear-mentions')
+  // Return focus from the card to the mention it was opened from.
+  if (fromCard)
+    scrollElement.value
+      ?.querySelector<HTMLElement>(`[data-occurrence="${quoted(key ?? '')}"]`)
+      ?.focus({ preventScroll: true })
+}
+
+type SelectionAction = {
+  kind: 'create' | 'change' | 'merge'
+  lineIndex: number
+  name: string
+  context: string
+  mentionId?: string
+  /** Overlapped mentions, in text order, when merging. */
+  mentionIds?: string[]
+  left: number
+  top: number
+}
+/** Create, Change or Merge mentions for text selected in the transcription. */
+const selectionAction = ref<SelectionAction | null>(null)
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+/** The selection's character offset within one line's text element. */
+function lineOffset(element: HTMLElement, container: Node, offset: number) {
+  const before = document.createRange()
+  before.selectNodeContents(element)
+  before.setEnd(container, offset)
+  return before.toString().length
+}
+
+/**
+ * Create or Change mention for text selected within one line or across
+ * consecutive lines. The selection grows to whole words; the context is the
+ * selected lines' text, which locates the mention exactly once (#176).
+ */
+function measureSelectionAction(): SelectionAction | null {
+  if (!props.canCreateMention && !props.canChangeMention && !props.canMergeMentions) return null
+  const current = textSelection()
+  const body = bodyElement.value
+  if (!current || !body) return null
+  const { range } = current
+  const elements = [
+    ...(scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text]') ?? []),
+  ].filter((element) => range.intersectsNode(element))
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  if (!first || !last) return null
+  if (!first.contains(range.startContainer) || !last.contains(range.endContainer)) return null
+  const indices = elements.map((element) =>
+    Number(element.closest<HTMLElement>('[data-line-index]')?.dataset.lineIndex),
+  )
+  // Consecutive, shown lines only: a selection across a collapsed gap offers nothing.
+  if (
+    indices.some((index, position) => position > 0 && index !== indices[position - 1]! + 1) ||
+    indices.some((index) => !includedLines.value[index])
+  )
+    return null
+  const lines = indices.map((index) => props.transcription[index])
+  if (lines.some((line) => !line)) return null
+  const firstLine = lines[0]!
+  const lastLine = lines[lines.length - 1]!
+  let start = lineOffset(first, range.startContainer, range.startOffset)
+  let end = lineOffset(last, range.endContainer, range.endOffset)
+  if (start > firstLine.text.length || end > lastLine.text.length) return null
+  // Trim spaces, then cover whole words at both ends.
+  const single = lines.length === 1
+  while (start < (single ? end : firstLine.text.length) && /\s/.test(firstLine.text[start]!))
+    start += 1
+  while (end > (single ? start : 0) && /\s/.test(lastLine.text[end - 1]!)) end -= 1
+  if (single && start === end) return null
+  while (start > 0 && WORD_CHARACTER.test(firstLine.text[start - 1]!)) start -= 1
+  while (end < lastLine.text.length && WORD_CHARACTER.test(lastLine.text[end]!)) end += 1
+  const parts = single
+    ? [firstLine.text.slice(start, end)]
+    : [
+        firstLine.text.slice(start),
+        ...lines.slice(1, -1).map((line) => line!.text),
+        lastLine.text.slice(0, end),
+      ]
+  const name = parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ')
+  if (!name) return null
+  // Mentions whose fragments overlap the selected characters on any line.
+  const overlapping = lines.flatMap((line, position) => {
+    const from = position === 0 ? start : 0
+    const to = position === lines.length - 1 ? end : line!.text.length
+    return (line!.entities ?? []).filter(
+      (span) => span.mention_id && span.start_index < to && span.end_index > from,
+    )
+  })
+  const overlappedIds = [
+    ...new Set(overlapping.flatMap((span) => (span.mention_id ? [span.mention_id] : []))),
+  ]
+  const target = overlapping[0]
+  // Several overlapped mentions merge into one covering the selection.
+  if (overlappedIds.length > 1) {
+    if (!props.canMergeMentions) return null
+  } else if (target) {
+    // Exactly the mention's own words: nothing to change.
+    const fragments = props.transcription.flatMap((line, index) =>
+      (line.entities ?? [])
+        .filter((span) => entityKey(span) === entityKey(target))
+        .map((span) => ({ index, span })),
+    )
+    const head = fragments[0]
+    const tail = fragments[fragments.length - 1]
+    const unchanged =
+      head !== undefined &&
+      tail !== undefined &&
+      head.index === indices[0] &&
+      tail?.index === indices[indices.length - 1] &&
+      head.span.start_index === start &&
+      tail.span.end_index === end
+    if (!props.canChangeMention || unchanged) return null
+  } else if (!props.canCreateMention) return null
+  // The context grows to neighbouring lines until it locates this mention once.
+  const context = uniqueMentionContext(props.transcription, indices[0]!, indices[indices.length - 1]!, start, name)
+  if (context === null) return null
+  const bounds = body.getBoundingClientRect()
+  // Older engines (and jsdom) lack Range geometry; the line still places the action.
+  const rect =
+    typeof range.getBoundingClientRect === 'function'
+      ? range.getBoundingClientRect()
+      : first.getBoundingClientRect()
+  const above = rect.top - bounds.top - MENTION_BADGE_HEIGHT - 4
+  return {
+    kind: overlappedIds.length > 1 ? 'merge' : target ? 'change' : 'create',
+    lineIndex: indices[0]!,
+    name,
+    context,
+    mentionId: target?.mention_id,
+    mentionIds: overlappedIds.length > 1 ? overlappedIds : undefined,
+    left: Math.max(0, rect.left - bounds.left),
+    top: above >= 0 ? above : rect.bottom - bounds.top + 4,
+  }
+}
+
+function applySelectionAction() {
+  const action = selectionAction.value
+  if (!action) return
+  if (action.kind === 'merge' && action.mentionIds)
+    emit('merge-mentions', { mentionIds: action.mentionIds, name: action.name, context: action.context })
+  else if (action.kind === 'change' && action.mentionId)
+    emit('change-mention', { mentionId: action.mentionId, name: action.name, context: action.context })
+  else emit('create-mention', { lineIndex: action.lineIndex, name: action.name, context: action.context })
+  window.getSelection()?.removeAllRanges()
+  selectionAction.value = null
 }
 
 /** Whether a range covers a whole element, such as a collapsed gap band. */
@@ -419,6 +711,7 @@ const selectedGaps = ref<ReadonlySet<number>>(new Set())
 let selectionFrame: number | undefined
 function measureSelectedGaps() {
   selectionFrame = undefined
+  selectionAction.value = measureSelectionAction()
   const current = textSelection()
   const next = new Set<number>()
   if (current)
@@ -576,6 +869,9 @@ function scheduleViewport() {
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   document.addEventListener('selectionchange', scheduleSelectedGaps)
+  window.addEventListener('keydown', trackModifiers)
+  window.addEventListener('keyup', trackModifiers)
+  window.addEventListener('blur', releaseModifiers)
   if (scrollElement.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(scheduleViewport)
     resizeObserver.observe(scrollElement.value)
@@ -584,6 +880,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', scheduleSelectedGaps)
+  window.removeEventListener('keydown', trackModifiers)
+  window.removeEventListener('keyup', trackModifiers)
+  window.removeEventListener('blur', releaseModifiers)
   if (selectionFrame !== undefined) cancelAnimationFrame(selectionFrame)
   resizeObserver?.disconnect()
   if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame)
@@ -640,7 +939,7 @@ function expandTranslation() {
   }
 }
 
-defineExpose({ scrollPage, navigateTo })
+defineExpose({ scrollPage, navigateTo, focusMentionCard })
 </script>
 
 <template>
@@ -672,6 +971,7 @@ defineExpose({ scrollPage, navigateTo })
       <section ref="scrollElement" tabindex="0"
         class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); mentionBadge = null" @keydown="handleKeydown"
+        @click="clearOutsideLines"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
         <!-- Every line stays in the DOM; hidden lines only stop being displayed, so
@@ -707,13 +1007,17 @@ defineExpose({ scrollPage, navigateTo })
                 <template v-for="(segment, segmentIndex) in segments[index]" :key="segmentIndex">
                   <mark v-if="segment.entity && isHighlighted(segment.entity)" tabindex="0" role="button"
                     :aria-label="mentionLabel(segment.entity)" :data-link-state="spanHighlightState(segment.entity)"
+                    :aria-pressed="isSelectedMention(segment.entity)"
+                    :data-occurrence="entityKey(segment.entity)"
+                    :data-mention-id="segment.entity.mention_id"
                     class="transcription-entity cursor-pointer" :class="mentionClasses(segment.entity)"
                     :data-selection="mentionSelectionState(segment.entity)"
                     @mouseenter="showMentionBadge($event, segment.entity)" @mouseleave="hideMentionBadge"
                     @focus="showMentionBadge($event, segment.entity)" @blur="hideMentionBadge"
-                    @keydown.enter.stop.prevent="emit('select-entity', index, segment.entity)"
-                    @keydown.space.stop.prevent="emit('select-entity', index, segment.entity)"
-                    @click.stop="activateEntity(index, segment.entity)">
+                    @keydown.enter.stop.prevent="activateEntity(index, segment.entity, $event)"
+                    @keydown.space.stop.prevent="activateEntity(index, segment.entity, $event)"
+                    @keydown.esc="selectedMentionIds.length && ($event.stopPropagation(), clearMentions())"
+                    @mousedown="keepTextSelection" @click.stop="activateEntity(index, segment.entity, $event)">
                     {{ segment.text }}
                   </mark>
                   <template v-else>{{ segment.text }}</template>
@@ -728,6 +1032,30 @@ defineExpose({ scrollPage, navigateTo })
         :style="{ left: `${mentionBadge.left}px`, top: `${mentionBadge.top}px` }">
         <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
           :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
+      </div>
+      <!-- The person card floats above or below its mention, like a face's card. -->
+      <Popover :open="cardOpen">
+        <PopoverAnchor :reference="cardAnchor ?? undefined" as="span" class="hidden" />
+        <PopoverContent v-if="$slots['mention-card']" data-mention-card side="bottom" align="start"
+          :side-offset="4" :collision-padding="8"
+          sticky="always" hide-when-detached update-position-strategy="always"
+          aria-label="Selected mentions"
+          class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0 transition-opacity"
+          :class="selectingMore && 'pointer-events-none opacity-25'"
+          :data-selecting-more="selectingMore ? '' : undefined"
+          @open-auto-focus.prevent @close-auto-focus.prevent @interact-outside.prevent
+          @escape-key-down.prevent="clearMentions">
+          <slot name="mention-card" />
+        </PopoverContent>
+      </Popover>
+      <!-- Create or change a mention from text selected within one line (#176). -->
+      <div v-if="selectionAction" class="absolute z-20"
+        :style="{ left: `${selectionAction.left}px`, top: `${selectionAction.top}px` }">
+        <Button type="button" size="xs" variant="outline" class="bg-background shadow-xs" data-selection-action
+          @mousedown.prevent @click="applySelectionAction">
+          <TextCursor aria-hidden="true" />
+          {{ { create: 'Create mention', change: 'Change mention', merge: 'Merge mentions' }[selectionAction.kind] }}
+        </Button>
       </div>
       <div class="min-h-0 select-none overflow-hidden py-2">
         <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo"
@@ -778,5 +1106,12 @@ defineExpose({ scrollPage, navigateTo })
 .teleprompter-line {
   content-visibility: auto;
   contain-intrinsic-size: auto 1.75em;
+}
+</style>
+
+<style>
+/* The card's portal wrapper lets clicks pass too while a modifier is held. */
+[data-reka-popper-content-wrapper]:has(> [data-selecting-more]) {
+  pointer-events: none !important;
 }
 </style>

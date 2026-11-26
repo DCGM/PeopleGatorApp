@@ -96,6 +96,7 @@ describe('in-place identity faces', () => {
           detections: 1,
           source: 'page',
         },
+        faceAssignment: 'assign',
       },
       attachTo: document.body,
       global: {
@@ -115,7 +116,7 @@ describe('in-place identity faces', () => {
       expect.objectContaining({ params: { personId: 'ada' } }),
     )
     await dismiss()
-    await mounted.get('[aria-label="Assign to Ada Novak"]').trigger('click')
+    await mounted.get('[aria-label="Assign face to Ada Novak"]').trigger('click')
     expect(mounted.emitted('assign')).toHaveLength(1)
     await mounted.get('[aria-label="Preview Ada Novak on this page"]').trigger('click')
     expect(mounted.emitted('preview')).toHaveLength(1)

@@ -26,10 +26,30 @@ import {
   PanelTopOpen,
 } from '@lucide/vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
-import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
+import { useCanAnnotate, useCanDeleteDetection, useHasScope } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
 import { useDeleteFaceMutation, useFaceQuery } from '@/query/faces'
-import { useTextMentionQuery } from '@/query/text-mentions'
+import { useReviewMentionsMutation } from '@/query/mention-review'
+import {
+  invalidateMentionEdits,
+  assignTextMentions,
+  useAssignTextMentionsMutation,
+  useCreateTextMentionMutation,
+  useDeleteTextMentionsMutation,
+  usePatchTextMentionTextMutation,
+  useTextMentionQuery,
+} from '@/query/text-mentions'
+import { useQueryClient } from '@tanstack/vue-query'
+import { linkMetadata } from '@/lib/entity-links'
+import {
+  mentionOrder,
+  nextMentionSelection,
+  pruneMentionSelection,
+  selectedMentions,
+  type MentionSelectMode,
+  type MentionSelection,
+} from '@/viewmodels/mention-selection'
+import { usePersonCreateFlow, type NewPerson } from '@/viewmodels/person-create-flow'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -39,7 +59,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
-import type { Face } from '@/viewmodels/document-workspace.types'
+import type { Face, MentionCardTarget } from '@/viewmodels/document-workspace.types'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
@@ -73,9 +93,11 @@ import { useRouteSort } from '@/lib/sorting'
 import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
   effectivePeopleOrder,
+  effectivePeopleScope,
   resolveSearchModel,
   SCAN_SELECTED_MENTION,
   useScanSidebarState,
+  type PeopleScope,
   type ScanSidebarState,
 } from '@/viewmodels/scan-sidebar'
 import { useScanPeople } from '@/viewmodels/scan-people'
@@ -184,7 +206,12 @@ const mentionView = setting('mentionView')
 const mentionSort = setting('mentionSort')
 const mentionGroupSort = setting('mentionGroupSort')
 const activityDirection = setting('activityDirection')
-const peopleScope = setting('peopleScope')
+// Searching shows and queries all people; the stored scope returns when search is cleared.
+const peopleScopeSetting = setting('peopleScope')
+const peopleScope = computed({
+  get: () => effectivePeopleScope(peopleScopeSetting.value, peopleScored.value),
+  set: (value: PeopleScope) => (peopleScopeSetting.value = value),
+})
 // The scan's faces follow the Faces tab's flat order for navigation.
 const faceSort = setting('faceSort')
 const { personId: galleryPerson, only: galleryPersonOnly } = useGalleryPerson(selectedPersonId)
@@ -245,6 +272,11 @@ const showBadgeNames = ref(true)
 const selectedLanguage = ref<Language>('en')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
+// Name mentions selected for the person card (#176), independent of the face.
+const NO_MENTIONS: MentionSelection = { ids: [], anchor: null }
+const mentionSelection = ref<MentionSelection>(NO_MENTIONS)
+// A created or changed mention, selected once the page's spans show it.
+const pendingMention = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
 const zoomElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
@@ -370,6 +402,8 @@ watch(
 // Another page reuses this view: discard the previous page's selections and viewport.
 watch(focusPageKey, () => {
   selectedEntityKey.value = null
+  mentionSelection.value = NO_MENTIONS
+  pendingMention.value = null
   selectedLineIndex.value = 0
   scanViewport.reset()
 })
@@ -427,7 +461,7 @@ const peopleOrder = computed({
 const people = reactive(
   useScanPeople({
     sources,
-    scope: () => sidebarState.value.peopleScope,
+    scope: () => effectivePeopleScope(sidebarState.value.peopleScope, peopleScored.value),
     order: peopleOrder,
     search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
     searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,
@@ -501,9 +535,29 @@ const verifyMutation = useVerifyLinkMutation()
 const deleteMutation = useDeleteFaceMutation()
 const deletionTarget = ref<Face | null>(null)
 const creatingPerson = ref(false)
+const canIngest = useHasScope('people-gator:ingest')
+const queryClient = useQueryClient()
+const assignMentionsMutation = useAssignTextMentionsMutation()
+const reviewMentionsMutation = useReviewMentionsMutation()
+const deleteMentionsMutation = useDeleteTextMentionsMutation()
+const createMentionMutation = useCreateTextMentionMutation()
+const patchMentionTextMutation = usePatchTextMentionTextMutation()
+const mentionPersonFlow = usePersonCreateFlow()
+const mentionDeletion = ref<string[] | null>(null)
+const mentionActionError = ref('')
+const mentionBusy = computed(
+  () =>
+    mentionPersonFlow.pending.value ||
+    assignMentionsMutation.isPending.value ||
+    reviewMentionsMutation.isPending.value ||
+    deleteMentionsMutation.isPending.value ||
+    createMentionMutation.isPending.value ||
+    patchMentionTextMutation.isPending.value,
+)
 const actionBusy = computed(
   () =>
     creatingPerson.value ||
+    mentionBusy.value ||
     assignmentStatus.value === 'pending' ||
     verifyMutation.isPending.value ||
     deleteMutation.isPending.value,
@@ -521,9 +575,41 @@ watch(selectedFaceId, () => {
   if (assignmentStatus.value !== 'pending') resetAssignment()
 })
 function closeDeletion(open: boolean) {
-  if (open || deleteMutation.isPending.value) return
+  if (open || deleteMutation.isPending.value || deleteMentionsMutation.isPending.value) return
+  if (patchMentionTextMutation.isPending.value) return
   deletionTarget.value = null
+  mentionDeletion.value = null
+  mentionMerge.value = null
+  mergeError.value = ''
   deleteMutation.reset()
+  deleteMentionsMutation.reset()
+}
+const deletionOpen = computed(() =>
+  Boolean(deletionTarget.value || mentionDeletion.value || mentionMerge.value),
+)
+const deletionTitle = computed(() => {
+  if (mentionMerge.value) return `Merge ${mentionMerge.value.others.length + 1} mentions?`
+  const count = mentionDeletion.value?.length
+  if (!count) return 'Delete this detection?'
+  return count === 1 ? 'Delete this mention?' : `Delete ${count} mentions?`
+})
+const deletionDescription = computed(() => {
+  const merge = mentionMerge.value
+  if (!merge) return 'This cannot be undone. Any link to a person is removed.'
+  const kept = merge.personName ? ` It keeps the link to ${merge.personName}.` : ''
+  return `They become one mention for “${merge.name}”; the others are deleted.${kept}`
+})
+const deletionFailed = computed(() => {
+  if (mergeError.value) return mergeError.value
+  if (deleteMutation.error.value) return 'Could not delete detection. Try again.'
+  if (deleteMentionsMutation.error.value)
+    return `Could not delete ${mentionDeletion.value?.length === 1 ? 'mention' : 'mentions'}. Try again.`
+  return ''
+})
+function confirmDeletion() {
+  if (mentionMerge.value) void mergeSelectedMentions()
+  else if (mentionDeletion.value) void deleteSelectedMentions()
+  else void deleteDetection()
 }
 function requestDeletion(face: Face | null) {
   if (!face || actionBusy.value) return
@@ -594,8 +680,15 @@ function selectFace(faceId: string) {
 
 function clearFace() {
   selectedFaceId.value = null
-  selectedPersonId.value = null
+  // Selected mentions stay; their person remains the page's context.
+  selectedPersonId.value = anchorMentionPerson()
   syncRoute()
+}
+
+function anchorMentionPerson() {
+  const anchor = mentionSelection.value.anchor
+  if (!anchor || !mentionSelection.value.ids.includes(anchor)) return null
+  return selectedMentions(transcription.value, [anchor])[0]?.entityId ?? null
 }
 
 function unassignSelectedFace() {
@@ -611,15 +704,40 @@ function selectLine(index: number) {
   if (!includedLines.value[index]) teleprompterLines.reveal([index])
   selectedLineIndex.value = index
   selectedEntityKey.value = null
+  mentionSelection.value = NO_MENTIONS
   requestFocus({ kind: 'line', id: transcription.value[index]!.id })
   syncRoute()
 }
 
-function selectEntity(index: number, entity: TranscriptionEntitySpan) {
+/**
+ * Select a name mention through the face selection path: highlight, pan/zoom
+ * focus, route sync and the People context. Ctrl/Cmd toggles one mention and
+ * Shift selects the range from the anchor in transcription order (#176).
+ */
+function selectEntity(
+  index: number,
+  entity: TranscriptionEntitySpan,
+  mode: MentionSelectMode = 'replace',
+  shown?: string[],
+) {
+  const key = transcriptionEntityKey(entity)
+  const id = entity.mention_id
+  const order = mentionOrder(transcription.value)
+  mentionSelection.value = id
+    ? nextMentionSelection(order, mentionSelection.value, id, mode, shown ?? order)
+    : NO_MENTIONS
   selectedLineIndex.value = index
-  selectedEntityKey.value = transcriptionEntityKey(entity)
-  requestFocus({ kind: 'line', id: entity.line_id, entityKey: transcriptionEntityKey(entity) })
-  selectedPersonId.value = entity.entity_id ?? null
+  const selected = !id || mentionSelection.value.ids.includes(id)
+  selectedEntityKey.value = selected ? key : null
+  requestFocus({ kind: 'line', id: entity.line_id, entityKey: key })
+  if (selected) selectedPersonId.value = entity.entity_id ?? null
+  syncRoute()
+}
+
+function clearMentions() {
+  mentionSelection.value = NO_MENTIONS
+  selectedEntityKey.value = null
+  selectedPersonId.value = selectedFace.value?.personId ?? null
   syncRoute()
 }
 
@@ -712,7 +830,9 @@ function handleNavigationKeydown(event: KeyboardEvent) {
         'input, select, textarea, button, a, [role=tablist], [role=dialog], [role=alertdialog]',
       ) &&
         // Detection boxes and their card keep face and line navigation.
-        !event.target.closest('[data-region-type="face"], [data-detection-card]')))
+        !event.target.closest(
+          '[data-region-type="face"], [data-detection-card], [data-mention-card]',
+        )))
   )
     return
   const navigate = {
@@ -776,14 +896,24 @@ watch([faces, referenceFace, transcription, annotationsLoading], () => {
     selectedPersonId.value = null
     changed = true
   }
+  // Deleted mentions leave the selection; the rest keep their order.
+  const order = mentionOrder(transcription.value)
+  const kept = pruneMentionSelection(order, mentionSelection.value)
+  if (
+    kept.ids.join() !== mentionSelection.value.ids.join() ||
+    kept.anchor !== mentionSelection.value.anchor
+  )
+    mentionSelection.value = kept
   if (
     selectedEntityKey.value &&
     !transcription.value.some((line) =>
       line.entities?.some((span) => transcriptionEntityKey(span) === selectedEntityKey.value),
     )
   ) {
-    selectedEntityKey.value = null
-    selectedPersonId.value = null
+    // A changed mention moves to its new words; the anchor stays selected.
+    const anchor = kept.anchor ? selectedMentions(transcription.value, [kept.anchor])[0] : undefined
+    selectedEntityKey.value = anchor ? transcriptionEntityKey(anchor.span) : null
+    if (!anchor) selectedPersonId.value = selectedFace.value?.personId ?? null
     changed = true
   }
   if (changed) syncRoute()
@@ -844,6 +974,236 @@ provide(
     return null
   }),
 )
+
+// --- Selected name mentions and their person card (#176) ---------------------
+const selectedMentionList = computed(() =>
+  selectedMentions(transcription.value, mentionSelection.value.ids),
+)
+// Every line a selected mention covers is marked on the scan, like the current line.
+const selectedMentionLines = computed(() => {
+  const ids = new Set(mentionSelection.value.ids)
+  return transcription.value.flatMap((line, index) =>
+    line.entities?.some((span) => span.mention_id && ids.has(span.mention_id)) ? [index] : [],
+  )
+})
+const mentionCardPerson = useEntityQuery(
+  computed(() => {
+    const ids = new Set(selectedMentionList.value.map((mention) => mention.entityId))
+    return ids.size === 1 ? ([...ids][0] ?? '') : ''
+  }),
+)
+const mentionCard = computed<MentionCardTarget | null>(() => {
+  const list = selectedMentionList.value
+  if (!list.length) return null
+  const people = new Set(list.map((mention) => mention.entityId))
+  const personId = people.size === 1 ? ([...people][0] ?? null) : null
+  const states = new Set(list.map((mention) => mention.span.linkState ?? null))
+  const person = mentionCardPerson.data.value
+  return {
+    ...(list.length === 1
+      ? linkMetadata({
+          entity_link_state: list[0]!.span.linkState,
+          entity_link_verified_by_user_id: list[0]!.span.verifiedBy,
+          entity_link_verified_at: list[0]!.span.verifiedAt,
+        })
+      : {
+          linkState: states.size === 1 ? [...states][0]! : null,
+          verifiedBy: null,
+          verifiedAt: null,
+        }),
+    ids: list.map((mention) => mention.id),
+    texts: [...new Set(list.map((mention) => mention.text))],
+    personId,
+    name:
+      (personId && person?.entity_id === personId && person.name) ||
+      (personId && entityNames?.value?.get(personId)) ||
+      'Unknown person',
+    thumbnailFaceId: person?.entity_id === personId ? person?.thumbnail_face_id : null,
+    mixed: people.size > 1,
+    anyLinked: list.some((mention) => mention.entityId),
+    anyUnverified: list.some(
+      (mention) => mention.entityId && mention.span.linkState !== 'verified',
+    ),
+  }
+})
+watch(
+  () => mentionSelection.value.ids.join(),
+  () => {
+    mentionActionError.value = ''
+  },
+)
+
+function mentionAction(error: string, action: () => Promise<unknown>, done?: () => void) {
+  if (actionBusy.value) return
+  mentionActionError.value = ''
+  action()
+    .then(() => done?.())
+    .catch(() => (mentionActionError.value = error))
+}
+function assignMentionsTo(entityId: string | null) {
+  const ids = mentionSelection.value.ids
+  if (!ids.length) return
+  // The page's person follows only a saved assignment.
+  mentionAction(
+    'Could not update link.',
+    () => assignMentionsMutation.mutateAsync({ mentionIds: ids, entityId }),
+    () => {
+      selectedPersonId.value = entityId ?? selectedFace.value?.personId ?? null
+      syncRoute()
+    },
+  )
+}
+function assignSimilarPersonToMentions(person: SimilarPersonCandidate) {
+  if (!actionBusy.value) assignMentionsTo(person.id)
+}
+function verifyMentions() {
+  const ids = selectedMentionList.value
+    .filter((mention) => mention.entityId && mention.span.linkState !== 'verified')
+    .map((mention) => mention.id)
+  if (!ids.length) return
+  mentionAction('Could not verify link.', () =>
+    reviewMentionsMutation.mutateAsync({ targets: { ids }, action: 'verify' }),
+  )
+}
+function requestMentionDeletion() {
+  if (actionBusy.value || !mentionSelection.value.ids.length) return
+  mentionDeletion.value = [...mentionSelection.value.ids]
+}
+async function deleteSelectedMentions() {
+  const ids = mentionDeletion.value
+  if (!ids || actionBusy.value) return
+  try {
+    await deleteMentionsMutation.mutateAsync(ids)
+    clearMentions()
+    closeDeletion(false)
+    teleprompter.value?.$el?.querySelector?.('[aria-label="Transcription teleprompter"]')?.focus()
+  } catch {
+    // Keep the mentions and confirmation available for retry.
+  }
+}
+// Search by name: the distinct selected names fill People search, which gets focus.
+function searchByMentionNames() {
+  const text = mentionCard.value?.texts.join(' ')
+  if (!text) return
+  sidebarVisible.value = true
+  focusPeopleRequested.value = true
+  sidebar.update({
+    tab: 'people',
+    peopleText: text,
+    searchFaceId: null,
+    searchModel: null,
+    peopleScope: 'all',
+    peopleOrder: 'relevance',
+  })
+  void nextTick(applyPeopleFocus)
+}
+async function createPersonForMentions(person: NewPerson) {
+  const ids = [...mentionSelection.value.ids]
+  if (!ids.length || actionBusy.value) return
+  mentionActionError.value = ''
+  try {
+    const created = await mentionPersonFlow.createAndLink(person, ids, async (entityId) => {
+      try {
+        return await assignTextMentions(ids, entityId)
+      } finally {
+        void invalidateMentionEdits(queryClient)
+      }
+    })
+    selectedPersonId.value = created.entity_id
+    syncRoute()
+  } catch {
+    mentionActionError.value = 'Could not create and link the person. Try again.'
+  }
+}
+const mentionCreateError = ref('')
+function createMention(mention: { lineIndex: number; name: string; context: string }) {
+  const sourceId = page.value?.source_id
+  if (!sourceId || actionBusy.value) return
+  mentionCreateError.value = ''
+  createMentionMutation
+    .mutateAsync({ name: mention.name, context: mention.context, source_id: sourceId })
+    .then((created) => (pendingMention.value = created.mention_id))
+    .catch(() => (mentionCreateError.value = 'Could not create mention.'))
+}
+function changeMention(mention: { mentionId: string; name: string; context: string }) {
+  if (actionBusy.value) return
+  mentionCreateError.value = ''
+  patchMentionTextMutation
+    .mutateAsync(mention)
+    .then(() => (pendingMention.value = mention.mentionId))
+    .catch(() => (mentionCreateError.value = 'Could not change mention.'))
+}
+/**
+ * Several overlapped mentions become one covering the selected words (#176).
+ * The kept mention is the first verified, else the first linked, else the
+ * first in text order; it takes the new words and keeps its link. The others
+ * are deleted after confirmation. The change is saved before the deletion,
+ * so a failure never loses a mention.
+ */
+type MentionMerge = {
+  keeper: string
+  others: string[]
+  name: string
+  context: string
+  personName?: string
+}
+const mentionMerge = ref<MentionMerge | null>(null)
+const mergeError = ref('')
+function mergeMentions(merge: { mentionIds: string[]; name: string; context: string }) {
+  if (actionBusy.value || merge.mentionIds.length < 2) return
+  const found = selectedMentions(transcription.value, merge.mentionIds)
+  const rank = (mention: (typeof found)[number]) =>
+    mention.state === 'verified' ? 0 : mention.entityId ? 1 : 2
+  const keeper = [...found].sort((a, b) => rank(a) - rank(b))[0]
+  const keeperId = keeper?.id ?? merge.mentionIds[0]!
+  mergeError.value = ''
+  mentionMerge.value = {
+    keeper: keeperId,
+    others: merge.mentionIds.filter((id) => id !== keeperId),
+    name: merge.name,
+    context: merge.context,
+    personName: keeper?.entityId
+      ? (entityNames?.value?.get(keeper.entityId) ?? 'Unknown person')
+      : undefined,
+  }
+}
+async function mergeSelectedMentions() {
+  const merge = mentionMerge.value
+  if (!merge || actionBusy.value) return
+  mergeError.value = ''
+  try {
+    await patchMentionTextMutation.mutateAsync({
+      mentionId: merge.keeper,
+      name: merge.name,
+      context: merge.context,
+    })
+  } catch {
+    mergeError.value = 'Could not merge mention.'
+    return
+  }
+  try {
+    await deleteMentionsMutation.mutateAsync(merge.others)
+  } catch {
+    mergeError.value = 'Could not delete the other mentions. Try again.'
+    return
+  }
+  pendingMention.value = merge.keeper
+  closeDeletion(false)
+}
+
+// Select a created or changed mention as soon as the refreshed spans show it.
+watch([pendingMention, transcription], ([id]) => {
+  if (!id) return
+  const index = transcription.value.findIndex((line) =>
+    line.entities?.some((span) => span.mention_id === id),
+  )
+  if (index < 0) return
+  const span = selectedMentions(transcription.value, [id])[0]!.span
+  pendingMention.value = null
+  if (!includedLines.value[index]) teleprompterLines.reveal([index])
+  selectEntity(index, span, 'replace')
+  teleprompter.value?.focusMentionCard()
+})
 
 // Narrow screens scroll the sidebar with the page. A tab switch keeps the tab
 // bar where it was; when scrolled past it, the new tab starts at its top.
@@ -962,10 +1322,47 @@ onBeforeUnmount(() => {
                   :selected-language="selectedLanguage"
                   :current-translation="currentTranslation"
                   :translation-loading="translationLoading"
+                  :selected-mention-ids="mentionSelection.ids"
+                  :can-create-mention="canAnnotate && canIngest"
+                  :can-change-mention="canAnnotate"
+                  :can-merge-mentions="canAnnotate && canDelete"
                   @select-line="selectLine"
                   @select-entity="selectEntity"
+                  @clear-mentions="clearMentions"
+                  @create-mention="createMention"
+                  @change-mention="changeMention"
+                  @merge-mentions="mergeMentions"
                   @expand="expandContext"
                 >
+                  <template v-if="mentionCard" #mention-card>
+                    <SelectedFaceItem
+                      :mentions="mentionCard"
+                      :assignment-pending="actionBusy"
+                      :can-annotate="canAnnotate"
+                      :can-delete="canDelete"
+                      :action-error="mentionActionError"
+                      @close="clearMentions"
+                      @find-profile="focusPeopleSearch"
+                      @search-face="searchByMentionNames"
+                      @create-profile="createPersonForMentions"
+                      @unassign="assignMentionsTo(null)"
+                      @delete="requestMentionDeletion"
+                    >
+                      <template #actions>
+                        <UiTooltip v-if="mentionCard.anyUnverified" text="Verify this link">
+                          <Button
+                            variant="outline"
+                            size="icon-xs"
+                            class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+                            :disabled="actionBusy"
+                            aria-label="Verify this link"
+                            @click="verifyMentions"
+                            ><BadgeCheck aria-hidden="true"
+                          /></Button>
+                        </UiTooltip>
+                      </template>
+                    </SelectedFaceItem>
+                  </template>
                   <template v-if="isWideWorkspace" #panel-actions>
                     <Button
                       type="button"
@@ -980,6 +1377,13 @@ onBeforeUnmount(() => {
                     /></Button>
                   </template>
                 </DocumentTeleprompter>
+                <p
+                  v-if="mentionCreateError"
+                  role="alert"
+                  class="absolute right-3 bottom-2 rounded-sm bg-background px-2 text-xs text-destructive"
+                >
+                  {{ mentionCreateError }}
+                </p>
               </section>
             </ResizablePanel>
             <!-- Above scan overlays and toolbars, which would otherwise capture drags at the edge. -->
@@ -1084,12 +1488,13 @@ onBeforeUnmount(() => {
                 <DocumentPageOverlay
                   :page-bounds="pageBounds"
                   :viewer="viewerElement"
-                  :actions-enabled="!deletionTarget"
+                  :actions-enabled="!deletionOpen"
                   :transcription="transcription"
                   :faces="overlayFaces"
                   :selected-line-index="selectedLineIndex"
                   :selected-face-id="selectedFace?.id ?? null"
-                  :selected-person-id="selectedPersonId"
+                  :selected-person-id="mentionSelection.ids.length ? null : selectedPersonId"
+                  :selected-mention-lines="selectedMentionLines"
                   :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
                   :show-badge-names="showBadgeNames"
                   @select-line="selectLine"
@@ -1103,6 +1508,7 @@ onBeforeUnmount(() => {
                       :can-annotate="canAnnotate"
                       :can-delete="canDelete"
                       :action-error="actionError"
+                      @close="clearFace"
                       @find-profile="focusPeopleSearch"
                       @search-face="searchByFace(face)"
                       @create-profile="createSimilarPerson"
@@ -1231,6 +1637,8 @@ onBeforeUnmount(() => {
               :face-model="searchModel"
               @update:face-model="(model) => sidebar.update({ searchModel: model })"
               :selected-face="selectedFace ?? null"
+              :selected-mentions="selectedMentionList"
+              :can-assign="canAnnotate"
               :viewed-person-id="selectedPersonId"
               :assignment-pending="actionBusy"
               :load-more="people.loadMore"
@@ -1239,6 +1647,7 @@ onBeforeUnmount(() => {
               @attach-selected-face="selectedFace && searchByFace(selectedFace)"
               @preview="previewSimilarPerson"
               @assign="assignSimilarPerson"
+              @assign-mentions="assignSimilarPersonToMentions"
             />
           </TabsContent>
           <TabsContent value="faces" class="mt-0 flex min-h-0 flex-1 flex-col">
@@ -1278,22 +1687,23 @@ onBeforeUnmount(() => {
         </Tabs>
       </ResizablePanel>
     </ResizablePanelGroup>
-    <AlertDialog :open="Boolean(deletionTarget)" @update:open="closeDeletion">
+    <AlertDialog :open="deletionOpen" @update:open="closeDeletion">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this detection?</AlertDialogTitle>
-          <AlertDialogDescription
-            >This cannot be undone. Any link to a person is removed.</AlertDialogDescription
-          >
+          <AlertDialogTitle>{{ deletionTitle }}</AlertDialogTitle>
+          <AlertDialogDescription>{{ deletionDescription }}</AlertDialogDescription>
         </AlertDialogHeader>
-        <p v-if="deleteMutation.error.value" role="alert" class="text-sm text-destructive">
-          Could not delete detection. Try again.
+        <p v-if="deletionFailed" role="alert" class="text-sm text-destructive">
+          {{ deletionFailed }}
         </p>
         <AlertDialogFooter>
-          <AlertDialogCancel :disabled="deleteMutation.isPending.value">Cancel</AlertDialogCancel>
-          <Button variant="destructive" :disabled="actionBusy" @click="deleteDetection"
-            >Delete</Button
+          <AlertDialogCancel
+            :disabled="deleteMutation.isPending.value || deleteMentionsMutation.isPending.value"
+            >Cancel</AlertDialogCancel
           >
+          <Button variant="destructive" :disabled="actionBusy" @click="confirmDeletion">{{
+            mentionMerge ? 'Merge' : 'Delete'
+          }}</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

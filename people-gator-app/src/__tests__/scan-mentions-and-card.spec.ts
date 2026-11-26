@@ -3,7 +3,7 @@ import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { Face } from '@/viewmodels/document-workspace.types'
+import type { Face, MentionCardTarget } from '@/viewmodels/document-workspace.types'
 
 const mocks = vi.hoisted(() => ({
   groups: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -85,7 +85,7 @@ describe('scan Mentions and face card (#103)', () => {
     expect(scan.findAll('[role="checkbox"]')).toHaveLength(0)
   })
 
-  it('shows the selected face card without a Current badge', () => {
+  it('shows the selected face card without a Current badge', async () => {
     const face = {
       id: 'face',
       personId: 'person',
@@ -102,5 +102,120 @@ describe('scan Mentions and face card (#103)', () => {
     })
     expect(wrapper.text()).toContain('Hana Sidebar')
     expect(wrapper.text()).not.toMatch(/current/i)
+    // The floating card can be dismissed with its own X button.
+    await wrapper.get('button[aria-label="Close"]').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  describe('selected mention card (#176)', () => {
+    const target = (fields: Partial<MentionCardTarget> = {}): MentionCardTarget => ({
+      ids: ['m1'],
+      texts: ['Jan Bulk'],
+      personId: 'jan',
+      name: 'Jan Bulk',
+      thumbnailFaceId: null,
+      mixed: false,
+      anyLinked: true,
+      anyUnverified: true,
+      linkState: 'automatic',
+      verifiedBy: null,
+      verifiedAt: null,
+      ...fields,
+    })
+    const mountCard = (mentions: MentionCardTarget, props: Record<string, unknown> = {}) =>
+      mount(SelectedFaceItem, {
+        props: { mentions, canDelete: true, ...props },
+        slots: { actions: () => h('button', { 'aria-label': 'Verify this link' }) },
+        global: {
+          stubs: { RouterLink: RouterLinkStub, IdentityFacePreview: true, PersonPortrait: true },
+        },
+      })
+    const labels = (wrapper: ReturnType<typeof mountCard>) =>
+      wrapper.findAll('button[aria-label]').map((button) => button.attributes('aria-label'))
+
+    it('uses the face card layout and actions for one linked mention', async () => {
+      const wrapper = mountCard(target())
+      expect(labels(wrapper)).toEqual([
+        'Search people by this name',
+        'Reassign to another profile',
+        'Create and assign a new profile',
+        'Unassign current profile',
+        'Verify this link',
+        'Delete mention',
+        'Close',
+      ])
+      expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
+        name: 'person-detail',
+        params: { personId: 'jan' },
+        query: {},
+      })
+      expect(wrapper.text()).toContain('“Jan Bulk”')
+      expect(wrapper.findComponent({ name: 'EntityLinkStateBadge' }).exists()).toBe(true)
+      for (const [label, event] of [
+        ['Search people by this name', 'searchFace'],
+        ['Reassign to another profile', 'findProfile'],
+        ['Unassign current profile', 'unassign'],
+        ['Delete mention', 'delete'],
+      ] as const) {
+        await wrapper.get(`[aria-label="${label}"]`).trigger('click')
+        expect(wrapper.emitted(event)).toHaveLength(1)
+      }
+    })
+
+    it('counts a mixed selection and names its texts', () => {
+      const wrapper = mountCard(
+        target({
+          ids: ['m1', 'm2', 'm3'],
+          texts: ['Jan Bulk', 'J. Bulk'],
+          personId: null,
+          mixed: true,
+        }),
+      )
+      expect(wrapper.text()).toContain('Several people')
+      expect(wrapper.text()).toContain('3 mentions · “Jan Bulk”, “J. Bulk”')
+      expect(wrapper.findComponent({ name: 'EntityLinkStateBadge' }).exists()).toBe(false)
+      expect(labels(wrapper)).toContain('Search people by these names')
+      expect(labels(wrapper)).toContain('Delete mentions')
+    })
+
+    it('links unlinked mentions and creates a person pre-filled with the text', async () => {
+      const wrapper = mountCard(
+        target({
+          ids: ['m1', 'm2'],
+          personId: null,
+          anyLinked: false,
+          anyUnverified: false,
+          linkState: null,
+        }),
+      )
+      expect(wrapper.text()).toContain('Unlinked mentions')
+      expect(labels(wrapper)).not.toContain('Unassign current profile')
+      expect(labels(wrapper)).toContain('Link to an existing profile')
+      await wrapper.get('[aria-label="Create and assign a new profile"]').trigger('click')
+      expect(wrapper.get('[aria-label="New person name"]').text()).toBe('Jan Bulk')
+      await wrapper.get('form').trigger('submit')
+      expect(wrapper.emitted('createProfile')).toEqual([
+        [{ name: 'Jan Bulk', shortDescription: undefined }],
+      ])
+    })
+
+    it('closes from the end of the bottom action row', async () => {
+      const wrapper = mountCard(target())
+      const close = wrapper.get('[aria-label="Close"]')
+      expect(close.element.closest('[data-slot="item-footer"]')).not.toBeNull()
+      expect(labels(wrapper).slice(-1)).toEqual(['Close'])
+      await close.trigger('click')
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      // The create form keeps it in the same row.
+      await wrapper.get('[aria-label="Create and assign a new profile"]').trigger('click')
+      expect(
+        wrapper.get('[aria-label="Close"]').element.closest('[data-slot="item-footer"]'),
+      ).not.toBeNull()
+    })
+
+    it('hides annotation and delete actions without permission', () => {
+      const wrapper = mountCard(target(), { canAnnotate: false, canDelete: false })
+      expect(labels(wrapper)).toEqual(['Search people by this name', 'Close'])
+    })
   })
 })

@@ -44,7 +44,8 @@ from people_gator_api.schemas.entities import (
 )
 from people_gator_api.schemas.faces import FaceResponse, FaceCreateRequest, FaceListFilter, FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import (
-    TextMentionListFilter, TextMentionListRequest, TextMentionPatchRequest,
+    TextMentionCreateRequest, TextMentionListFilter, TextMentionListRequest, TextMentionPatchBatchItem,
+    TextMentionPatchRequest,
 )
 from people_gator_api.schemas.sources import (
     PageResponse,
@@ -188,7 +189,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (52, 170, 124)
+    assert await counts(database) == (53, 170, 132)
     assert result.documents.keys() == {document.key for document in DOCUMENTS if document.registered}
     assert result.pages.keys() == {page.key for page in PAGES}
 
@@ -254,7 +255,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
              "sidebar-rosa", "sidebar-karel", "strip-other-person"},
 
         ),
-        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas", "sidebar-direct",
+        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", "sidebar-tomas", "sidebar-direct", "mention-edit-jan",
                                                                        *(f"pagination-{i}" for i in range(1, 15))}),
         # Life-date examples (#123) are evidence-free, like Lenka.
         (EntityListFilter(has_detections=False, has_mentions=False),
@@ -322,10 +323,9 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
                 document_id=document.document_id,
                 page_id=page.page_id,
             )
+            # Every stored mention resolves, unlinked ones included (#176).
             assert {span.mention_id for span in spans} == {
-                result.mentions[item.key]
-                for item in page.mentions
-                if item.state is not None
+                result.mentions[item.key] for item in page.mentions
             }
         else:
             with pytest.raises(SourceResolutionError) as missing_layout:
@@ -375,7 +375,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         # Database-generated identities differ; fixture keys, counts and media do not.
         for field in type(fresh).model_fields:
             assert getattr(copied, field).keys() == getattr(fresh, field).keys(), field
-        assert await counts(copy) == await counts(database) == (52, 170, 124)
+        assert await counts(copy) == await counts(database) == (53, 170, 132)
 
         def files(root: Path) -> dict[Path, bytes]:
             return {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
@@ -389,7 +389,7 @@ async def test_worker_seed_copy_matches_a_fresh_seed(seed_target, seed_templates
         }
         # The copy is a seeded preview: a rerun keeps every identity and adds nothing.
         assert await preview.seed_preview(copy, storage) == copied
-        assert await counts(copy) == (52, 170, 124)
+        assert await counts(copy) == (53, 170, 132)
 
 
 @pytest.mark.asyncio
@@ -510,7 +510,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (52, 170, 124)
+    assert await counts(database) == (53, 170, 132)
 
 
 
@@ -531,7 +531,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (52, 170, 124)
+    assert await counts(database) == (53, 170, 132)
 
 
     stored = await database.entities.get(first.entities["ada"])
@@ -555,7 +555,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (53, 170, 124)
+    assert await counts(database) == (54, 170, 132)
 
 
 
@@ -581,8 +581,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 52 and len(result.faces) == 170
-    assert await counts(database) == (52, 170, 124)
+    assert len(result.entities) == 53 and len(result.faces) == 170
+    assert await counts(database) == (53, 170, 132)
 
 
 
@@ -1749,11 +1749,10 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
                     document_id=page.document_id, page_id=page.page_id,
                     entity_link_state=list(states) if states else MISSING,
                 )
-                # OCR overlays represent assigned mentions; unassigned records
-                # remain available through the mention repository.
+                # OCR overlays show every mention the state filter admits;
+                # without a filter that includes unassigned records (#176).
                 assert {span.mention_id for span in spans} == {
-                    first.mentions['links-' + key + '-mention']
-                    for key in matching if expected[page_key][key] is not None
+                    first.mentions['links-' + key + '-mention'] for key in matching
                 }
 
     actor = GenericActor(user_id=first.users['reviewer'])
@@ -2216,7 +2215,9 @@ async def _page_mention_lines(database, page):
         # A span covers its start line, its end line and every line between.
         covered = order[order.index(span.start_line_id):order.index(span.end_line_id) + 1]
         assert covered, "span lines must resolve in the stored layout"
-        by_entity.setdefault(span.entity_id, set()).update(covered)
+        # Unlinked mentions have spans too (#176) but no identity to map.
+        if span.entity_id is not None:
+            by_entity.setdefault(span.entity_id, set()).update(covered)
         by_mention.setdefault(span.mention_id, set()).update(covered)
     return by_entity, by_mention
 
@@ -3737,7 +3738,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (52, 170, 124)
+    assert await counts(db) == (53, 170, 132)
 
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
@@ -4658,8 +4659,93 @@ async def test_teleprompter_upgrade_recovers_an_interrupted_checkpoint(seed_targ
         limit=100, filter_=TextMentionListFilter(source_id=[seed.pages["teleprompter-1"]]),
     ))).items
     assert sorted(mention.name for mention in listed) == [
-        "Ada Novak", "Nora Svoboda", "Viktor Marek",
+        *["Ada Novak"] * 4, "Nora Svoboda", *["Viktor Marek"] * 2,
     ]
+
+
+@pytest.mark.asyncio
+async def test_teleprompter_repeats_upgrade_to_one_record_per_line(seed_target, monkeypatch):
+    """#176 localizes spans by context; older previews gain the repeat records once."""
+    database, filesystem, _ = seed_target
+    added = {"teleprompter-ada-16", "teleprompter-ada-29", "teleprompter-ada-33", "teleprompter-viktor-25"}
+    with monkeypatch.context() as legacy:
+        legacy.setattr(preview, "PAGES", tuple(
+            replace(item, mentions=tuple(m for m in item.mentions if m.key not in added))
+            if item.key == "teleprompter-1" else item
+            for item in preview.PAGES
+        ))
+        old = await preview.seed_preview(database, filesystem)
+    assert not added & old.mentions.keys()
+    page = await database.sources.get_page(old.pages["teleprompter-1"])
+    # Before the upgrade, a record covers only its own line.
+    by_entity, _ = await _page_mention_lines(database, page)
+    assert by_entity[old.entities["ada"]] == {TELEPROMPTER_LINE(3)}
+
+    seed = await preview.seed_preview(database, filesystem)
+    assert old.mentions.items() <= seed.mentions.items()
+    assert added <= seed.mentions.keys()
+    by_entity, by_mention = await _page_mention_lines(database, page)
+    assert by_entity[seed.entities["ada"]] == {TELEPROMPTER_LINE(i) for i in (3, 16, 29, 33, 34)}
+    assert by_mention[seed.mentions["teleprompter-ada-33"]] == {TELEPROMPTER_LINE(33), TELEPROMPTER_LINE(34)}
+    assert await preview.seed_preview(database, filesystem) == seed
+
+
+@pytest.mark.asyncio
+async def test_mention_editing_page_offers_repeated_states_and_plain_text(seed_target):
+    """#176: bulk mention selection, reassignment and Create mention on one scan."""
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["mention-editing-1"])
+    assert urlsplit(result.filter_examples["mention-editing"]).path == (
+        f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    )
+    jan = result.entities["mention-edit-jan"]
+    keys = ("mention-edit-verified", "mention-edit-automatic", "mention-edit-unlinked", "mention-edit-manual")
+    records = {key: await database.text_mentions.get(result.mentions[key]) for key in keys}
+    assert {key: (record.entity_id, record.entity_link_state) for key, record in records.items()} == {
+        "mention-edit-verified": (jan, "verified"),
+        "mention-edit-automatic": (jan, "automatic"),
+        "mention-edit-unlinked": (None, None),
+        "mention-edit-manual": (jan, "manual"),
+    }
+    spans = await get_text_mention_spans(
+        database, page.source_id, library=page.library,
+        document_id=page.document_id, page_id=page.page_id,
+    )
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    lines = {line.id: line.transcription for region in layout.regions for line in region.lines}
+    covered = {
+        span.mention_id: lines[span.start_line_id][span.start_character:span.end_character]
+        for span in spans
+    }
+    # Each record covers only the name on its own line; the unlinked one too.
+    assert len(spans) == 4
+    assert {key: covered[result.mentions[key]] for key in keys} == {
+        "mention-edit-verified": "Jan Bulk", "mention-edit-automatic": "Jan Bulk",
+        "mention-edit-unlinked": "Jan Bulk", "mention-edit-manual": "J. Bulk",
+    }
+    assert [span.start_line_id for span in spans] == [
+        line_id for line_id, text in lines.items() if "Bulk" in text
+    ]
+    # "Marta Plain" stays plain text for Create mention.
+    assert "Marta Plain witnessed the closing entry." in lines.values()
+    assert not any("Marta" in text for text in covered.values())
+
+    # A reviewer reassigns, unlinks and retexts mentions; reruns keep all of it.
+    actor = GenericActor(user_id=result.users["reviewer"])
+    other = result.entities["ada"]
+    edited = await database.text_mentions.patch_batch([
+        TextMentionPatchBatchItem(mention_id=result.mentions["mention-edit-unlinked"], entity_id=other,
+                                  entity_link_state="manual"),
+        TextMentionPatchBatchItem(mention_id=result.mentions["mention-edit-verified"], name="Bulk"),
+    ], actor)
+    created = await database.text_mentions.create(TextMentionCreateRequest(
+        name="Marta Plain", context="Marta Plain witnessed the closing entry.", source_id=page.source_id,
+    ), actor)
+    for _ in range(2):
+        assert await preview.seed_preview(database, filesystem) == result
+    assert [await database.text_mentions.get(item.mention_id) for item in edited] == edited
+    assert (await database.text_mentions.get(created.mention_id)) == created
 
 
 @pytest.mark.asyncio

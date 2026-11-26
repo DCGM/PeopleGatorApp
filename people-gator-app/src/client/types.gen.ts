@@ -3433,9 +3433,9 @@ export type TextMentionCreateRequest = {
     /**
      * Entity Id
      *
-     * The ID of the entity being mentioned.
+     * The ID of the entity being mentioned. Omit it to record an unlinked mention.
      */
-    entity_id: string;
+    entity_id?: string;
     /**
      * Source Id
      *
@@ -3540,6 +3540,18 @@ export type TextMentionPatchBatchItem = {
      */
     entity_id?: string | null;
     /**
+     * Name
+     *
+     * New mentioned text. Omit to keep it; it cannot be empty.
+     */
+    name?: string;
+    /**
+     * Context
+     *
+     * New context, such as the OCR line holding the name. Null clears it; omit to keep it.
+     */
+    context?: string | null;
+    /**
      * Mention Id
      */
     mention_id: string;
@@ -3548,7 +3560,10 @@ export type TextMentionPatchBatchItem = {
 /**
  * TextMentionPatchRequest
  *
- * Assign a mention to an entity, or unassign it with null.
+ * Assign a mention to an entity, or unassign it with null, and/or change its text.
+ *
+ * Omitted fields are kept. Changing only ``name``/``context`` keeps the
+ * person link and its verification state.
  */
 export type TextMentionPatchRequest = {
     /**
@@ -3559,6 +3574,18 @@ export type TextMentionPatchRequest = {
      * Entity Id
      */
     entity_id?: string | null;
+    /**
+     * Name
+     *
+     * New mentioned text. Omit to keep it; it cannot be empty.
+     */
+    name?: string;
+    /**
+     * Context
+     *
+     * New context, such as the OCR line holding the name. Null clears it; omit to keep it.
+     */
+    context?: string | null;
 };
 
 /**
@@ -3675,8 +3702,10 @@ export type TextMentionSpanModel = {
     mention_id: string;
     /**
      * Entity Id
+     *
+     * Linked entity, or null for an unlinked mention.
      */
-    entity_id: string;
+    entity_id?: string | null;
     entity_type: EntityType | null;
     /**
      * Start Line Id

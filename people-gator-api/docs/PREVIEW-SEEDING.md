@@ -85,6 +85,7 @@ This does not automatically seed the actual staging environment.
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
 | Page and document verification (#149) | Open `document-verification`: **Verification: all pages verified** (2 / 2) and **Verification: in progress** (1 / 3) and **Verification: mostly done** (3 / 4) in `preview-verification`; `document-verification-percentage` sorts them by **Verified %**. See [Page verification](#page-verification-149). |
 | Create or replace a person by ID (#173) | Open `put-replace-person`: **Pia Replace**, created through `PUT /api/v1/entities/{id}` at a fixed UUID, with one face and one mention. See [Create or replace by ID](#create-or-replace-by-id-173). |
+| Scan mention editing (#176) | Open `mention-editing`: **Jan Bulk** in verified, automatic, unlinked and manual (`J. Bulk`) mentions on one **Mention editing practice** page, plus plain-text **Marta Plain**. See [Scan mention editing](#scan-mention-editing-176). |
 | Deactivated reviewer attribution (#66) | Open `deactivated-reviewer`: **Olga Expiry** matches **Modified by: Preview former reviewer**, an inactive user |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
@@ -1191,9 +1192,12 @@ second seed run. No preview edits or checkpoint identities are reset.
 
 The additive **Teleprompter reading practice** document (`teleprompter`,
 `preview-mzk`) has a 40-line page (`teleprompter-1`) and an additive wrapped-line page (`teleprompter-wrap-2`). Ada Novak's automatic
-mention repeats on L3, L16 and L29 and spans L33–L34. Viktor Marek's verified
-mention is on L10 and L25 and Nora Svoboda's manual mention is on L20. The other
-lines stay unannotated. One unembedded Ada face sits beside the text.
+mentions repeat on L3, L16 and L29 and one spans L33–L34. Viktor Marek's verified
+mentions are on L10 and L25 and Nora Svoboda's manual mention is on L20. The other
+lines stay unannotated. One unembedded Ada face sits beside the text. Since #176
+each repeat is its own record, because a mention resolves only on the line its
+context names (see [Scan mention editing](#scan-mention-editing-176)); previews
+seeded earlier keep their L3/L10 records and gain the four repeat records once.
 
 - Open `teleprompter` for full text. Select **Annotated** to collapse the
   unannotated lines. Each hidden gap is a band showing its line count. Its
@@ -1741,3 +1745,53 @@ cleared values survive and an interrupted run never repeats a write. The four
 new people are created with their values through the typed person contract
 (`create_person`/`put_person`; the upgrade uses `patch_person`). Integration tests check the orders,
 ranges, example links, the upgrade, review-edit preservation and checkpoint recovery.
+
+## Scan mention editing (#176)
+
+The additive **Mention editing practice** document (`mention-editing`,
+`preview-mzk`) has one five-line page (`mention-editing-1`) for
+**Jan Bulk** (`mention-edit-jan`, mentions only):
+
+| Line | Text | Mention |
+| --- | --- | --- |
+| L1 | Jan Bulk opened the parish register. | Jan Bulk, verified |
+| L2 | Jan Bulk noted the bell repairs. | Jan Bulk, automatic (unverified) |
+| L3 | Jan Bulk signed the closing entry. | Jan Bulk, unlinked |
+| L4 | Marta Plain witnessed the closing entry. | none: plain text |
+| L5 | J. Bulk filed the register away. | J. Bulk, manual |
+
+Open `mention-editing`:
+
+- Click a name in the transcription to open its person card, which floats
+  above or below the mention like a face's card and hides when the mention
+  scrolls out of view. Only the clicked mention is selected, and its line is
+  marked on the scan. Ctrl/Cmd-click adds or removes a mention; Shift-click
+  selects every shown mention from the last clicked one, in text order and
+  across lines. Enter/Space with the same modifiers work on a focused mention.
+  The card counts the selection and applies its actions to all selected mentions.
+- Select the three **Jan Bulk** mentions, choose Search to fill People with
+  their name, then **Assign to mentions** on another result; or Create a new
+  person in place, pre-filled with the name. A face can stay selected at the
+  same time; **Assign to face** targets only it.
+- Select the words **Marta Plain** to get **Create mention**: the new unlinked
+  mention is selected and its card opens. A selection across consecutive lines
+  creates one mention whose context is those lines. Select **Bulk** inside a
+  mention to get **Change mention**, which keeps its person and verification state.
+  A selection across several mentions offers **Merge mentions** (with delete
+  permission): after confirmation one mention covers the selected words, keeping
+  the first verified, else the first linked, mention's link, and the others are deleted.
+
+Each mention resolves to at most one span. Its context locates it when it
+equals exactly one OCR line, or one run of consecutive lines (compared word by
+word, ignoring case and punctuation), and the name is matched there. A
+missing context, or one found nowhere on the page, uses the best single match
+on the page. The API does not check contexts (it may not know the page text);
+the scan sends a unique one: it starts with the selected lines and adds
+neighbouring lines in the same OCR region until the context occurs once on
+the page and its first exact name match is the selected words. Identical
+surroundings, or a name repeated earlier in its own line, offer no action
+yet (#182). Unlinked
+mentions are served as spans with no entity. Reruns keep reviewer
+reassignments, text changes and mentions created on the scan; integration
+tests check each record's span, the plain-text line and that review edits
+survive two reruns.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
-from people_gator_api.schemas.missing import is_missing
+from people_gator_api.schemas.missing import is_missing, missing_to_none
 from collections.abc import Sequence
 
 from sqlalchemy import (
@@ -223,7 +223,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             **touch_values(context),
             mention=payload.name,
             context=payload.context,
-            entity_id=payload.entity_id,
+            entity_id=missing_to_none(payload.entity_id),
             entity_link_state=create_link_state(payload),
             source_id=payload.source_id,
         )
@@ -250,12 +250,12 @@ class PostgresTextMentionRepository(TextMentionRepository):
         await ensure_ids(
             self._session,
             Entity,
-            [item.entity_id for item in payloads],
+            [entity_id for item in payloads if (entity_id := missing_to_none(item.entity_id))],
             "mention entity",
         )
         mentions = [self._new(payload, context) for payload in payloads]
         self._session.add_all(mentions)
-        await touch_entities(self._session, [item.entity_id for item in payloads], context)
+        await touch_entities(self._session, [missing_to_none(item.entity_id) for item in payloads], context)
         await touch_sources(self._session, [item.source_id for item in payloads], context)
         await commit(self._session, "mention create violates a persistence constraint")
         return [mention_response(mention) for mention in mentions]
@@ -306,10 +306,18 @@ class PostgresTextMentionRepository(TextMentionRepository):
             mention = mentions.get(command.mention_id)
             if mention is not None:
                 values = transitions[command.mention_id]
-                if values != (mention.entity_id, mention.entity_link_state, mention.entity_link_verified_by_user_id, mention.entity_link_verified_at):
+                text = {
+                    column: value
+                    for column, value in (("mention", command.name), ("context", command.context))
+                    if not is_missing(value) and getattr(mention, column) != value
+                }
+                link_changed = values != (mention.entity_id, mention.entity_link_state, mention.entity_link_verified_by_user_id, mention.entity_link_verified_at)
+                if link_changed or text:
                     touched.update([mention.entity_id, values[0]])
                     sources.add(mention.source_id)
                     apply_link(mention, values)
+                    for column, value in text.items():
+                        setattr(mention, column, value)
                     apply_touch(mention, context)
         await touch_entities(self._session, touched, context)
         await touch_sources(self._session, sources, context)

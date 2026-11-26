@@ -36,6 +36,7 @@ from people_gator_api.utils.http_errors import raise_api_error
 router = APIRouter(tags=["text mentions"])
 
 
+
 @router.get("/text-mentions", response_model=TextMentionListResponse)
 async def list_text_mentions_route(
     database: DatabaseDependency,

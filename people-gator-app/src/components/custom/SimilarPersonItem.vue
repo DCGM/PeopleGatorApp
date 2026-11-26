@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ExternalLink, LetterText, ScanFace } from '@lucide/vue'
+import { Check, ExternalLink, LetterText, ScanFace, TextCursor } from '@lucide/vue'
 import { computed } from 'vue'
 
 import type {
@@ -13,19 +13,46 @@ import EvidenceSourceBadge from './EvidenceSourceBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemFooter, ItemMedia } from '@/components/ui/item'
 
-const props = defineProps<{
-  person: SimilarPersonCandidate
-  assigned?: boolean
-  reassignment?: boolean
-  assignmentDisabled?: boolean
-  assignmentPending?: boolean
-  viewed?: boolean
-}>()
+/** What Assign to face would do for the scan's selected face, if any. */
+export type FaceAssignment = 'none' | 'assign' | 'reassign' | 'assigned'
+
+const props = withDefaults(
+  defineProps<{
+    person: SimilarPersonCandidate
+    /** Show Assign to mentions and Assign to face; each is disabled without its target. */
+    canAssign?: boolean
+    faceAssignment?: FaceAssignment
+    /** Name mentions selected on the scan. */
+    mentionCount?: number
+    /** Every selected mention already links to this person. */
+    mentionsAssigned?: boolean
+    assignmentPending?: boolean
+    viewed?: boolean
+  }>(),
+  { canAssign: true, faceAssignment: 'none', mentionCount: 0 },
+)
 
 const emit = defineEmits<{
   preview: [person: SimilarPersonCandidate]
   assign: [person: SimilarPersonCandidate]
+  assignMentions: [person: SimilarPersonCandidate]
 }>()
+
+const mentionsLabel = computed(() => {
+  const count = props.mentionCount
+  if (props.mentionsAssigned) return `Mentions assigned to ${props.person.name}`
+  if (!count) return `Assign mentions to ${props.person.name}`
+  return `Assign ${count} ${count === 1 ? 'mention' : 'mentions'} to ${props.person.name}`
+})
+const faceLabel = computed(
+  () =>
+    ({
+      none: `Assign face to ${props.person.name}`,
+      assign: `Assign face to ${props.person.name}`,
+      reassign: `Reassign face to ${props.person.name}`,
+      assigned: `Face assigned to ${props.person.name}`,
+    })[props.faceAssignment],
+)
 
 function wikidataHref(value: string) {
   return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
@@ -133,10 +160,13 @@ const scores = computed(() =>
     </ItemContent>
 
     <ItemFooter
-      v-if="person.wikidataId || person.nlcrAuthorityId || !props.assignmentDisabled"
-      class="relative z-20 w-full shrink-0 items-center border-t pt-2 text-muted-foreground"
+      v-if="person.wikidataId || person.nlcrAuthorityId || canAssign"
+      class="relative z-20 w-full shrink-0 flex-wrap items-center gap-2 border-t pt-2 text-muted-foreground"
     >
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div
+        v-if="person.wikidataId || person.nlcrAuthorityId"
+        class="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+      >
         <a
           v-if="person.wikidataId"
           :href="wikidataHref(person.wikidataId)"
@@ -159,24 +189,50 @@ const scores = computed(() =>
         </a>
       </div>
 
-      <Button
-        v-if="!props.assignmentDisabled"
-        type="button"
-        size="xs"
-        :variant="assigned ? 'secondary' : 'outline'"
-        :class="!assigned && 'text-accent hover:text-accent'"
-        :aria-pressed="assigned"
-        :aria-label="
-          assigned
-            ? `Assigned to ${person.name}`
-            : `${reassignment ? 'Reassign' : 'Assign'} to ${person.name}`
-        "
-        :disabled="assigned || props.assignmentPending"
-        @click="emit('assign', person)"
-      >
-        <Check v-if="assigned" aria-hidden="true" />
-        {{ assigned ? 'Assigned' : reassignment ? 'Reassign' : 'Assign' }}
-      </Button>
+      <!-- Each target has its own button, disabled while nothing of its kind is selected. -->
+      <div v-if="canAssign" class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+        <Button
+          type="button"
+          size="xs"
+          :variant="mentionsAssigned ? 'secondary' : 'outline'"
+          :class="!mentionsAssigned && mentionCount > 0 && 'text-accent hover:text-accent'"
+          :aria-pressed="mentionsAssigned"
+          :aria-label="mentionsLabel"
+          :title="mentionsLabel"
+          :disabled="!mentionCount || mentionsAssigned || assignmentPending"
+          @click="emit('assignMentions', person)"
+        >
+          <Check v-if="mentionsAssigned" aria-hidden="true" />
+          <TextCursor v-else aria-hidden="true" />
+          {{ mentionsAssigned ? 'Assigned' : 'Assign to mentions' }}
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          :variant="faceAssignment === 'assigned' ? 'secondary' : 'outline'"
+          :class="
+            (faceAssignment === 'assign' || faceAssignment === 'reassign') &&
+            'text-accent hover:text-accent'
+          "
+          :aria-pressed="faceAssignment === 'assigned'"
+          :aria-label="faceLabel"
+          :title="faceLabel"
+          :disabled="
+            faceAssignment === 'none' || faceAssignment === 'assigned' || assignmentPending
+          "
+          @click="emit('assign', person)"
+        >
+          <Check v-if="faceAssignment === 'assigned'" aria-hidden="true" />
+          <ScanFace v-else aria-hidden="true" />
+          {{
+            faceAssignment === 'assigned'
+              ? 'Assigned'
+              : faceAssignment === 'reassign'
+                ? 'Reassign face'
+                : 'Assign to face'
+          }}
+        </Button>
+      </div>
     </ItemFooter>
   </Item>
 </template>

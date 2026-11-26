@@ -24,9 +24,15 @@ const props = withDefaults(
     showBadgeNames?: boolean
     viewer?: HTMLElement | null
     actionsEnabled?: boolean
+    /** Lines holding the name mentions selected for editing (#176). */
+    selectedMentionLines?: readonly number[]
   }>(),
-  { showBadgeNames: true, actionsEnabled: true },
+  { showBadgeNames: true, actionsEnabled: true, selectedMentionLines: () => [] },
 )
+const mentionLines = computed(() => new Set(props.selectedMentionLines))
+function lineSelected(index: number) {
+  return index === props.selectedLineIndex || mentionLines.value.has(index)
+}
 
 const emit = defineEmits<{
   selectLine: [index: number]
@@ -157,7 +163,7 @@ function lineMentionsSelectedPerson(index: number) {
 
 function lineSelectionState(index: number): keyof typeof lineSelectionClasses {
   const mentioned = lineMentionsSelectedPerson(index)
-  if (index === props.selectedLineIndex) return mentioned ? 'selectedMentioned' : 'selected'
+  if (lineSelected(index)) return mentioned ? 'selectedMentioned' : 'selected'
   return mentioned ? 'mentioned' : 'default'
 }
 
@@ -193,7 +199,7 @@ function regionStyle(position: Face['position']): CSSProperties {
       :class="lineSelectionClasses[lineSelectionState(index)]"
       :style="regionStyle(line.position)"
       :aria-label="lineLabel(line, index)"
-      :aria-pressed="index === selectedLineIndex"
+      :aria-pressed="lineSelected(index)"
       @click.stop="emit('selectLine', index)"
     />
 

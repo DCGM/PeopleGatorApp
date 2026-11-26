@@ -181,6 +181,9 @@ PEOPLE = (
     Person("put-replace", "Pia Replace", ("P. Replace",),
            "Synthetic person created by PUT; replace her to see evidence stay linked.", "reviewer",
            put=True),
+    # Issue #176: repeated name mentions to select, reassign and create in bulk on a scan.
+    Person("mention-edit-jan", "Jan Bulk", (),
+           "Synthetic person whose name repeats on one scan in several link states.", "importer"),
 )
 
 
@@ -268,6 +271,7 @@ DOCUMENTS = (
     # More verified pages than "all pages verified", but a smaller share.
     Document("verification-most", "preview-verification", "Verification: mostly done"),
     Document("put-replace", "preview-mzk", "Create or replace practice"),
+    Document("mention-editing", "preview-mzk", "Mention editing practice"),
 )
 
 
@@ -429,6 +433,13 @@ SIDEBAR_PAGES = (
                          ("automatic", "manual", "verified")[index % 3])
                  for index in range(SIDEBAR_REPEATED_MENTIONS)))
       for page in range(2, SIDEBAR_CROWD_PAGES + 2)),
+)
+MENTION_EDITING_LINES = (
+    "Jan Bulk opened the parish register.",
+    "Jan Bulk noted the bell repairs.",
+    "Jan Bulk signed the closing entry.",
+    "Marta Plain witnessed the closing entry.",
+    "J. Bulk filed the register away.",
 )
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
@@ -715,7 +726,15 @@ PAGES = (
          (Face("teleprompter-ada", "ada", 0, 0, embedded=False, box=(600, 200, 150, 175)),),
          (Mention("teleprompter-ada", "ada", "Ada Novak opened the reading room."),
           Mention("teleprompter-viktor", "viktor", "Viktor Marek brought the glass plates.", "verified"),
-          Mention("teleprompter-nora", "nora", "Nora Svoboda copied the index.", "manual")),
+          Mention("teleprompter-nora", "nora", "Nora Svoboda copied the index.", "manual"),
+          # #176: spans follow each record's own line (its context), so every
+          # repeat has its own record; reruns add them beside earlier records.
+          Mention("teleprompter-ada-16", "ada", "Ada Novak checked the plates against the ledger."),
+          Mention("teleprompter-ada-29", "ada", "Ada Novak compared the index with the plates."),
+          Mention("teleprompter-ada-33", "ada",
+                  "The final entry of the day was written by Ada\nNovak before the room was closed."),
+          Mention("teleprompter-viktor-25", "viktor",
+                  "Viktor Marek photographed the sketch for the album.", "verified")),
          lines=TELEPROMPTER_LINES),
     Page("teleprompter-wrap-2", "teleprompter", 2, (),
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
@@ -735,6 +754,15 @@ PAGES = (
     Page("put-replace-1", "put-replace", 1,
          (Face("put-replace-face", "put-replace", 0, 0, embedded=False),),
          (Mention("put-replace-mention", "put-replace", "Pia Replace signed the register."),)),
+    # #176: one name in verified, automatic and unlinked mentions, a reassigned
+    # look-alike, and "Marta Plain" left as plain text for Create mention.
+    Page("mention-editing-1", "mention-editing", 1, (),
+         (Mention("mention-edit-verified", "mention-edit-jan", MENTION_EDITING_LINES[0], "verified"),
+          Mention("mention-edit-automatic", "mention-edit-jan", MENTION_EDITING_LINES[1]),
+          Mention("mention-edit-unlinked", "mention-edit-jan", MENTION_EDITING_LINES[2], None),
+          Mention("mention-edit-manual", "mention-edit-jan", MENTION_EDITING_LINES[4], "manual",
+                  recorded="J. Bulk")),
+         lines=MENTION_EDITING_LINES),
 )
 
 # Pages the seed verifies once as the reviewer; reruns keep later review edits.

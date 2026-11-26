@@ -44,7 +44,9 @@ class TextMentionSpanModel(EntityLinkResponse):
     """
 
     mention_id: uuid.UUID
-    entity_id: uuid.UUID
+    entity_id: uuid.UUID | None = Field(
+        default=None, description="Linked entity, or null for an unlinked mention."
+    )
     entity_type: EntityType | None
     start_line_id: str
     end_line_id: str

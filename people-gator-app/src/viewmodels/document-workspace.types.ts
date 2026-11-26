@@ -51,6 +51,8 @@ export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
 export type TranscriptionLine = {
   id: string
   text: string
+  /** OCR region of the line; a mention's context never crosses regions. */
+  regionId?: string
   position: { left: number; top: number; width: number; height: number }
   entities?: TranscriptionEntitySpan[]
 }
@@ -58,4 +60,23 @@ export type TranscriptionLine = {
 /** Whether a line carries a span linked to the identity, matched by ID rather than text. */
 export function lineMentionsEntity(line: TranscriptionLine | undefined, entityId: string) {
   return line?.entities?.some((span) => span.entity_id === entityId) ?? false
+}
+
+/**
+ * The scan's selected name mentions as the person card shows them (#176).
+ * Link metadata describes the selection when every mention shares it.
+ */
+export type MentionCardTarget = LinkMetadata & {
+  ids: string[]
+  /** Distinct mention texts, in transcription order. */
+  texts: string[]
+  /** The person every selected mention links to, or null when unlinked or mixed. */
+  personId: string | null
+  name: string
+  thumbnailFaceId?: string | null
+  /** Mentions link to different people, or only some are linked. */
+  mixed: boolean
+  anyLinked: boolean
+  /** Some linked mention is not verified yet. */
+  anyUnverified: boolean
 }

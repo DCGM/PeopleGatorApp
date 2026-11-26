@@ -18,7 +18,8 @@ import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
-import { useCreateEntityMutation, useEntityListQuery } from '@/query/entities'
+import { useEntityListQuery } from '@/query/entities'
+import { usePersonCreateFlow } from '@/viewmodels/person-create-flow'
 import {
   fetchFaceAlignedCrop,
   useAssignFaceMutation,
@@ -63,7 +64,8 @@ function spanFragments(
   span: TextMentionSpanModel,
   lines: Array<{ id: string; text: string }>,
 ): TranscriptionEntitySpan[] {
-  if (!span.entity_type) return []
+  // Unlinked mentions have no entity type; linked ones are people.
+  const label: EntityType = span.entity_type ?? 'person'
   const startLineIndex = lines.findIndex((line) => line.id === span.start_line_id)
   const endLineIndex = lines.findIndex((line) => line.id === span.end_line_id)
   if (startLineIndex < 0 || endLineIndex < startLineIndex) return []
@@ -81,8 +83,8 @@ function spanFragments(
         // Fragments of one occurrence, such as a two-line name, share this key.
         occurrence: `${span.mention_id}:${span.start_line_id}:${span.start_character}`,
         firstFragment: offset === 0,
-        entity_id: span.entity_id,
-        label: span.entity_type as EntityType,
+        entity_id: span.entity_id ?? undefined,
+        label,
         text,
         line_id: line.id,
         start_index: start,
@@ -105,7 +107,12 @@ function makeTranscription(layout?: PageLayoutModel, spans: TextMentionSpanModel
     [...region.lines]
       .sort((left, right) => (left.index ?? 0) - (right.index ?? 0))
       .filter((line) => line.transcription?.trim())
-      .map((line) => ({ id: line.id, text: line.transcription ?? '', polygon: line.polygon })),
+      .map((line) => ({
+        id: line.id,
+        text: line.transcription ?? '',
+        polygon: line.polygon,
+        regionId: region.id,
+      })),
   )
   const fragments = spans.flatMap((span) => spanFragments(span, rawLines))
 
@@ -114,6 +121,7 @@ function makeTranscription(layout?: PageLayoutModel, spans: TextMentionSpanModel
     return {
       id: line.id,
       text: line.text,
+      regionId: line.regionId,
       position: {
         left: (box.left / pageWidth) * 100,
         top: (box.top / pageHeight) * 100,
@@ -271,21 +279,18 @@ export function useDocumentWorkspace(
       ),
   )
 
-  const createEntity = useCreateEntityMutation()
   const assignFaceMutation = useAssignFaceMutation()
+  const createFlow = usePersonCreateFlow()
 
   function assignFace(detectionId: string, entityId: string | null) {
     assignFaceMutation.mutate({ detectionId, entityId })
   }
 
-  async function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
-    const entity = await createEntity.mutateAsync({
-      entity_type: 'person',
-      name,
-      short_description: shortDescription || null,
-    })
-    await assignFaceMutation.mutateAsync({ detectionId, entityId: entity.entity_id })
-    return entity
+  /** Create the person through the typed API, then link the face (#176). */
+  function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
+    return createFlow.createAndLink({ name, shortDescription }, [detectionId], (entityId) =>
+      assignFaceMutation.mutateAsync({ detectionId, entityId }),
+    )
   }
 
   return {

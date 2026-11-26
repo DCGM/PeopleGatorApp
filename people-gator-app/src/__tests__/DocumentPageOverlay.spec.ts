@@ -89,6 +89,31 @@ describe('DocumentPageOverlay', () => {
     }
   })
 
+  it('marks every line of the selected name mentions as selected (#176)', () => {
+    const position = { left: 10, top: 10, width: 20, height: 5 }
+    const wrapper = mount(DocumentPageOverlay, {
+      props: {
+        pageBounds: { left: 0, top: 0, width: 500, height: 800 },
+        transcription: ['a', 'b', 'c', 'd'].map((id) => ({ id, text: id, position })),
+        faces: [],
+        selectedLineIndex: 0,
+        selectedFaceId: null,
+        selectedPersonId: null,
+        selectedCandidateFaceId: null,
+        selectedMentionLines: [1, 3],
+      },
+    })
+    const lines = wrapper.findAll('[data-region-type="line"]')
+    expect(lines.map((line) => line.attributes('aria-pressed'))).toEqual([
+      'true',
+      'true',
+      'false',
+      'true',
+    ])
+    expect(lines[3]!.classes()).toContain('border-accent')
+    expect(lines[2]!.classes()).toContain('border-transparent')
+  })
+
   it('uses transformed page bounds without scaling borders or badge content', async () => {
     const wrapper = mount(DocumentPageOverlay, {
       props: {
