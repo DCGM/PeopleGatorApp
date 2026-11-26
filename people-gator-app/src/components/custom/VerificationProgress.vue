@@ -15,7 +15,8 @@ const props = defineProps<{
   /** Tooltip explaining the ring and splitting its total; makes the ring focusable. */
   breakdown?: ProgressBreakdown
 }>()
-// Closed here on Escape too: a parent may stop the key before it reaches the tooltip layer.
+// Escape closes it here too, since a parent may stop the key before it reaches the tooltip
+// layer. A tap toggles it, because touch has neither hover nor keyboard focus.
 const open = ref(false)
 const RADIUS = 6
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -30,7 +31,7 @@ const label = computed(() =>
 
 <template>
   <TooltipProvider v-if="breakdown" :delay-duration="200">
-    <Tooltip v-model:open="open">
+    <Tooltip v-model:open="open" disable-closing-trigger>
       <TooltipTrigger as-child>
         <span
           class="inline-flex shrink-0 items-center gap-1 text-sm tabular-nums"
@@ -39,6 +40,7 @@ const label = computed(() =>
           tabindex="0"
           data-verification-progress
           @keydown.esc="open = false"
+          @click="open = !open"
           v-bind="$attrs"
         >
           <svg viewBox="0 0 16 16" class="size-4 -rotate-90" aria-hidden="true">

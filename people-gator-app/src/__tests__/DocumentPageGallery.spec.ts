@@ -140,6 +140,15 @@ describe('DocumentPageGallery', () => {
     await faces!.trigger('keydown', { key: 'Escape' })
     await flushPromises()
     expect(document.body.querySelector('[data-progress-breakdown]')).toBeNull()
+    // Touch has no hover or keyboard focus: a tap opens the same panel, a second tap closes it.
+    await rings[1]!.trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-progress-breakdown] div')!.textContent).toBe(
+      'Mentions0',
+    )
+    await rings[1]!.trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-progress-breakdown]')).toBeNull()
     vi.unstubAllGlobals()
     wrapper.unmount()
   })
