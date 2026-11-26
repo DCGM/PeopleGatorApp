@@ -59,3 +59,22 @@ export type TranscriptionLine = {
 export function lineMentionsEntity(line: TranscriptionLine | undefined, entityId: string) {
   return line?.entities?.some((span) => span.entity_id === entityId) ?? false
 }
+
+/**
+ * The scan's selected name mentions as the person card shows them (#176).
+ * Link metadata describes the selection when every mention shares it.
+ */
+export type MentionCardTarget = LinkMetadata & {
+  ids: string[]
+  /** Distinct mention texts, in transcription order. */
+  texts: string[]
+  /** The person every selected mention links to, or null when unlinked or mixed. */
+  personId: string | null
+  name: string
+  thumbnailFaceId?: string | null
+  /** Mentions link to different people, or only some are linked. */
+  mixed: boolean
+  anyLinked: boolean
+  /** Some linked mention is not verified yet. */
+  anyUnverified: boolean
+}

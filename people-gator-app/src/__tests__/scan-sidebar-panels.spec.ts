@@ -319,13 +319,55 @@ describe('People panel (#103)', () => {
   })
 
   it('assigns only a selected face, separately from preview', async () => {
-    const wrapper = panel()
-    expect(wrapper.find('button[aria-label^="Assign to"]').exists()).toBe(false)
+    const wrapper = panel({ canAssign: true })
+    const faceButton = () => wrapper.get('button[aria-label*="ace "][aria-label$=" to Ada"]')
+    // Without a selected face its button stays, greyed out.
+    expect(faceButton().attributes('disabled')).toBeDefined()
     await wrapper.setProps({ selectedFace: { ...face, personId: null } })
     await wrapper.get('button[aria-label="Preview Ada on this page"]').trigger('click')
     expect(wrapper.emitted('preview')).toHaveLength(1)
     expect(wrapper.emitted('assign')).toBeUndefined()
-    await wrapper.get('button[aria-label="Assign to Ada"]').trigger('click')
+    await wrapper.get('button[aria-label="Assign face to Ada"]').trigger('click')
     expect(wrapper.emitted('assign')).toHaveLength(1)
+    expect(wrapper.emitted('assignMentions')).toBeUndefined()
+  })
+
+  it('assigns selected mentions and the face with separate buttons (#176)', async () => {
+    const wrapper = panel({ canAssign: true })
+    const mentions = () => wrapper.get('button[aria-label*="ention"]')
+    const faceButton = () => wrapper.get('button[aria-label*="ace "][aria-label$=" to Ada"]')
+    expect(mentions().attributes('aria-label')).toBe('Assign mentions to Ada')
+    expect(mentions().attributes('disabled')).toBeDefined()
+    expect(faceButton().attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({ selectedMentions: [{ entityId: null }, { entityId: 'ada' }, { entityId: 'x' }] })
+    expect(mentions().attributes('aria-label')).toBe('Assign 3 mentions to Ada')
+    expect(mentions().text()).toBe('Assign to mentions')
+    expect(faceButton().attributes('disabled')).toBeDefined()
+    await mentions().trigger('click')
+    expect(wrapper.emitted('assignMentions')).toEqual([[expect.objectContaining({ id: 'ada' })]])
+    expect(wrapper.emitted('assign')).toBeUndefined()
+
+    // Each target shows its own Assigned state.
+    await wrapper.setProps({
+      selectedMentions: [{ entityId: 'ada' }],
+      selectedFace: { ...face, personId: 'other' },
+    })
+    expect(mentions().attributes('aria-label')).toBe('Mentions assigned to Ada')
+    expect(mentions().attributes('aria-pressed')).toBe('true')
+    expect(mentions().attributes('disabled')).toBeDefined()
+    expect(faceButton().attributes('aria-label')).toBe('Reassign face to Ada')
+    expect(faceButton().attributes('disabled')).toBeUndefined()
+    await wrapper.setProps({ selectedFace: { ...face, personId: 'ada' } })
+    expect(faceButton().attributes('aria-label')).toBe('Face assigned to Ada')
+    expect(faceButton().attributes('disabled')).toBeDefined()
+    // Pending work disables both.
+    await wrapper.setProps({ selectedMentions: [{ entityId: null }], assignmentPending: true })
+    expect(mentions().attributes('disabled')).toBeDefined()
+  })
+
+  it('offers no assignment without annotate permission', () => {
+    const wrapper = panel({ selectedMentions: [{ entityId: null }], selectedFace: face })
+    expect(wrapper.find('button[aria-label*="to Ada"]').exists()).toBe(false)
   })
 })

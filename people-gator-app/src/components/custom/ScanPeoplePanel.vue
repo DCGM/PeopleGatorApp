@@ -46,6 +46,10 @@ const props = defineProps<{
   faceModels?: string[]
   faceModel?: string | null
   selectedFace: Face | null
+  /** Name mentions selected on the scan, as assignment targets (#176). */
+  selectedMentions?: ReadonlyArray<{ entityId: string | null }>
+  /** Whether the viewer may assign people to the selection. */
+  canAssign?: boolean
   viewedPersonId: string | null
   assignmentPending?: boolean
   loadMore: () => Promise<unknown>
@@ -62,7 +66,22 @@ const emit = defineEmits<{
   attachSelectedFace: []
   preview: [person: SimilarPersonCandidate]
   assign: [person: SimilarPersonCandidate]
+  assignMentions: [person: SimilarPersonCandidate]
 }>()
+
+function faceAssignment(person: SimilarPersonCandidate) {
+  const face = props.selectedFace
+  if (!face) return 'none'
+  if (face.personId === person.id) return 'assigned'
+  return face.personId ? 'reassign' : 'assign'
+}
+const mentionCount = computed(() => props.selectedMentions?.length ?? 0)
+function mentionsAssigned(person: SimilarPersonCandidate) {
+  return (
+    mentionCount.value > 0 &&
+    (props.selectedMentions ?? []).every((mention) => mention.entityId === person.id)
+  )
+}
 
 const draft = ref(text.value)
 // Back/Forward, links and face Search replace the draft with the applied text.
@@ -239,14 +258,16 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
           <li v-for="person in people" :key="person.id">
             <SimilarPersonItem
               :person="person"
-              :assigned="selectedFace?.personId === person.id"
-              :reassignment="Boolean(selectedFace?.personId && selectedFace.personId !== person.id)"
-              :assignment-disabled="!selectedFace"
+              :can-assign="Boolean(canAssign)"
+              :face-assignment="faceAssignment(person)"
+              :mention-count="mentionCount"
+              :mentions-assigned="mentionsAssigned(person)"
               :assignment-pending="assignmentPending"
               :viewed="viewedPersonId === person.id"
               :data-person-viewed="viewedPersonId === person.id"
               @preview="emit('preview', $event)"
               @assign="emit('assign', $event)"
+              @assign-mentions="emit('assignMentions', $event)"
             />
           </li>
         </ul>

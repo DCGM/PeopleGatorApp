@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import IdentityFacePreview from './IdentityFacePreview.vue'
+import PersonPortrait from './PersonPortrait.vue'
 import UiTooltip from './UiTooltip.vue'
 import {
   Check,
@@ -8,28 +9,34 @@ import {
   Link2,
   RefreshCw,
   Search,
+  TextCursor,
   Trash2,
   Unlink,
   UserPlus,
   X,
 } from '@lucide/vue'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
-import type { Face } from '@/viewmodels/document-workspace.types'
+import type { Face, MentionCardTarget } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemFooter, ItemMedia, ItemTitle } from '@/components/ui/item'
 
+/**
+ * The selected evidence card on the scan: one face, or one or more name
+ * mentions (#176). Both share the layout, labels, actions and permissions.
+ */
 const props = withDefaults(
   defineProps<{
-    face: Face
+    face?: Face
+    mentions?: MentionCardTarget
     assignmentPending?: boolean
     canAnnotate?: boolean
     canDelete?: boolean
     actionError?: string
   }>(),
-  { canAnnotate: true },
+  { canAnnotate: true, face: undefined, mentions: undefined },
 )
 
 const emit = defineEmits<{
@@ -40,12 +47,50 @@ const emit = defineEmits<{
   delete: []
 }>()
 
+const count = computed(() => props.mentions?.ids.length ?? 1)
+const plural = computed(() => count.value !== 1)
+/** What the card shows for either kind of evidence. */
+const subject = computed(() => {
+  const face = props.face
+  if (face)
+    return {
+      key: `face:${face.id}`,
+      personId: face.personId,
+      name: face.name,
+      linked: Boolean(face.personId),
+      unlinked: 'Unassigned face',
+      link: face,
+      query: { origin_matched_face: face.id },
+      searchLabel: 'Search people by this face',
+      searchUnavailable: !face.embeddingModel && 'Face search unavailable',
+      deleteLabel: 'Delete detection',
+    }
+  const mentions = props.mentions!
+  return {
+    key: `mentions:${mentions.ids.join(',')}`,
+    personId: mentions.personId,
+    name: mentions.name,
+    linked: mentions.anyLinked,
+    unlinked: mentions.mixed
+      ? 'Several people'
+      : plural.value
+        ? 'Unlinked mentions'
+        : 'Unlinked mention',
+    link: mentions,
+    query: {},
+    searchLabel: plural.value ? 'Search people by these names' : 'Search people by this name',
+    searchUnavailable: false as const,
+    deleteLabel: plural.value ? 'Delete mentions' : 'Delete mention',
+  }
+})
+
 const isCreating = ref(false)
 const draftName = ref('')
 const draftShortDescription = ref('')
 
 function startCreating() {
-  draftName.value = ''
+  // A mention suggests its own words as the new person's name.
+  draftName.value = props.mentions?.texts[0] ?? ''
   draftShortDescription.value = ''
   isCreating.value = true
 }
@@ -68,7 +113,7 @@ function createProfile() {
   cancelCreating()
 }
 
-watch(() => props.face.id, cancelCreating)
+watch(() => subject.value.key, cancelCreating)
 </script>
 
 <template>
@@ -79,7 +124,7 @@ watch(() => props.face.id, cancelCreating)
     @keydown.esc="isCreating && ($event.stopPropagation(), cancelCreating())"
   >
     <ItemMedia class="relative self-start">
-      <div class="size-12 overflow-hidden rounded-full bg-muted">
+      <div v-if="face" class="size-12 overflow-hidden rounded-full bg-muted">
         <LoadableImage
           :src="face.portrait"
           :loading="face.portraitLoading"
@@ -88,9 +133,25 @@ watch(() => props.face.id, cancelCreating)
           image-class="size-full object-cover grayscale"
         />
       </div>
+      <PersonPortrait
+        v-else-if="subject.personId"
+        :name="subject.name"
+        :face-id="mentions?.thumbnailFaceId"
+        class="size-12"
+      />
+      <div
+        v-else
+        class="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
+      >
+        <TextCursor aria-hidden="true" />
+      </div>
       <!-- The person's other faces open from a small + over this face. -->
-      <span v-if="face.personId && !isCreating" class="absolute -right-1 -bottom-1">
-        <IdentityFacePreview :key="face.personId" :person-id="face.personId" :name="face.name" />
+      <span v-if="subject.personId && !isCreating" class="absolute -right-1 -bottom-1">
+        <IdentityFacePreview
+          :key="subject.personId"
+          :person-id="subject.personId"
+          :name="subject.name"
+        />
       </span>
     </ItemMedia>
 
@@ -121,20 +182,18 @@ watch(() => props.face.id, cancelCreating)
     <ItemContent v-else class="min-w-0 items-start gap-1 overflow-hidden">
       <ItemTitle class="min-w-0 w-full max-w-full">
         <RouterLink
-          v-if="face.personId"
+          v-if="subject.personId"
           :to="{
             name: 'person-detail',
-            params: { personId: face.personId },
-            query: {
-              origin_matched_face: face.id,
-            },
+            params: { personId: subject.personId },
+            query: subject.query,
           }"
           class="flex min-w-0 w-full items-center gap-1 underline-offset-4 transition-transform group hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <h4
             class="flex min-h-6 min-w-0 w-full items-center gap-1.5 rounded-sm border border-transparent px-1"
           >
-            <span class="min-w-0 truncate">{{ face.name }}</span>
+            <span class="min-w-0 truncate">{{ subject.name }}</span>
             <ChevronRight
               class="size-[1.15em] shrink-0 group-hover:translate-x-1 group-focus-visible:translate-x-1"
               aria-hidden="true"
@@ -145,11 +204,19 @@ watch(() => props.face.id, cancelCreating)
           v-else
           class="min-h-6 w-full truncate rounded-sm border border-transparent px-1 text-muted-foreground"
         >
-          Unassigned face
+          {{ subject.unlinked }}
         </h4>
       </ItemTitle>
 
-      <EntityLinkStateBadge v-bind="face" />
+      <EntityLinkStateBadge v-if="!mentions?.mixed" v-bind="subject.link" />
+      <p
+        v-if="mentions"
+        class="min-w-0 w-full truncate px-1 text-xs text-muted-foreground"
+        :title="mentions.texts.join(', ')"
+      >
+        <span v-if="plural" class="font-medium text-foreground">{{ count }} mentions · </span
+        >{{ mentions.texts.map((text) => `“${text}”`).join(', ') }}
+      </p>
     </ItemContent>
 
     <ItemFooter class="w-full shrink-0 flex-wrap items-center justify-start gap-2 border-t pt-2">
@@ -183,22 +250,20 @@ watch(() => props.face.id, cancelCreating)
 
       <div v-else class="flex min-w-0 w-full flex-wrap items-center gap-1">
         <div class="flex min-w-0 flex-wrap items-center justify-start gap-1">
-          <UiTooltip
-            :text="face.embeddingModel ? 'Search people by this face' : 'Face search unavailable'"
-          >
+          <UiTooltip :text="subject.searchUnavailable || subject.searchLabel">
             <Button
               type="button"
               size="icon-xs"
               variant="outline"
-              :disabled="!face.embeddingModel"
-              aria-label="Search people by this face"
+              :disabled="Boolean(subject.searchUnavailable)"
+              :aria-label="subject.searchLabel"
               @click="emit('searchFace')"
             >
               <Search aria-hidden="true" />
             </Button>
           </UiTooltip>
           <template v-if="canAnnotate">
-            <UiTooltip v-if="face.personId" text="Reassign to another profile">
+            <UiTooltip v-if="subject.linked" text="Reassign to another profile">
               <Button
                 type="button"
                 size="icon-xs"
@@ -237,7 +302,7 @@ watch(() => props.face.id, cancelCreating)
                 <UserPlus aria-hidden="true" />
               </Button>
             </UiTooltip>
-            <UiTooltip v-if="face.personId" text="Unassign current profile">
+            <UiTooltip v-if="subject.linked" text="Unassign current profile">
               <Button
                 type="button"
                 size="icon-xs"
@@ -253,14 +318,14 @@ watch(() => props.face.id, cancelCreating)
             <!-- Order: search, link, new, unlink, verify, delete. -->
             <slot name="actions" />
           </template>
-          <UiTooltip v-if="canDelete" text="Delete detection">
+          <UiTooltip v-if="canDelete" :text="subject.deleteLabel">
             <Button
               type="button"
               size="icon-xs"
               variant="outline"
               class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
               :disabled="props.assignmentPending"
-              aria-label="Delete detection"
+              :aria-label="subject.deleteLabel"
               @click="emit('delete')"
             >
               <Trash2 aria-hidden="true" />
