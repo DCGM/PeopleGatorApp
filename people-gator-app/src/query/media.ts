@@ -1,4 +1,3 @@
-import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -40,6 +39,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { invalidateMedia } from '@/query/invalidation'
 import { queryKeys } from '@/query/keys'
 
 export type DocumentListParams = NonNullable<ListDocumentsRouteApiV1DocumentsGetData['query']>
@@ -184,7 +184,7 @@ export function usePageImageQuery(
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
   return useQuery({
-    queryKey: computed(() => queryKeys.pages.image(toValue(sourceId), toValue(width))),
+    queryKey: computed(() => queryKeys.pageImages.image(toValue(sourceId), toValue(width))),
     queryFn: ({ signal }) => fetchPageImage(toValue(sourceId), toValue(width), signal),
     enabled: computed(() => Boolean(toValue(sourceId)) && toValue(enabled)),
     staleTime: Number.POSITIVE_INFINITY,
@@ -231,7 +231,7 @@ export function useImageQuery(imageId: MaybeRefOrGetter<string>) {
 
 export function useImageContentQuery(imageId: MaybeRefOrGetter<string>) {
   return useQuery({
-    queryKey: computed(() => queryKeys.images.content(toValue(imageId))),
+    queryKey: computed(() => queryKeys.imageContents.content(toValue(imageId))),
     queryFn: ({ signal }) =>
       responseData(
         getImageContentByIdRouteApiV1ImagesImageIdContentGet({
@@ -307,16 +307,18 @@ export function useSourceLookupQuery(url: MaybeRefOrGetter<string>) {
 
 function useMediaInvalidation() {
   const queryClient = useQueryClient()
-  return () => {
-    restartPeoplePages(queryClient)
-    void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-    void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'library'] })
-    void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'document'] })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+  return () => void invalidateMedia(queryClient)
+}
+
+/** Refresh after a deletion and drop the stored bytes of the removed source. */
+function useMediaDeletion(kinds: ('page' | 'image')[]) {
+  const queryClient = useQueryClient()
+  return (_data: unknown, id: string) => {
+    if (kinds.includes('page'))
+      queryClient.removeQueries({ queryKey: queryKeys.pageImages.source(id) })
+    if (kinds.includes('image'))
+      queryClient.removeQueries({ queryKey: queryKeys.imageContents.content(id) })
+    void invalidateMedia(queryClient)
   }
 }
 
@@ -389,7 +391,7 @@ export function useDeleteDocumentMutation() {
 }
 
 export function useDeletePageMutation() {
-  const invalidate = useMediaInvalidation()
+  const invalidate = useMediaDeletion(['page'])
   return useMutation({
     mutationFn: (sourceId: string) =>
       responseData(
@@ -403,7 +405,7 @@ export function useDeletePageMutation() {
 }
 
 export function useDeleteImageMutation() {
-  const invalidate = useMediaInvalidation()
+  const invalidate = useMediaDeletion(['image'])
   return useMutation({
     mutationFn: (imageId: string) =>
       responseData(
@@ -417,7 +419,7 @@ export function useDeleteImageMutation() {
 }
 
 export function useDeleteSourceMutation() {
-  const invalidate = useMediaInvalidation()
+  const invalidate = useMediaDeletion(['page', 'image'])
   return useMutation({
     mutationFn: (sourceId: string) =>
       responseData(

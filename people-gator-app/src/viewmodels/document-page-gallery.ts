@@ -142,7 +142,7 @@ export function useDocumentPageGallery(
   const thumbnailQueries = useQueries({
     queries: computed(() =>
       pages.value.map((page) => ({
-        queryKey: queryKeys.pages.image(page.source_id, PAGE_GALLERY_THUMBNAIL_WIDTH),
+        queryKey: queryKeys.pageImages.image(page.source_id, PAGE_GALLERY_THUMBNAIL_WIDTH),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           fetchPageImage(page.source_id, PAGE_GALLERY_THUMBNAIL_WIDTH, signal),
         staleTime: Number.POSITIVE_INFINITY,

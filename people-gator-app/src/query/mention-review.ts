@@ -5,8 +5,7 @@ import {
 } from '@/client'
 import { responseData } from './api'
 import { fetchTextMentions, type TextMentionListParams } from './text-mentions'
-import { queryKeys } from './keys'
-import { restartPeoplePages } from './people-count-invalidation'
+import { invalidateEvidence } from './invalidation'
 
 export type MentionReviewTargets =
   | { ids: string[] }
@@ -79,18 +78,6 @@ export function useReviewMentionsMutation() {
       }
       return completed
     },
-    onSettled: async () => {
-      restartPeoplePages(client)
-      await Promise.all(
-        [
-          queryKeys.textMentions.all,
-          queryKeys.entities.all,
-          queryKeys.pages.all,
-          queryKeys.documents.all,
-          queryKeys.sources.all,
-          queryKeys.search.all,
-        ].map((queryKey) => client.invalidateQueries({ queryKey })),
-      )
-    },
+    onSettled: () => invalidateEvidence(client),
   })
 }

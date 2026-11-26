@@ -1,5 +1,4 @@
 import { isAxiosError } from 'axios'
-import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -20,6 +19,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { invalidateEntityRecords, invalidateEvidence } from '@/query/invalidation'
 import { queryKeys } from '@/query/keys'
 
 export type EntityListParams = NonNullable<ListEntitiesRouteApiV1EntitiesGetData['query']>
@@ -68,16 +68,8 @@ export function useCreateEntityMutation() {
     mutationFn: (body: EntityCreateRequest) =>
       responseData(createEntityRouteApiV1EntitiesPost({ body, throwOnError: true })),
     onSuccess: (entity) => {
-      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEntityRecords(queryClient)
     },
   })
 }
@@ -88,18 +80,10 @@ export function useCreateEntitiesMutation() {
     mutationFn: (body: EntityCreateRequest[]) =>
       responseData(createEntityBatchRouteApiV1EntitiesBatchPost({ body, throwOnError: true })),
     onSuccess: (entities) => {
-      restartPeoplePages(queryClient)
       for (const entity of entities) {
         queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEntityRecords(queryClient)
     },
   })
 }
@@ -116,18 +100,9 @@ export function usePatchEntityMutation() {
         }),
       ),
     onSuccess: (entity) => {
-      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       // The typed person record holds more fields; refetch it rather than overwrite.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.person(entity.entity_id) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEntityRecords(queryClient, [queryKeys.entities.person(entity.entity_id)])
     },
   })
 }
@@ -177,7 +152,6 @@ export function useMergeEntitiesMutation() {
       ])
     },
     onSuccess: (result, { sourceEntityIds }) => {
-      restartPeoplePages(queryClient)
       for (const sourceEntityId of sourceEntityIds) {
         queryClient.removeQueries({ queryKey: queryKeys.entities.detail(sourceEntityId) })
       }
@@ -185,16 +159,7 @@ export function useMergeEntitiesMutation() {
         queryKeys.entities.detail(result.target_entity_id),
         result.merged_entity,
       )
-      return Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.faces.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.documents.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.sources.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.images.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
-      ])
+      return invalidateEvidence(queryClient)
     },
   })
 }
@@ -210,16 +175,8 @@ export function useDeleteEntityMutation() {
         }),
       ),
     onSuccess: (_data, entityId) => {
-      restartPeoplePages(queryClient)
       queryClient.removeQueries({ queryKey: queryKeys.entities.detail(entityId) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEntityRecords(queryClient)
     },
   })
 }
@@ -229,18 +186,6 @@ export function useDeleteEntitiesMutation() {
   return useMutation({
     mutationFn: (body: EntityDeleteManyRequest) =>
       responseData(deleteEntitiesRouteApiV1EntitiesDelete({ body, throwOnError: true })),
-    onSuccess: () => {
-      restartPeoplePages(queryClient)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
-    },
+    onSuccess: () => invalidateEvidence(queryClient),
   })
 }
