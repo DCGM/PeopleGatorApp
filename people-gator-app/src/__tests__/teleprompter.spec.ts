@@ -799,6 +799,13 @@ describe('DocumentTeleprompter', () => {
       await withCard.get('[data-line-index="8"]').trigger('click')
       expect(withCard.emitted('clear-mentions')).toHaveLength(3)
       expect(withCard.emitted('select-line')).toBeUndefined()
+      // Holding Ctrl/Cmd/Shift lets clicks pass through the card to covered mentions.
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }))
+      await nextTick()
+      expect(card.className).toContain('pointer-events-none')
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }))
+      await nextTick()
+      expect(card.className).not.toContain('pointer-events-none')
       // A plain keyboard activation moves focus into the card.
       await withCard.get('[data-line-index="8"] mark').trigger('keydown', { key: 'Enter' })
       await nextTick()

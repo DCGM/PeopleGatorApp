@@ -475,6 +475,18 @@ watch(
 const slots = defineSlots<{ 'mention-card'?: () => unknown; 'panel-actions'?: () => unknown }>()
 const cardOpen = computed(() => Boolean(cardAnchor.value && slots['mention-card']))
 
+/**
+ * The card may cover nearby mentions. While Ctrl, Cmd or Shift is held, it
+ * fades and lets clicks through, so those mentions can still be added.
+ */
+const selectingMore = ref(false)
+function trackModifiers(event: KeyboardEvent) {
+  selectingMore.value = event.shiftKey || event.ctrlKey || event.metaKey
+}
+function releaseModifiers() {
+  selectingMore.value = false
+}
+
 function mentionCardElement() {
   return document.querySelector<HTMLElement>('[data-mention-card]')
 }
@@ -828,6 +840,9 @@ function scheduleViewport() {
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   document.addEventListener('selectionchange', scheduleSelectedGaps)
+  window.addEventListener('keydown', trackModifiers)
+  window.addEventListener('keyup', trackModifiers)
+  window.addEventListener('blur', releaseModifiers)
   if (scrollElement.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(scheduleViewport)
     resizeObserver.observe(scrollElement.value)
@@ -836,6 +851,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', scheduleSelectedGaps)
+  window.removeEventListener('keydown', trackModifiers)
+  window.removeEventListener('keyup', trackModifiers)
+  window.removeEventListener('blur', releaseModifiers)
   if (selectionFrame !== undefined) cancelAnimationFrame(selectionFrame)
   resizeObserver?.disconnect()
   if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame)
@@ -992,7 +1010,9 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
           :side-offset="4" :collision-padding="8"
           sticky="always" hide-when-detached update-position-strategy="always"
           aria-label="Selected mentions"
-          class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
+          class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0 transition-opacity"
+          :class="selectingMore && 'pointer-events-none opacity-25'"
+          :data-selecting-more="selectingMore ? '' : undefined"
           @open-auto-focus.prevent @close-auto-focus.prevent @interact-outside.prevent
           @escape-key-down.prevent="clearMentions">
           <slot name="mention-card" />
@@ -1056,5 +1076,12 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
 .teleprompter-line {
   content-visibility: auto;
   contain-intrinsic-size: auto 1.75em;
+}
+</style>
+
+<style>
+/* The card's portal wrapper lets clicks pass too while a modifier is held. */
+[data-reka-popper-content-wrapper]:has(> [data-selecting-more]) {
+  pointer-events: none !important;
 }
 </style>
