@@ -90,13 +90,10 @@ useAutomaticPagination({
 
 <template>
   <main class="mx-auto w-full min-w-0 px-2 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-    <header class="pb-4 pt-6 lg:shrink-0">
-      <small class="font-semibold uppercase text-secondary">People index</small>
-      <h1>Browse people</h1>
-    </header>
+    <h1 class="sr-only">People</h1>
 
     <!-- From 1024px the page fills the viewport: filters and results scroll separately. -->
-    <div class="lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
+    <div class="pt-3 lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
       <aside v-if="desktop" class="w-60 shrink-0 overflow-y-auto pb-4" aria-label="People filters">
         <PeopleFilters />
       </aside>

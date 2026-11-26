@@ -94,10 +94,7 @@ useAutomaticPagination({
 
 <template>
   <main class="mx-auto w-full min-w-0 px-2 pb-4 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-    <header class="pb-2 pt-4 lg:shrink-0">
-      <small class="font-semibold uppercase text-secondary">Documents index</small>
-    </header>
-    <div class="lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
+    <div class="pt-3 lg:flex lg:min-h-0 lg:flex-1 lg:gap-4">
       <aside
         v-if="desktop"
         class="w-60 shrink-0 overflow-y-auto pb-1"

@@ -151,7 +151,7 @@ try {
       pageHeight: document.documentElement.scrollHeight,
       viewport: innerHeight,
     }))
-    assert.deepEqual(layout.chrome, { footer: 0, title: 0, label: 'Documents index' })
+    assert.deepEqual(layout.chrome, { footer: 0, title: 0, label: undefined })
     assert.equal(await page.getByRole('button', { name: /load more/i }).count(), 0)
     if (label === 'desktop') {
       assert.ok(
