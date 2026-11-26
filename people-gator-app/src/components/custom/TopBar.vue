@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import ArchiveLink from './ArchiveLink.vue'
 import { useEntityQuery } from '@/query/entities'
 import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
 import { CircleUser, FileText, LogIn, LogOut, User } from '@lucide/vue'
@@ -106,21 +105,35 @@ const hidesHomeCrumbOnPhone = computed(
   () => route.name === 'document-page' || route.name === 'person-detail',
 )
 
-const isDocumentRoute = computed(() =>
-  ['document-list', 'document-source', 'document-pages', 'page-source', 'document-page'].includes(
-    String(route.name),
-  ),
-)
-const isPeopleRoute = computed(
-  () => route.name === 'people-search' || route.name === 'person-detail',
-)
+const sections = computed(() => [
+  {
+    label: 'Documents',
+    icon: FileText,
+    to: { name: 'document-list' } as RouteLocationRaw,
+    active: [
+      'document-list',
+      'document-source',
+      'document-pages',
+      'page-source',
+      'document-page',
+    ].includes(String(route.name)),
+  },
+  {
+    label: 'People',
+    icon: User,
+    to: { name: 'people-search' } as RouteLocationRaw,
+    active: route.name === 'people-search' || route.name === 'person-detail',
+  },
+])
 </script>
 
 <template>
+  <!-- Below `md` the bar packs left to right. From `md` the selector sits in the middle;
+       breadcrumbs wider than their half push it aside before they truncate. -->
   <nav
-    class="sticky top-0 z-50 flex h-13 w-full items-center gap-2 border-b bg-background px-2 sm:gap-3 sm:px-4"
+    class="sticky top-0 z-50 grid h-13 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b bg-background px-2 sm:gap-3 sm:px-4 md:grid-cols-[minmax(auto,1fr)_auto_minmax(auto,1fr)]"
   >
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex min-w-0 items-center gap-2 md:w-max md:max-w-[calc(100vw-30rem)]">
       <RouterLink
         :to="{ name: 'document-list' }"
         aria-label="PeopleGator"
@@ -128,10 +141,8 @@ const isPeopleRoute = computed(
       >
         <PeopleGatorIcon aria-hidden="true" class="size-10 text-primary" stroke-width="1" />
       </RouterLink>
-    </div>
 
-    <div class="min-w-0 flex-1">
-      <Breadcrumb aria-label="Breadcrumb" class="min-w-0">
+      <Breadcrumb aria-label="Breadcrumb" class="min-w-0 flex-1">
         <BreadcrumbList
           class="min-w-0 flex-nowrap gap-1 font-heading text-base font-extralight leading-normal sm:gap-2"
         >
@@ -173,54 +184,34 @@ const isPeopleRoute = computed(
       </Breadcrumb>
     </div>
 
-    <ArchiveLink
-      v-if="route.name === 'document-page'"
-      :url="pageQuery.data.value?.url"
-      compact
-      class="self-center"
-    />
-
-    <div class="flex shrink-0 items-center gap-3 sm:gap-6">
+    <div
+      class="inline-flex h-9 shrink-0 items-center rounded-lg bg-muted p-0.75 text-muted-foreground"
+      data-slot="section-selector"
+    >
       <slot name="navigation">
         <RouterLink
-          :to="{ name: 'document-list' }"
-          aria-label="Documents"
-          :aria-current="isDocumentRoute ? 'page' : undefined"
-          class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
+          v-for="section in sections"
+          :key="section.label"
+          :to="section.to"
+          :aria-label="section.label"
+          :aria-current="section.active ? 'page' : undefined"
+          class="inline-flex h-full items-center gap-1.5 rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50"
           :class="
-            isDocumentRoute
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+            section.active ? 'bg-background text-foreground shadow-sm' : 'hover:text-foreground'
           "
         >
-          <span class="flex items-center gap-2">
-            <FileText class="size-[1em]" />
-            <span class="hidden 2xl:inline">Documents</span>
-          </span>
-        </RouterLink>
-
-        <RouterLink
-          :to="{ name: 'people-search' }"
-          aria-label="People"
-          class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
-          :class="
-            isPeopleRoute
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          "
-        >
-          <span class="flex items-center gap-2">
-            <User class="size-[1em]" />
-            <span class="hidden 2xl:inline">People</span>
-          </span>
+          <component :is="section.icon" class="size-4 shrink-0" aria-hidden="true" />
+          <span class="hidden sm:inline">{{ section.label }}</span>
         </RouterLink>
       </slot>
+    </div>
 
+    <div class="flex min-w-0 items-center justify-end">
       <!-- Leaving the public account opens the login page. -->
       <Button
         v-if="isPublicSession"
         variant="outline"
-        size="sm"
+        class="rounded-lg"
         aria-label="Sign in"
         @click="signOut"
       >
@@ -229,7 +220,11 @@ const isPeopleRoute = computed(
       </Button>
       <DropdownMenu v-else-if="currentUser">
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="sm" :aria-label="`Account ${currentUser}`">
+          <Button
+            variant="outline"
+            class="min-w-0 rounded-lg"
+            :aria-label="`Account ${currentUser}`"
+          >
             <CircleUser aria-hidden="true" />
             <span class="hidden max-w-32 truncate sm:inline">{{ currentUser }}</span>
           </Button>

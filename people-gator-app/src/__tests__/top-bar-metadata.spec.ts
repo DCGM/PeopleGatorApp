@@ -70,9 +70,8 @@ it.each([
     expect(links[1]!.attributes('href')).toBe('/?library=lib')
     expect(links[2]!.attributes('href')).toBe('/libraries/lib/documents/doc?pages_view=expanded')
     expect(links[3]!.attributes('href')).toBe('/lib/doc/one')
-    expect(wrapper.get('a[target="_blank"]').attributes('href')).toBe(
-      'https://archive.example/page',
-    )
+    // The digital-library links live in the page browser, not the top bar.
+    expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
     dispose()
   },
 )

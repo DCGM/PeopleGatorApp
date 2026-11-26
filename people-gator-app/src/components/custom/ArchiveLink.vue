@@ -2,8 +2,7 @@
 import { ExternalLink } from '@lucide/vue'
 import { Badge } from '@/components/ui/badge'
 
-// Compact links show only the icon below `sm`; the accessible name keeps the NDK label.
-defineProps<{ url?: string | null; kind?: 'page' | 'document'; compact?: boolean }>()
+defineProps<{ url?: string | null; kind?: 'page' | 'document' }>()
 </script>
 
 <template>
@@ -20,7 +19,7 @@ defineProps<{ url?: string | null; kind?: 'page' | 'document'; compact?: boolean
     @click.stop
     @keydown.stop
   >
-    <span :class="compact && 'max-sm:sr-only'">NDK</span>
+    <span>NDK</span>
     <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
   </Badge>
 </template>
