@@ -62,7 +62,12 @@ const assignmentOptions = [
     </FilterGroup>
   </div>
   <!-- Applied filters always follow the selectors, in the sidebar and in the drawer. -->
-  <div class="flex min-w-0 flex-col gap-2 pt-2">
+  <div class="group flex min-w-0 flex-col pt-4" role="group" aria-label="Applied filters">
+    <small
+      class="hidden font-semibold uppercase text-secondary group-has-[.active-filters]:block"
+      aria-hidden="true"
+      >Applied filters</small
+    >
     <PeopleFilterTags />
   </div>
 </template>

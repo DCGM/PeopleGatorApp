@@ -312,6 +312,10 @@ describe('people filter controls and URL restoration', () => {
       expect(controls.find(`button[aria-label="${label}"]`).exists()).toBe(true)
     expect(wrapper.find('[data-slot="collapsible-trigger"]').exists()).toBe(false)
     expect(controls.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
+    // The tags form the last titled group of the sidebar.
+    expect(controls.get('[role="group"][aria-label="Applied filters"]').text()).toMatch(
+      /^Applied filters/,
+    )
     await wrapper.get('button[aria-label="Remove Modified by: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
