@@ -275,3 +275,69 @@ async def test_migration_upgrades_existing_people_and_downgrades(migrated_postgr
         assert await connection.scalar(text("SELECT count(*) FROM pg_demo_entities")) == 2
         await connection.run_sync(lambda sync: migrate(sync, "head"))
         assert await connection.scalar(text("SELECT count(*) FROM pg_demo_persons")) == 1
+
+
+async def test_person_rows_exist_for_entity_only_writers(persons):
+    """An older backend inserting only the entity row still yields a readable person."""
+    r = persons
+    user_id = await r.session.scalar(text("SELECT user_id FROM pg_demo_entities LIMIT 1"))
+    legacy, transient = uuid.uuid4(), uuid.uuid4()
+    await r.session.execute(text(
+        "INSERT INTO pg_demo_entities (id, user_id, kind, name) VALUES "
+        "(:legacy, :user, 'person', 'Legacy Writer'), (:transient, :user, 'person', 'Gone')"
+    ), {"legacy": legacy, "transient": transient, "user": user_id})
+    # Deleted before commit: the deferred trigger must not resurrect or fail on it.
+    await r.session.execute(text("DELETE FROM pg_demo_entities WHERE id = :id"), {"id": transient})
+    await r.session.commit()
+    person = await r.db.entities.get_person(legacy)
+    assert (person.name, person.surname, person.birth_date) == ("Legacy Writer", None, None)
+    assert (await r.db.entities.patch_person(legacy, PersonPatchRequest(surname="Writer"), r.actor)).surname == "Writer"
+    assert legacy in {item.entity_id for item in (await r.db.entities.list_people(PersonListRequest(limit=100))).items}
+    # ORM-created people already have their row; the trigger leaves it as written.
+    assert await r.session.scalar(text("SELECT count(*) FROM pg_demo_persons WHERE entity_id = ANY(:ids)"),
+                                  {"ids": [legacy, transient, r.ids["ada"]]}) == 2
+
+
+async def test_bootstrap_and_migration_backfill_people_without_rows(migrated_postgres):
+    from people_gator_api.persistence.postgres.models import Base
+
+    async with migrated_postgres.begin() as connection:
+        def migrate(sync, target, downgrade=False):
+            config = migration_config()
+            config.attributes["connection"] = sync
+            (command.downgrade if downgrade else command.upgrade)(config, target)
+
+        # Revision 0019 had no trigger: an entity-only insert leaves an orphan.
+        await connection.run_sync(lambda sync: migrate(sync, "d34a021b0019", True))
+        user_id, orphan = uuid.uuid4(), uuid.uuid4()
+        await connection.execute(text(
+            "INSERT INTO pg_demo_users (id, display_name, is_active, external_subject, external_issuer) "
+            "VALUES (:id, 'Legacy', true, :subject, 'issue123')"), {"id": user_id, "subject": uuid.uuid4().hex})
+        await connection.execute(text(
+            "INSERT INTO pg_demo_entities (id, user_id, kind, name) VALUES (:id, :user, 'person', 'Orphan')"
+        ), {"id": orphan, "user": user_id})
+        orphans = text("SELECT count(*) FROM pg_demo_entities e WHERE kind = 'person' AND NOT EXISTS "
+                       "(SELECT 1 FROM pg_demo_persons p WHERE p.entity_id = e.id)")
+        assert await connection.scalar(orphans) == 1
+        # Starting the ORM in bootstrap mode installs the trigger and backfills.
+        await connection.run_sync(Base.metadata.create_all)
+        assert await connection.scalar(orphans) == 0
+        await connection.execute(text("DELETE FROM pg_demo_persons WHERE entity_id = :id"), {"id": orphan})
+        await connection.run_sync(lambda sync: migrate(sync, "head"))
+        assert await connection.scalar(orphans) == 0
+        await connection.run_sync(validate_schema)
+
+        # Validation fails loudly instead of serving unreadable people.
+        async with connection.begin_nested() as nested:
+            await connection.execute(text("ALTER TABLE pg_demo_entities DISABLE TRIGGER ensure_person"))
+            with pytest.raises(Exception, match="person subtype trigger"):
+                await connection.run_sync(validate_schema)
+            await nested.rollback()
+        async with connection.begin_nested() as nested:
+            await connection.execute(text("DELETE FROM pg_demo_persons WHERE entity_id = :id"), {"id": orphan})
+            with pytest.raises(Exception, match="lack a pg_demo_persons row"):
+                await connection.run_sync(validate_schema)
+            await nested.rollback()
+        await connection.run_sync(lambda sync: migrate(sync, "d34a021b0019", True))
+        assert not await connection.scalar(text(
+            "SELECT count(*) FROM pg_trigger WHERE tgname = 'ensure_person' AND NOT tgisinternal"))

@@ -612,3 +612,10 @@ def _thumbnail_schema_present(ddl, target, connection, **kwargs):
 
 for statement in THUMBNAIL_DDL:
     event.listen(Base.metadata, "after_create", DDL(statement).execute_if(callable_=_thumbnail_schema_present))
+
+# Bootstrap installs the person subtype trigger and backfills subtype rows for
+# people a retained store already holds, like migrations d34a021b0019/0020.
+from .person_ddl import PERSON_BACKFILL, PERSON_DDL
+
+for statement in (*PERSON_DDL, PERSON_BACKFILL):
+    event.listen(Base.metadata, "after_create", DDL(statement))

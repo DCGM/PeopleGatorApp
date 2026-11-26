@@ -24,6 +24,7 @@ from people_gator_api.persistence.postgres.models import (
     TABLE_NAME_PREFIX,
 )
 from people_gator_api.persistence.postgres.thumbnail_ddl import THUMBNAIL_DDL
+from people_gator_api.persistence.postgres.person_ddl import PERSON_FUNCTION, PERSON_TRIGGER
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ def validate_schema(
         expected = "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date"
         if constraint is None or "".join(constraint["sqltext"].lower().split()).replace("(", "").replace(")", "") != "".join(expected.lower().split()):
             raise SchemaValidationError("Missing or incompatible person life-date constraint")
+        _validate_person_rows(connection)
 
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.
@@ -149,6 +151,34 @@ def _canonical_sql(value: str) -> str:
     # Reflection qualifies objects outside search_path and DDL may use OR REPLACE.
     value = re.sub(r"\b\w+\.(?=pg_demo_)", "", value.replace("OR REPLACE ", ""))
     return " ".join(value.split())
+
+
+def _validate_person_rows(connection: Connection) -> None:
+    """Every person needs its subtype row; the deferred trigger keeps it so (#123)."""
+    function = re.match(r"CREATE OR REPLACE FUNCTION \w+\(.*?\$\$(.*)\$\$", PERSON_FUNCTION, re.S)
+    assert function is not None
+    sources = connection.execute(text("""
+        SELECT p.prosrc FROM pg_proc p
+        WHERE p.proname = 'pg_demo_ensure_person' AND pg_function_is_visible(p.oid)
+    """)).scalars().all()
+    if [_canonical_sql(source) for source in sources] != [_canonical_sql(function[1])]:
+        raise SchemaValidationError("Missing or incompatible person subtype function: pg_demo_ensure_person")
+    trigger = connection.execute(text("""
+        SELECT t.tgconstraint <> 0, t.tgdeferrable, t.tginitdeferred, t.tgenabled IN ('O', 'A'),
+               p.proname
+        FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
+        WHERE t.tgrelid = to_regclass('pg_demo_entities') AND t.tgname = :name AND NOT t.tgisinternal
+    """), {"name": PERSON_TRIGGER}).first()
+    if trigger is None or tuple(trigger) != (True, True, True, True, "pg_demo_ensure_person"):
+        raise SchemaValidationError(f"Missing, disabled or incompatible person subtype trigger: {PERSON_TRIGGER}")
+    orphans = connection.execute(text("""
+        SELECT count(*) FROM pg_demo_entities e
+        WHERE e.kind = 'person' AND NOT EXISTS (SELECT 1 FROM pg_demo_persons p WHERE p.entity_id = e.id)
+    """)).scalar_one()
+    if orphans:
+        raise SchemaValidationError(
+            f"{orphans} person entities lack a pg_demo_persons row. Run the deployment migration job."
+        )
 
 
 def _validate_thumbnail_invariants(connection: Connection) -> None:

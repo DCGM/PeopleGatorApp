@@ -184,7 +184,7 @@ async def test_preview_stamped_before_renumbering_gains_page_verification(migrat
         await connection.execute(text('DROP TABLE pg_demo_persons'))
         await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0017'"))
         await connection.run_sync(lambda sync: migrate(sync, 'head'))
-        assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == 'd34a021b0019'
+        assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == 'd34a021b0020'
         await connection.run_sync(validate_schema)
 
 
