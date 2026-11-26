@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatLifeDate, lifeDatesError, lifeSpan, parseIsoDate } from '@/lib/life-dates'
+import {
+  formatLifeDate,
+  lifeDatesError,
+  lifeSpan,
+  normalizeLifeDateInput,
+  parseIsoDate,
+} from '@/lib/life-dates'
 
 describe('life dates', () => {
   it('summarizes full, partial and unknown life spans', () => {
@@ -30,6 +36,16 @@ describe('life dates', () => {
     )
     expect(lifeDatesError('1900-01-01', '1900-01-01')).toBeUndefined()
     expect(lifeDatesError('', '1900-01-01')).toBeUndefined()
-    expect(lifeDatesError('1900-13-01', '')).toBe('Enter a valid date.')
+    expect(lifeDatesError('1900-13-01', '')).toBe('Enter a date as YYYY-MM-DD or a year.')
+  })
+
+  it('turns a bare year into 1 January and rejects incomplete dates', () => {
+    expect(normalizeLifeDateInput(' 1890 ')).toBe('1890-01-01')
+    expect(normalizeLifeDateInput('800')).toBe('0800-01-01')
+    expect(normalizeLifeDateInput('1')).toBe('0001-01-01')
+    expect(normalizeLifeDateInput('1890-03-14')).toBe('1890-03-14')
+    expect(normalizeLifeDateInput('')).toBe('')
+    for (const input of ['0', '1890-03', '1890-03-', '-03-14', '1890-02-30', '14.3.1890', '18900'])
+      expect(normalizeLifeDateInput(input)).toBeUndefined()
   })
 })

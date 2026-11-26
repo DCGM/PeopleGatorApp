@@ -39,10 +39,27 @@ export function formatLifeDate(value: string): string {
   })
 }
 
+/**
+ * Editor input to a stored date (#123): empty clears, a bare year (1–9999) means
+ * 1 January of that year, and a full `YYYY-MM-DD` date is kept. Anything else,
+ * such as a year and month only, is rejected (undefined) and must not be sent.
+ */
+export function normalizeLifeDateInput(input: string): string | undefined {
+  const value = input.trim()
+  if (!value) return ''
+  if (/^\d{1,4}$/.test(value)) {
+    const year = Number(value)
+    return year >= 1 ? `${String(year).padStart(4, '0')}-01-01` : undefined
+  }
+  return parseIsoDate(value)
+}
+
+export const LIFE_DATE_FORMAT_ERROR = 'Enter a date as YYYY-MM-DD or a year.'
+
 /** Death must not precede birth; ISO dates compare as text. */
 export function lifeDatesError(birth: string, death: string): string | undefined {
   if ((birth && !parseIsoDate(birth)) || (death && !parseIsoDate(death)))
-    return 'Enter a valid date.'
+    return LIFE_DATE_FORMAT_ERROR
   if (birth && death && death < birth) return 'Death date must not be before birth date.'
   return undefined
 }

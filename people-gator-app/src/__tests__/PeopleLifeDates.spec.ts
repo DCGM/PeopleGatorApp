@@ -140,6 +140,19 @@ describe('people life-date filters', () => {
     wrapper.unmount()
   })
 
+  it('offers every calendar year from 1 AD', async () => {
+    const { wrapper } = await mountedView({ born_from: '0800-06-15' })
+    expect(tag(wrapper, 'Born from:')?.text()).toContain('800')
+    await lifeDatePickers(wrapper)[0]!.get('button').trigger('click')
+    await flushPromises()
+    const years = body()
+      .findAll('select')
+      .flatMap((select) => select.findAll('option').map((option) => option.attributes('value')))
+    expect(years).toEqual(expect.arrayContaining(['1', '800', String(new Date().getFullYear())]))
+    expect(body().find('[data-value="0800-06-15"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('picks a calendar date without a time and removes one tag at a time', async () => {
     const { wrapper, router } = await mountedView({ q: 'Ada', born_from: '1890-03-14' })
     await lifeDatePickers(wrapper)[0]!.get('button').trigger('click')

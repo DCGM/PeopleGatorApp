@@ -11,10 +11,10 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 // `dateOnly` edits a calendar date (`YYYY-MM-DD`) without a time or zone,
-// with years back to EARLIEST_YEAR for historical dates such as births.
+// with every year from 1 AD for historical dates such as births.
 const props = defineProps<{ label: string; invalid?: boolean; dateOnly?: boolean }>()
 const value = defineModel<string>({ required: true })
-const EARLIEST_YEAR = 1400
+const EARLIEST_YEAR = 1
 const yearRange = computed(() => {
   if (!props.dateOnly) return undefined
   const now = today(getLocalTimeZone())
