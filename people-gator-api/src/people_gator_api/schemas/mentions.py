@@ -3,7 +3,7 @@ from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPa
 
 import uuid
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 from typing import Annotated, Literal
 
 from people_gator_api.settings import settings
@@ -34,8 +34,9 @@ class TextMentionCreateRequest(EntityLinkCreate):
         default=None,
         description="The context in which the entity name was found.",
     )
-    entity_id: uuid.UUID = Field(
-        description="The ID of the entity being mentioned.",
+    entity_id: uuid.UUID | MissingType = Field(
+        default=MISSING,
+        description="The ID of the entity being mentioned. Omit it to record an unlinked mention.",
     )
     source_id: uuid.UUID = Field(
         description="The ID of the source where the entity name was found.",
@@ -48,9 +49,29 @@ type TextMentionsBatchCreateRequest = Annotated[
 
 
 class TextMentionPatchRequest(EntityLinkPatch):
-    """Assign a mention to an entity, or unassign it with null."""
+    """Assign a mention to an entity, or unassign it with null, and/or change its text.
+
+    Omitted fields are kept. Changing only ``name``/``context`` keeps the
+    person link and its verification state.
+    """
 
     entity_id: uuid.UUID | None | MissingType = MISSING
+    name: str | MissingType = Field(
+        default=MISSING,
+        min_length=1,
+        description="New mentioned text. Omit to keep it; it cannot be empty.",
+    )
+    context: str | None | MissingType = Field(
+        default=MISSING,
+        description="New context, such as the OCR line holding the name. Null clears it; omit to keep it.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def name_has_text(cls, value):
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("name must not be blank")
+        return value
 
 
 class TextMentionPatchBatchItem(TextMentionPatchRequest):

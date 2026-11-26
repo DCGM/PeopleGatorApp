@@ -519,7 +519,7 @@ def _link_properties(values):
     }
 
 
-async def _replace_link(client, name, stored, values, vectors=None):
+async def _replace_link(client, name, stored, values, vectors=None, properties=None):
     # Weaviate PATCH adds references; replacing the complete object is required
     # to atomically replace/remove a link with its verification metadata.
     refs = {
@@ -532,7 +532,7 @@ async def _replace_link(client, name, stored, values, vectors=None):
     named_vectors = {**stored.vector, **(vectors or {})}
     await client.collections.get(name).data.replace(
         uuid=stored.uuid,
-        properties={**stored.properties, **_link_properties(values)},
+        properties={**stored.properties, **(properties or {}), **_link_properties(values)},
         references=refs,
         vector=named_vectors or None,
     )
@@ -560,9 +560,20 @@ async def _patch_annotation(
             old.entity_link_verified_at,
         )
         changed = values != old_values
+        # Mention text changes keep the link; they travel in the same object update.
+        text = (
+            {
+                field: value
+                for field in ("name", "context")
+                if not is_missing(value := getattr(payload, field, MISSING))
+                and stored.properties.get(field) != value
+            }
+            if name == TEXT_MENTION_COLLECTION
+            else {}
+        )
         # References and link metadata are sent in a single object update.
-        if changed or vectors:
-            await _replace_link(client, name, stored, values, vectors)
+        if changed or vectors or text:
+            await _replace_link(client, name, stored, values, vectors, text)
             await _touch(client, [old.entity_id, values[0]], context)
         fields = dict(
             zip(
@@ -575,6 +586,7 @@ async def _patch_annotation(
                 values,
             )
         )
+        fields.update(text)
         if models is not None and not is_missing(payload.embeddings):
             fields["embeddings"] = sorted(
                 set(old.embeddings)
@@ -1572,24 +1584,28 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         self, payload: TextMentionCreateRequest, context: GenericActor
     ) -> TextMentionResponse:
         await _require(self._client, SOURCE_COLLECTION, payload.source_id, "source")
-        await _require(self._client, ENTITY_COLLECTION, payload.entity_id, "entity")
+        entity = missing_to_none(payload.entity_id)
+        if entity:
+            await _require(self._client, ENTITY_COLLECTION, entity, "entity")
         i = new_uuid6()
+        references = {"source": payload.source_id}
+        if entity:
+            references["entity"] = entity
         await self._client.collections.get(TEXT_MENTION_COLLECTION).data.insert(
             uuid=i,
             properties={
                 "context": payload.context,
-                **_link_properties(
-                    (payload.entity_id, create_link_state(payload), None, None)
-                ),
-                "annotation_source_id": str(payload.source_id),
                 **_props(payload, {"source_id", "entity_id"}),
+                **_link_properties((entity, create_link_state(payload), None, None)),
+                "annotation_source_id": str(payload.source_id),
             },
-            references={"source": payload.source_id, "entity": payload.entity_id},
+            references=references,
         )
-        await _touch(self._client, [payload.entity_id], context)
+        await _touch(self._client, [entity], context)
         return TextMentionResponse.model_validate(
             {
                 **payload.model_dump(),
+                "entity_id": entity,
                 "entity_link_state": create_link_state(payload),
                 "mention_id": i,
             }
