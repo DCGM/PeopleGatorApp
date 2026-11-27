@@ -12,13 +12,24 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from people_gator_api.persistence.contracts import CreateResult
+from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.routes.v1 import router as v1_router
-from people_gator_api.schemas.entities import EntityMergeResponse
+from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.entities import EntityCreateRequest, EntityMergeResponse
+from people_gator_api.schemas.enums import EntityLinkState, EntityType
 from people_gator_api.schemas.faces import FaceResponse
-from people_gator_api.schemas.mentions import TextMentionResponse
-from people_gator_api.schemas.sources import DocumentResponse, PageResponse
+from people_gator_api.schemas.mentions import TextMentionCreateRequest, TextMentionResponse
+from people_gator_api.schemas.sources import (
+    DocumentCreateRequest,
+    DocumentResponse,
+    PageCreateRequest,
+    PageResponse,
+)
+from people_gator_api.schemas.users import UserCreateRequest
+from people_gator_api.services import database_service
 from people_gator_api.services.auth_service import get_auth_context
 from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.services.event_service import EventHub, get_event_hub
@@ -343,3 +354,84 @@ async def test_new_pages_notify_their_document_once_per_request() -> None:
         ("source", str(pages[2].source_id), "self", "created", str(pages[2].source_id)),
     }
     sources.lookup_document.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_postgres_reassignment_and_delete_reach_subscribers(
+    migrated_postgres: AsyncEngine, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reading the prior link in the request's own session must not disturb the write."""
+    sessions = database_service.make_postgres_session_factory(migrated_postgres)
+    async with sessions() as session:
+        database = postgres_database(session)
+        user = await database.users.get_or_create(UserCreateRequest(
+            display_name="Event reviewer", is_active=True,
+            external_subject="event-reviewer", external_issuer="urn:people-gator:tests",
+        ))
+        actor = GenericActor(user_id=user.user_id)
+        old, new = [
+            (await database.entities.create(EntityCreateRequest(entity_type=EntityType.person, name=name), actor)).entity_id
+            for name in ("Ada Events", "Bea Events")
+        ]
+        library, document_id = "events", uuid.uuid4()
+        document, _ = await database.sources.get_or_create_document(
+            DocumentCreateRequest(library=library, document_id=document_id, name="Events"), context=actor,
+        )
+        page, _ = await database.sources.get_or_create_page(
+            PageCreateRequest(library=library, document_id=document_id, page_id=uuid.uuid4()), context=actor,
+        )
+        mention = await database.text_mentions.create(TextMentionCreateRequest(
+            name="Ada Events", source_id=page.source_id, entity_id=old, entity_link_state=EntityLinkState.manual,
+        ), actor)
+    monkeypatch.setattr(database_service, "_postgres_engine", migrated_postgres)
+    monkeypatch.setattr(database_service, "_postgres_sessions", sessions)
+    mention_id, source = str(mention.mention_id), str(page.source_id)
+
+    async with _api(user_id=user.user_id) as api:
+        api.app.dependency_overrides.pop(get_database)
+        api.app.dependency_overrides.pop(get_database_context)
+        url = f"/api/v1/text-mentions/{mention_id}"
+        await api.subscribe(
+            _topic("mention", mention.mention_id), _topic("source", page.source_id, "related"),
+            _topic("entity", old, "related"), _topic("entity", new, "related"),
+            _topic("source", document.source_id, "related"), _topic("source", page.source_id),
+        )
+        stream = asyncio.create_task(api.client.get(f"/api/v1/events/{api.session}"))
+        while not api.hub.subscriptions(api.session, user.user_id).connected:
+            await asyncio.sleep(0)
+
+        patched = await api.client.patch(url, json={"entity_id": str(new), "entity_link_state": "manual"})
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["entity_id"] == str(new)
+        verified = await api.client.patch(f"/api/v1/pages/{source}", json={"verification_state": "verified"})
+        assert verified.status_code == 200, verified.text
+        assert (await api.client.delete(url)).status_code == 204
+        assert (await api.client.get(url)).status_code == 404
+
+        queue = api.hub._sessions[api.session].queue  # pyright: ignore[reportPrivateUsage]
+        while queue is not None and not queue.empty():
+            await asyncio.sleep(0)
+        with api.hub.connect(api.session, user.user_id):
+            response = await stream
+
+    events = [
+        (event["topic"]["kind"], event["topic"]["id"], event["topic"]["scope"], event["change"], event["object"]["id"])
+        for event in (json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: "))
+        if event["type"] == "change"
+    ]
+    assert sorted(events[:4]) == sorted([
+        ("mention", mention_id, "self", "updated", mention_id),
+        ("source", source, "related", "updated", mention_id),
+        ("entity", str(old), "related", "updated", mention_id),
+        ("entity", str(new), "related", "updated", mention_id),
+    ])
+    assert sorted(events[4:6]) == sorted([
+        ("source", source, "self", "updated", source),
+        ("source", str(document.source_id), "related", "updated", source),
+    ])
+    # After the move only the new entity hears about the deletion.
+    assert sorted(events[6:]) == sorted([
+        ("mention", mention_id, "self", "deleted", mention_id),
+        ("source", source, "related", "deleted", mention_id),
+        ("entity", str(new), "related", "deleted", mention_id),
+    ])

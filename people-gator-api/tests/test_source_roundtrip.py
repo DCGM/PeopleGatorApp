@@ -30,6 +30,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__PERSISTENCE__WEAVIATE__GRPC_SECURE", "f
 os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 
 
+from people_gator_api.services.event_service import EventHub
 from people_gator_api.app import app
 from people_gator_api.routes.v1.sources import delete_source_route, get_source_route
 from people_gator_api.schemas.enums import SourceKind
@@ -95,6 +96,7 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
         source_id=source_id,
         user=_user(),
         database=database,  # type: ignore[arg-type]
+        events=EventHub(),
     )
 
     with pytest.raises(HTTPException) as exc_info:
