@@ -2,9 +2,10 @@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed, nextTick, ref, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
-import { ChevronDown, Plus, ScanFace, Search } from '@lucide/vue'
+import { ChevronDown, Plus, ScanFace, Search, TextQuote, X } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
 import SearchFaceAttachment from './SearchFaceAttachment.vue'
+import SearchTextAttachment from './SearchTextAttachment.vue'
 import SimilarPersonItem from './SimilarPersonItem.vue'
 import SimilarPersonItemSkeleton from './SimilarPersonItemSkeleton.vue'
 import SortSelect from './SortSelect.vue'
@@ -42,12 +43,14 @@ const props = defineProps<{
   isFetching: boolean
   error?: unknown
   searchFaceId: string | null
+  /** Mention texts attached as separate search terms (#205). */
+  searchTexts?: readonly string[]
   /** Embedding models available for the attached face. */
   faceModels?: string[]
   faceModel?: string | null
   selectedFace: Face | null
   /** Name mentions selected on the scan, as assignment targets (#176). */
-  selectedMentions?: ReadonlyArray<{ entityId: string | null }>
+  selectedMentions?: ReadonlyArray<{ entityId: string | null; text?: string }>
   /** Whether the viewer may assign people to the selection. */
   canAssign?: boolean
   viewedPersonId: string | null
@@ -64,6 +67,11 @@ const emit = defineEmits<{
   removeFace: []
   /** Attach the face selected on the scan as the search reference. */
   attachSelectedFace: []
+  /** Attach the texts of the mentions selected on the scan. */
+  attachSelectedMentions: []
+  removeText: [text: string]
+  /** Remove the face and every mention text; typed text stays. */
+  clearAttachments: []
   preview: [person: SimilarPersonCandidate]
   assign: [person: SimilarPersonCandidate]
   assignMentions: [person: SimilarPersonCandidate]
@@ -92,6 +100,12 @@ watchDebounced(draft, () => search(), { debounce: 300 })
 function search() {
   if (changed.value) text.value = draft.value.trim()
 }
+/** Clearing applies at once; attachments stay. */
+function clearText() {
+  draft.value = ''
+  search()
+  group.value?.querySelector('input')?.focus()
+}
 
 const scopeLabel = computed(
   () => PEOPLE_SCOPES.find((item) => item.value === scope.value)?.label ?? '',
@@ -111,10 +125,19 @@ const orderValue = computed({
   get: () => order.value,
   set: (value: string) => (order.value = value as PeopleOrder),
 })
-// Search attaches one face for now; the menu is where aliases and more faces will go.
+// Search attaches one face and any number of mention texts.
 const canAttachSelected = computed(
   () =>
     Boolean(props.selectedFace?.embeddingModel) && props.selectedFace?.id !== props.searchFaceId,
+)
+const canAttachMentions = computed(() =>
+  (props.selectedMentions ?? []).some((mention) => {
+    const value = mention.text?.trim()
+    return Boolean(value) && !props.searchTexts?.includes(value!)
+  }),
+)
+const attachmentCount = computed(
+  () => (props.searchFaceId ? 1 : 0) + (props.searchTexts?.length ?? 0),
 )
 const countLabel = computed(() =>
   props.loading || props.totalCount === undefined
@@ -123,7 +146,10 @@ const countLabel = computed(() =>
 )
 const group = ref<HTMLElement | null>(null)
 const results = ref<HTMLElement | null>(null)
-const resetKey = computed(() => `${scope.value}:${order.value}:${text.value}:${props.searchFaceId}`)
+const resetKey = computed(
+  () =>
+    `${scope.value}:${order.value}:${text.value}:${props.searchFaceId}:${JSON.stringify(props.searchTexts ?? [])}`,
+)
 
 // Bring a newly previewed candidate into view once it is loaded. Later batches
 // leave the scroll position alone, so loading more never jumps back to it.
@@ -166,6 +192,15 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
       <InputGroup>
         <InputGroupInput v-model="draft" aria-label="Search people" placeholder="Name or alias" />
         <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            v-if="draft"
+            type="button"
+            size="icon-xs"
+            aria-label="Clear search"
+            @click="clearText"
+          >
+            <X aria-hidden="true" />
+          </InputGroupButton>
           <InputGroupButton type="submit" size="icon-xs" :disabled="!changed">
             <Search aria-hidden="true" />
             <span class="sr-only">Search</span>
@@ -194,6 +229,12 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
             <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
               <ScanFace aria-hidden="true" />Selected face
             </DropdownMenuItem>
+            <DropdownMenuItem
+              :disabled="!canAttachMentions"
+              @select="emit('attachSelectedMentions')"
+            >
+              <TextQuote aria-hidden="true" />Selected mentions
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <SearchFaceAttachment
@@ -201,6 +242,22 @@ defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
           :face-id="searchFaceId"
           @remove="emit('removeFace')"
         />
+        <SearchTextAttachment
+          v-for="item in searchTexts"
+          :key="item"
+          :text="item"
+          @remove="emit('removeText', item)"
+        />
+        <Button
+          v-if="attachmentCount > 1"
+          type="button"
+          variant="ghost"
+          size="xs"
+          class="shrink-0"
+          @click="emit('clearAttachments')"
+        >
+          Remove all
+        </Button>
       </div>
       <div class="flex min-w-0 flex-row flex-nowrap items-center gap-1" aria-label="Search options">
         <DropdownMenu>

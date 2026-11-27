@@ -10,11 +10,30 @@ import {
 } from '@/viewmodels/scan-sidebar'
 
 describe('scan sidebar URL state (#103)', () => {
+  it('keeps attached mention texts in a repeatable key and treats them as a search (#205)', () => {
+    expect(readSidebarState({ candidate_mention: ' Ada ' })).toMatchObject({
+      searchTexts: ['Ada'],
+      peopleScope: 'all',
+      peopleOrder: 'relevance',
+    })
+    expect(
+      readSidebarState({ candidate_mention: ['Ada', ' ', 'Lina Archivist', 'Ada'] }).searchTexts,
+    ).toEqual(['Ada', 'Lina Archivist'])
+    expect(sidebarQuery({ searchTexts: ['Ada', 'Lina'] })).toEqual({
+      candidate_mention: ['Ada', 'Lina'],
+    })
+    expect(sidebarQuery({ searchTexts: [] })).toEqual({ candidate_mention: undefined })
+    expect(scanSettingsQuery({ candidate_mention: ['Ada'], person: 'face-a' })).toEqual({
+      candidate_mention: ['Ada'],
+    })
+  })
+
   it('uses the agreed defaults when parameters are absent', () => {
     expect(readSidebarState({})).toEqual({
       tab: 'people',
       peopleText: '',
       searchFaceId: null,
+      searchTexts: [],
       searchModel: null,
       peopleScope: 'document',
       peopleOrder: 'context',

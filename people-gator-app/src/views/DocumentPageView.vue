@@ -454,7 +454,10 @@ watch(
   },
 )
 const peopleScored = computed(
-  () => Boolean(sidebarState.value.peopleText.trim()) || Boolean(searchFaceId.value),
+  () =>
+    Boolean(sidebarState.value.peopleText.trim()) ||
+    Boolean(searchFaceId.value) ||
+    sidebarState.value.searchTexts.length > 0,
 )
 const peopleOrder = computed({
   get: () => effectivePeopleOrder(sidebarState.value.peopleOrder, peopleScored.value),
@@ -465,7 +468,11 @@ const people = reactive(
     sources,
     scope: () => effectivePeopleScope(sidebarState.value.peopleScope, peopleScored.value),
     order: peopleOrder,
-    search: () => ({ text: sidebarState.value.peopleText, face: searchFace.value }),
+    search: () => ({
+      text: sidebarState.value.peopleText,
+      texts: sidebarState.value.searchTexts,
+      face: searchFace.value,
+    }),
     searchPending: () => Boolean(searchFaceId.value) && searchFaceQuery.isPending.value,
     enabled: () => sidebarState.value.tab === 'people',
     pageFaces: faces,
@@ -500,6 +507,22 @@ function removeSearchFace(history: 'push' | 'replace' = 'push') {
     },
     history,
   )
+}
+// The People context menu adds to the search: typed text and other attachments stay (#205).
+function attachSearchFace(face: Face) {
+  sidebar.update({ searchFaceId: face.id, searchModel: null })
+}
+function attachSelectedMentionTexts() {
+  const texts = selectedMentionList.value.map((mention) => mention.text.trim()).filter(Boolean)
+  sidebar.update({ searchTexts: [...new Set([...sidebarState.value.searchTexts, ...texts])] })
+}
+function removeSearchText(text: string) {
+  sidebar.update({
+    searchTexts: sidebarState.value.searchTexts.filter((item) => item !== text),
+  })
+}
+function clearSearchAttachments() {
+  sidebar.update({ searchFaceId: null, searchModel: null, searchTexts: [] })
 }
 const focusPeopleRequested = ref(false)
 function applyPeopleFocus() {
@@ -1083,16 +1106,19 @@ async function deleteSelectedMentions() {
     // Keep the mentions and confirmation available for retry.
   }
 }
-// Search by name: the distinct selected names fill People search, which gets focus.
+// Search by name starts a new People search, which gets focus. One name fills
+// the field; several become attachments, each a search term of its own (#205).
 function searchByMentionNames() {
-  const text = mentionCard.value?.texts.join(' ')
-  if (!text) return
+  const texts = mentionCard.value?.texts ?? []
+  if (!texts.length) return
+  const several = texts.length > 1
   sidebarVisible.value = true
   focusPeopleRequested.value = true
   sidebar.update({
     tab: 'people',
-    peopleText: text,
+    peopleText: several ? '' : texts[0]!,
     searchFaceId: null,
+    searchTexts: several ? texts : [],
     searchModel: null,
     peopleScope: 'all',
     peopleOrder: 'relevance',
@@ -1637,6 +1663,7 @@ onBeforeUnmount(() => {
               :is-fetching="people.isFetching"
               :error="people.error"
               :search-face-id="searchFaceId"
+              :search-texts="sidebarState.searchTexts"
               :face-models="searchFaceModels"
               :face-model="searchModel"
               @update:face-model="(model) => sidebar.update({ searchModel: model })"
@@ -1648,7 +1675,10 @@ onBeforeUnmount(() => {
               :load-more="people.loadMore"
               :retry="people.retry"
               @remove-face="removeSearchFace()"
-              @attach-selected-face="selectedFace && searchByFace(selectedFace)"
+              @attach-selected-face="selectedFace && attachSearchFace(selectedFace)"
+              @attach-selected-mentions="attachSelectedMentionTexts"
+              @remove-text="removeSearchText"
+              @clear-attachments="clearSearchAttachments"
               @preview="previewSimilarPerson"
               @assign="assignSimilarPerson"
               @assign-mentions="assignSimilarPersonToMentions"

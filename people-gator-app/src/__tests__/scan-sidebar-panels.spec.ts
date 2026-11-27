@@ -178,6 +178,39 @@ describe('People panel (#103)', () => {
     expect(labels).toEqual(['Scope: All people', 'Face model: model-b'])
   })
 
+  it('clears typed text at once and keeps attachments (#205)', async () => {
+    const wrapper = panel({ text: 'Ada', searchTexts: ['Lina'], scored: true })
+    const group = wrapper.get('[data-slot="input-group"]')
+    expect(group.findAll('button').map((button) => button.text())).toEqual(['', 'Search'])
+    await group.get('[aria-label="Clear search"]').trigger('click')
+    expect(wrapper.emitted('update:text')).toEqual([['']])
+    expect(wrapper.emitted('removeText')).toBeUndefined()
+    expect(wrapper.emitted('clearAttachments')).toBeUndefined()
+    await wrapper.setProps({ text: '' })
+    expect(group.find('[aria-label="Clear search"]').exists()).toBe(false)
+  })
+
+  it('lists attached mention texts with their own and a shared remove action (#205)', async () => {
+    const wrapper = panel({ searchTexts: ['Ada'], scored: true })
+    const context = wrapper.get('[aria-label="Search context"]')
+    expect(context.findAll('[data-search-text]').map((chip) => chip.text())).toEqual(['Ada'])
+    // A single attachment needs no shared action.
+    expect(context.text()).not.toContain('Remove all')
+    await wrapper.setProps({ searchTexts: ['Ada', 'Lina Archivist'] })
+    expect(context.findAll('[data-search-text]').map((chip) => chip.text())).toEqual([
+      'Ada',
+      'Lina Archivist',
+    ])
+    await context.get('[aria-label="Remove mention text Lina Archivist"]').trigger('click')
+    expect(wrapper.emitted('removeText')).toEqual([['Lina Archivist']])
+    const all = context.findAll('button').find((button) => button.text() === 'Remove all')!
+    await all.trigger('click')
+    expect(wrapper.emitted('clearAttachments')).toHaveLength(1)
+    // A face and one text are two attachments.
+    await wrapper.setProps({ searchTexts: ['Ada'], searchFaceId: 'face-a' })
+    expect(context.text()).toContain('Remove all')
+  })
+
   it('keeps an empty, fixed-height attachment row without context', () => {
     const wrapper = panel()
     const context = wrapper.get('[aria-label="Search context"]')
