@@ -388,7 +388,10 @@ function applyPendingFocus() {
   )
   if (!transform) return
   pendingFocus.value = null
-  panzoom.zoom(transform.scale, { animate: false })
+  // A fully visible target keeps the view; only the selection changes.
+  const pan = panzoom.getPan()
+  if (transform.scale !== panzoom.getScale()) panzoom.zoom(transform.scale, { animate: false })
+  else if (transform.x === pan.x && transform.y === pan.y) return
   panzoom.pan(transform.x, transform.y, { animate: false, force: true })
 }
 
