@@ -1714,6 +1714,7 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
         ('scan-toolbar', 'links-2', []),
         ('scan-toolbar-union', 'links-1', [State.automatic, State.manual]),
         ('scan-toolbar-assigned', 'links-2', list(State)),
+        ('scan-toolbar-unassigned', 'links-2', ['unassigned']),
     ):
         link = urlsplit(first.filter_examples[example])
         assert parse_qs(link.query).get('page_link_state', []) == selected
@@ -1724,6 +1725,13 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
         image = await get_page_image(page.library, page.document_id, page.page_id)
         with Image.open(io.BytesIO(image.content)) as scan:
             assert scan.size == (800, 1100)
+        # The toolbar's Unassigned toggle lists faces without a person (#195).
+        unassigned = await database.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(source_id=[page.source_id], is_assigned=False),
+        ))
+        assert {face.detection_id for face in unassigned.items} == {
+            first.faces['links-' + key] for key, state in expected[page_key].items() if state is None
+        }
         for size in range(4):
             for states in combinations(list(State), size):
                 matching = {key for key, state in expected[page_key].items()
