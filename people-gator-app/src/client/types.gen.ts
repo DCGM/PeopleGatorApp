@@ -91,6 +91,35 @@ export type BoundingBox = {
 };
 
 /**
+ * ChangeEvent
+ *
+ * A subscribed topic changed.
+ */
+export type ChangeEvent = {
+    /**
+     * Type
+     */
+    type?: 'change';
+    /**
+     * The subscribed topic this event belongs to.
+     */
+    topic: Topic;
+    /**
+     * What happened to the object.
+     */
+    change: ChangeKind;
+    /**
+     * The changed object. Null on a related or kind-wide topic when one request changed several objects.
+     */
+    object: ObjectRef | null;
+};
+
+/**
+ * ChangeKind
+ */
+export type ChangeKind = 'created' | 'updated' | 'deleted';
+
+/**
  * DocumentCreateRequest
  *
  * Typed document descriptor backed by a document Source record.
@@ -2507,6 +2536,19 @@ export type ModelEmbeddingFaceModelStub = {
 };
 
 /**
+ * ObjectRef
+ *
+ * Identity of one changed object. Clients refetch it; no snapshot is sent.
+ */
+export type ObjectRef = {
+    kind: TopicKind;
+    /**
+     * Id
+     */
+    id: string;
+};
+
+/**
  * OpenIDConfigurationResponse
  *
  * OpenID Connect discovery metadata for the People Gator token service.
@@ -3314,6 +3356,29 @@ export type ScoreAggregation = 'min' | 'max' | 'average';
 export type ScoreFusion = 'rrf';
 
 /**
+ * SessionEvent
+ *
+ * First frame of every connection: the session's current subscriptions.
+ *
+ * Events published while no stream was connected are not replayed, so a
+ * client refetches what it shows and re-subscribes missing topics.
+ */
+export type SessionEvent = {
+    /**
+     * Type
+     */
+    type?: 'session';
+    /**
+     * Session Id
+     */
+    session_id: string;
+    /**
+     * Topics
+     */
+    topics: Array<Topic>;
+};
+
+/**
  * SortDirection
  */
 export type SortDirection = 'asc' | 'desc';
@@ -3372,6 +3437,42 @@ export type SourceResponseBase = {
      * Created By Api Key Name
      */
     created_by_api_key_name?: string | null;
+};
+
+/**
+ * SubscriptionUpdateRequest
+ *
+ * Topics to add to and remove from a session; unsubscribing is applied first.
+ */
+export type SubscriptionUpdateRequest = {
+    /**
+     * Subscribe
+     */
+    subscribe?: Array<Topic>;
+    /**
+     * Unsubscribe
+     */
+    unsubscribe?: Array<Topic>;
+};
+
+/**
+ * SubscriptionsResponse
+ */
+export type SubscriptionsResponse = {
+    /**
+     * Session Id
+     */
+    session_id: string;
+    /**
+     * Connected
+     *
+     * Whether a stream is currently attached.
+     */
+    connected: boolean;
+    /**
+     * Topics
+     */
+    topics: Array<Topic>;
 };
 
 /**
@@ -3744,6 +3845,40 @@ export type TokenResponse = {
      */
     token_type: string;
 };
+
+/**
+ * Topic
+ *
+ * One subscribable topic.
+ *
+ * ``self`` follows the object with this ``id``; without an ``id`` it follows
+ * every object of the kind. ``related`` follows the faces and text mentions
+ * linked to an entity, or the faces, text mentions and pages of a source.
+ */
+export type Topic = {
+    kind: TopicKind;
+    /**
+     * Id
+     *
+     * Object UUID. Omit to follow every object of this kind.
+     */
+    id?: string | null;
+    scope?: TopicScope;
+};
+
+/**
+ * TopicKind
+ *
+ * Kinds of objects that change live in the application.
+ */
+export type TopicKind = 'entity' | 'source' | 'face' | 'mention';
+
+/**
+ * TopicScope
+ *
+ * Whether a topic follows the object itself or what is related to it.
+ */
+export type TopicScope = 'self' | 'related';
 
 /**
  * TranslationRequest
@@ -9964,6 +10099,98 @@ export type HealthApiV1HealthGetResponses = {
 };
 
 export type HealthApiV1HealthGetResponse = HealthApiV1HealthGetResponses[keyof HealthApiV1HealthGetResponses];
+
+export type StreamEventsRouteApiV1EventsSessionIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/events/{session_id}';
+};
+
+export type StreamEventsRouteApiV1EventsSessionIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type StreamEventsRouteApiV1EventsSessionIdGetError = StreamEventsRouteApiV1EventsSessionIdGetErrors[keyof StreamEventsRouteApiV1EventsSessionIdGetErrors];
+
+export type StreamEventsRouteApiV1EventsSessionIdGetResponses = {
+    /**
+     * Response 200 Stream Events Route Api V1 Events  Session Id  Get
+     *
+     * JSON `data` of each frame.
+     */
+    200: SessionEvent | ChangeEvent;
+};
+
+export type StreamEventsRouteApiV1EventsSessionIdGetResponse = StreamEventsRouteApiV1EventsSessionIdGetResponses[keyof StreamEventsRouteApiV1EventsSessionIdGetResponses];
+
+export type GetEventTopicsRouteApiV1EventsSessionIdTopicsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/events/{session_id}/topics';
+};
+
+export type GetEventTopicsRouteApiV1EventsSessionIdTopicsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetEventTopicsRouteApiV1EventsSessionIdTopicsGetError = GetEventTopicsRouteApiV1EventsSessionIdTopicsGetErrors[keyof GetEventTopicsRouteApiV1EventsSessionIdTopicsGetErrors];
+
+export type GetEventTopicsRouteApiV1EventsSessionIdTopicsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionsResponse;
+};
+
+export type GetEventTopicsRouteApiV1EventsSessionIdTopicsGetResponse = GetEventTopicsRouteApiV1EventsSessionIdTopicsGetResponses[keyof GetEventTopicsRouteApiV1EventsSessionIdTopicsGetResponses];
+
+export type UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchData = {
+    body: SubscriptionUpdateRequest;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/events/{session_id}/topics';
+};
+
+export type UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchError = UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchErrors[keyof UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchErrors];
+
+export type UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionsResponse;
+};
+
+export type UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchResponse = UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchResponses[keyof UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchResponses];
 
 export type GetJwksWellKnownJwksJsonGetData = {
     body?: never;
