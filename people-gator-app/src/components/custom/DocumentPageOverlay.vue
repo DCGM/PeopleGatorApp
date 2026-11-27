@@ -4,6 +4,7 @@ import { linkTooltip } from '@/lib/entity-links'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { SCAN_DRAG_THRESHOLD } from '@/composables/scan-viewport'
+import { cardInUse, movedIntoNestedLayer, useHoverCard } from '@/composables/hover-card'
 
 import { lineMentionsEntity } from '@/viewmodels/document-workspace.types'
 import type {
@@ -44,32 +45,72 @@ const overlay = ref<HTMLElement | null>(null)
 const drawableFaces = computed(() =>
   props.faces.filter((face) => face.position.width > 0 && face.position.height > 0),
 )
-// Only the selected face expands its name tag into its details card. A click
-// off it on the scan unselects it; the card also collapses at once, in case the
-// parent keeps the face selected.
+// The selected face expands its name tag into its details card. A click off it
+// on the scan unselects it; the card also collapses at once, in case the parent
+// keeps the face selected. A hovered face shows its card instead, until the
+// pointer leaves; using that card selects the face (#203).
 const dismissedFaceId = ref<string | null>(null)
 watch(
   () => props.selectedFaceId,
-  () => (dismissedFaceId.value = null),
+  (selected) => {
+    dismissedFaceId.value = null
+    // Another selection takes over from a hovered card.
+    if (hoverCard.target.value !== selected) hoverCard.close(true)
+  },
 )
 
 const slots = defineSlots<{ card?: (props: { face: Face }) => unknown }>()
+const hoverCard = useHoverCard<string>()
+// Cards that opened on hover only; closing one leaves focus where it is.
+const hoverOnly = new Set<string>()
+watch(hoverCard.target, (faceId) => {
+  if (faceId && faceId !== props.selectedFaceId) hoverOnly.add(faceId)
+})
+watch(
+  () => props.actionsEnabled,
+  (enabled) => enabled || hoverCard.close(true),
+)
+const cardFaceId = computed(() => {
+  const hovered = hoverCard.target.value
+  if (hovered && drawableFaces.value.some((face) => face.id === hovered)) return hovered
+  return dismissedFaceId.value === props.selectedFaceId ? null : props.selectedFaceId
+})
 function cardOpen(faceId: string) {
-  return (
-    props.actionsEnabled &&
-    Boolean(slots.card) &&
-    props.selectedFaceId === faceId &&
-    dismissedFaceId.value !== faceId
-  )
+  return props.actionsEnabled && Boolean(slots.card) && cardFaceId.value === faceId
+}
+
+function detectionCard(faceId: string) {
+  return document.querySelector<HTMLElement>(`[data-detection-card="${faceId}"]`)
+}
+function hoverFace(event: MouseEvent, faceId: string) {
+  // Not while dragging the scan, or while the open card is in use.
+  if (event.buttons || cardInUse(document.querySelector('[data-detection-card]'))) return
+  if (faceId === cardFaceId.value) hoverCard.hold()
+  else hoverCard.open(faceId)
+}
+/** Using the hovered card selects its face, so the card's actions apply to it. */
+function selectHovered(faceId: string) {
+  hoverOnly.delete(faceId)
+  if (props.selectedFaceId !== faceId) emit('selectFace', faceId)
+}
+function leaveCard(event: MouseEvent, faceId: string) {
+  if (movedIntoNestedLayer(event, event.currentTarget as Element)) selectHovered(faceId)
+  else hoverCard.close()
 }
 
 function detectionButton(faceId: string) {
   return overlay.value?.querySelector<HTMLButtonElement>(`[data-detection-id="${faceId}"]`)
 }
 
-function activateFace(faceId: string) {
+async function activateFace(faceId: string) {
+  // A card already open from hovering gets focus as a newly opened one does.
+  const shown = cardOpen(faceId)
+  hoverOnly.delete(faceId)
   dismissedFaceId.value = null
   emit('selectFace', faceId)
+  if (!shown || document.activeElement !== detectionButton(faceId)) return
+  await nextTick()
+  detectionCard(faceId)?.focus({ preventScroll: true })
 }
 
 // Move focus into the card only when the box itself was activated, so
@@ -77,15 +118,16 @@ function activateFace(faceId: string) {
 // The card itself takes focus, not its first button, so no tooltip pops up.
 async function openFocus(event: Event, faceId: string) {
   event.preventDefault()
+  // Hovering shows the card without moving focus.
+  if (props.selectedFaceId !== faceId) return
   if (document.activeElement !== detectionButton(faceId)) return
   await nextTick()
-  document
-    .querySelector<HTMLElement>(`[data-detection-card="${faceId}"]`)
-    ?.focus({ preventScroll: true })
+  detectionCard(faceId)?.focus({ preventScroll: true })
 }
 
 function clickOff(faceId: string) {
   if (props.selectedFaceId !== faceId) return
+  hoverCard.close(true)
   dismissedFaceId.value = faceId
   emit('clearFace')
 }
@@ -137,6 +179,8 @@ onBeforeUnmount(() => {
 function returnFocus(event: Event, faceId: string) {
   event.preventDefault()
   const active = document.activeElement
+  // A card that was only hovered never took focus, and one hidden by a hovered card keeps it.
+  if (hoverOnly.delete(faceId) || hoverCard.target.value) return
   if (active !== document.body && !(event.target as HTMLElement).contains(active)) return
   const selected = props.selectedFaceId ? detectionButton(props.selectedFaceId) : null
   ;(selected ?? detectionButton(faceId))?.focus({ preventScroll: true })
@@ -227,6 +271,8 @@ function regionStyle(position: Face['position']): CSSProperties {
           :aria-pressed="face.id === selectedFaceId"
           :aria-expanded="actionsEnabled && $slots.card ? cardOpen(face.id) : undefined"
           :aria-haspopup="actionsEnabled && $slots.card ? 'dialog' : undefined"
+          @mouseenter="hoverFace($event, face.id)"
+          @mouseleave="hoverCard.close()"
           @click.stop="activateFace(face.id)"
           @keydown.esc="face.id === selectedFaceId && emit('clearFace')"
         >
@@ -256,6 +302,10 @@ function regionStyle(position: Face['position']): CSSProperties {
         update-position-strategy="always"
         prioritize-position
         :aria-label="`Details for ${face.personId ? face.name : 'unassigned face'}`"
+        @mouseenter="hoverCard.hold"
+        @mouseleave="leaveCard($event, face.id)"
+        @pointerdown.capture="selectHovered(face.id)"
+        @focusin="selectHovered(face.id)"
         @open-auto-focus="openFocus($event, face.id)"
         @focus-outside.prevent
         @pointer-down-outside="pressOutside($event, face.id)"
