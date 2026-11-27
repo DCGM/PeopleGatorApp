@@ -361,6 +361,7 @@ jobs:
       DEPLOY_OTEL_HEADERS: ${{ secrets.STAGING_OTEL_HEADERS }}
       DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.STAGING_RUM_CLIENT_TOKEN }}
       DEPLOY_RUM_SITE: ${{ vars.STAGING_RUM_SITE }}
+      DEPLOY_PUBLIC_LOGIN: ${{ vars.STAGING_PUBLIC_LOGIN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -454,6 +455,7 @@ jobs:
       DEPLOY_OTEL_HEADERS: ${{ secrets.PRODUCTION_OTEL_HEADERS }}
       DEPLOY_RUM_CLIENT_TOKEN: ${{ secrets.PRODUCTION_RUM_CLIENT_TOKEN }}
       DEPLOY_RUM_SITE: ${{ vars.PRODUCTION_RUM_SITE }}
+      DEPLOY_PUBLIC_LOGIN: ${{ vars.PRODUCTION_PUBLIC_LOGIN }}
     steps:
       - uses: actions/checkout@v4
         with:

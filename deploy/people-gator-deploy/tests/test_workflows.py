@@ -33,7 +33,8 @@ SAMPLES = {"HOST": "app.example.invalid", "DATABASE_URL": "postgresql://u:p@db:5
            "S3_ACCESS_KEY_ID": "k", "S3_SECRET_ACCESS_KEY": "s", "BACKUP_S3_ENDPOINT_URL": "https://s3.example.invalid",
            "BACKUP_S3_REGION": "r", "BACKUP_S3_BUCKET": "backups", "BACKUP_S3_PREFIX": "p/", "BACKUP_S3_ACCESS_KEY_ID": "rk",
            "BACKUP_S3_SECRET_ACCESS_KEY": "rs", "OTEL_ENDPOINT": "http://lgtm:4318", "OTEL_HEADERS": "Authorization=Basic x",
-           "RUM_CLIENT_TOKEN": "t", "RUM_SITE": "o2.example", "USERS_JSON": '{"test": {"hash": "h", "scopes": []}}'}
+           "RUM_CLIENT_TOKEN": "t", "RUM_SITE": "o2.example", "USERS_JSON": '{"test": {"hash": "h", "scopes": []}}',
+           "PUBLIC_LOGIN": '{"username": "guest", "password": "g"}'}
 
 
 def workflow():

@@ -28,6 +28,7 @@ secrets.
 | `RUM_CLIENT_TOKEN` | secret | optional | optional | optional | Enables browser RUM |
 | `RUM_SITE` | variable | optional | optional | optional | RUM site, default `openobserve.capturemyhand.com` |
 | `USERS_JSON` | secret | optional | | | Preview login accounts in the format of `people-gator-api/example.users.json`; that file (`test` / `test`) is the default. Previews open as `test` without the login page while it exists |
+| `PUBLIC_LOGIN` | variable | | optional | optional | `{"username": "…", "password": "…"}` of a `users.json` account the app opens as without the login page ([Logins](#logins)). Served to every browser |
 
 Omitting `OTEL_*` or `RUM_*` leaves that feature off. For example:
 
@@ -60,6 +61,7 @@ gh secret set PRODUCTION_S3_ACCESS_KEY_ID --env production --body KEY
 gh secret set PRODUCTION_S3_SECRET_ACCESS_KEY --env production --body SECRET
 gh variable set PRODUCTION_OTEL_ENDPOINT --body http://lgtm:4318
 gh secret set PRODUCTION_OTEL_HEADERS --env production --body 'Authorization=Basic BASE64'
+gh variable set PRODUCTION_PUBLIC_LOGIN --body '{"username": "guest", "password": "GUEST_PASSWORD"}'
 ```
 
 ## Hosts
@@ -165,13 +167,20 @@ account's `postgres` container; staging creates its own database and role there.
 Every environment signs users in on the app's login page, checked against
 `peoplegator_api/users.json` in its storage. Previews use `USERS_JSON` and are
 public: the app opens them as `test` / `test` without the login page; if
-`USERS_JSON` has no such account, the login page asks instead. Staging and
-production have no public account. For them, upload the file to `STAGING_S3_BUCKET`
-or `PRODUCTION_S3_BUCKET` before inviting users; until then nobody can sign in.
+`USERS_JSON` has no such account, the login page asks instead. For staging and
+production, upload the file to `STAGING_S3_BUCKET` or `PRODUCTION_S3_BUCKET` before
+inviting users; until then nobody can sign in.
 Each entry holds an Argon2 hash and the account's scopes, as in
 `people-gator-api/example.users.json`; never upload that example's `test` account.
 Edits apply at the next sign-in, without a redeploy. Keep `peoplegator_api/jwks.json`
 beside it: deleting it signs everyone out.
+
+Staging and production show the login page unless `STAGING_PUBLIC_LOGIN` or
+`PRODUCTION_PUBLIC_LOGIN` names one of those accounts; the app then opens as it and
+offers **Sign in** for personal accounts. Its password is served to every browser,
+so give the account only the scopes anyone may use (`people-gator:browse` for
+read-only). A change applies with the next deployment: a push to `main` for
+staging, a new release tag for production.
 
 ```sh
 # In people-gator-api: hash a password, then upload the file
