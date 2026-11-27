@@ -339,6 +339,10 @@ describe('document page gallery navigation', () => {
       line: 'l2',
       link_state: 'manual',
       page_link_state: 'verified',
+      lines: 'annotated',
+      highlight: 'manual',
+      panel: 'faces',
+      face_scope: 'document',
       selectedPerson: 'nora',
       gallery_person_only: 'on',
       gallery_sort: 'faces_total_count',
@@ -352,7 +356,13 @@ describe('document page gallery navigation', () => {
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
+      // Editor filters and sidebar settings follow; page selections stay (#193).
       query: {
+        page_link_state: 'verified',
+        lines: 'annotated',
+        highlight: 'manual',
+        panel: 'faces',
+        face_scope: 'document',
         gallery_person_only: 'on',
         gallery_not_verified: 'on',
         selectedPerson: 'nora',

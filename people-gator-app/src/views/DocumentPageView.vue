@@ -94,7 +94,9 @@ import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/
 import {
   effectivePeopleOrder,
   effectivePeopleScope,
+  PAGE_LINK_STATE_KEY,
   resolveSearchModel,
+  scanSettingsQuery,
   SCAN_SELECTED_MENTION,
   useScanSidebarState,
   type PeopleScope,
@@ -174,7 +176,7 @@ function showPanel(side: 'left' | 'right') {
 }
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
-const linkStates = useLinkStateFilter('page_link_state')
+const linkStates = useLinkStateFilter(PAGE_LINK_STATE_KEY)
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -257,6 +259,8 @@ function galleryLocation(item: PageGalleryItem) {
     name: 'document-page',
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
     query: {
+      // Editor filters and sidebar settings follow to the opened page (#193).
+      ...scanSettingsQuery(route.query),
       [GALLERY_PERSON_KEY]: galleryPersonOnly.value ? 'on' : undefined,
       [GALLERY_NOT_VERIFIED_KEY]: galleryNotVerified.value ? 'on' : undefined,
       selectedPerson: selectedPersonId.value || undefined,

@@ -62,7 +62,16 @@ async function mountControls(current: PageResponse) {
   await router.push({
     name: 'document-page',
     params: { libraryId: 'lib', documentId: 'doc', pageId: current.page_id },
-    query: { panel: 'info', gallery_not_verified: 'on', person: 'face', pages_view: 'expanded' },
+    query: {
+      panel: 'info',
+      gallery_not_verified: 'on',
+      person: 'face',
+      line: 'l1',
+      pages_view: 'expanded',
+      lines: 'annotated',
+      page_link_state: 'manual',
+      face_scope: 'document',
+    },
   })
   const wrapper = mount(PageReviewControls, {
     props: { page: current },
@@ -112,7 +121,7 @@ describe('page verification (#149)', () => {
     expect(mount(VerificationProgress).text()).toBe('–/–')
   })
 
-  it('verifies from the viewer controls and preserves the expanded gallery across page navigation', async () => {
+  it('verifies from the viewer controls and preserves editor settings across page navigation', async () => {
     mocks.pages = [page('a'), page('b'), page('c')]
     const wrapper = await mountControls(page('b'))
     await wrapper.get('button[aria-label="Verify page"]').trigger('click')
@@ -121,10 +130,10 @@ describe('page verification (#149)', () => {
       payload: { verification_state: 'verified' },
     })
     expect(wrapper.get('a[aria-label="Previous page"]').attributes('href')).toBe(
-      '/libraries/lib/documents/doc/pages/a?gallery_not_verified=on&pages_view=expanded&panel=info',
+      '/libraries/lib/documents/doc/pages/a?panel=info&face_scope=document&page_link_state=manual&lines=annotated&gallery_not_verified=on&pages_view=expanded',
     )
     expect(wrapper.get('a[aria-label="Next page"]').attributes('href')).toBe(
-      '/libraries/lib/documents/doc/pages/c?gallery_not_verified=on&pages_view=expanded&panel=info',
+      '/libraries/lib/documents/doc/pages/c?panel=info&face_scope=document&page_link_state=manual&lines=annotated&gallery_not_verified=on&pages_view=expanded',
     )
     wrapper.unmount()
   })

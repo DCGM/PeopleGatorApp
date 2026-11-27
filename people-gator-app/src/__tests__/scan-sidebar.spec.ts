@@ -5,7 +5,7 @@ import {
   resolveSearchModel,
   readSidebarState,
   sidebarQuery,
-  sidebarSettingsQuery,
+  scanSettingsQuery,
   type ScanSidebarState,
 } from '@/viewmodels/scan-sidebar'
 
@@ -157,20 +157,24 @@ describe('scan sidebar URL state (#103)', () => {
     expect(resolveSearchModel('model-a', [])).toBeNull()
   })
 
-  it('carries only sidebar settings to another scan page (#109)', () => {
+  it('carries editor filters and sidebar settings to another scan page (#193)', () => {
     expect(
-      sidebarSettingsQuery({
+      scanSettingsQuery({
         panel: 'faces',
         face_scope: 'document',
         face_view: 'person',
         candidate_face: 'f',
         face_model: 'm',
-        page_link_state: 'manual',
+        page_link_state: ['manual', 'verified'],
+        lines: 'annotated',
+        highlight: ['manual'],
+        // Filters of other views and this page's selections stay behind (#109).
+        link_state: 'manual',
         library: 'lib',
         touched_by: 'u',
         person: 'f',
         line: 'l1',
-        lines: 'person',
+        mention: 'm1',
       }),
     ).toEqual({
       panel: 'faces',
@@ -178,6 +182,9 @@ describe('scan sidebar URL state (#103)', () => {
       face_view: 'person',
       candidate_face: 'f',
       face_model: 'm',
+      page_link_state: ['manual', 'verified'],
+      lines: 'annotated',
+      highlight: ['manual'],
     })
   })
 

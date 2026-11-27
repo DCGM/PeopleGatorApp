@@ -178,7 +178,10 @@ controls; an explicit choice that remains applicable survives switching between
 browse and search. Filter tag removal and **Clear all filters** keep search and
 sort. Related navigation to another resource carries no sort or cursor; links to
 another page of the same document keep the workspace's face, gallery and
-candidate orders. Profile witnesses from an originating face search are pinned
+candidate orders. Switching pages inside the scan editor (Previous/Next, the
+page strip, sidebar face and mention links) also keeps its line, highlight and
+link-state filters and the sidebar's tab and settings; the selected face, line
+and mention stay behind. Profile witnesses from an originating face search are pinned
 first and labelled **Search hit**; the remaining faces follow the selected order.
 
 ## Filter reference

@@ -7,7 +7,7 @@ import AnnotationLastChange from './AnnotationLastChange.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { SCAN_SELECTED_MENTION, sidebarSettingsQuery } from '@/viewmodels/scan-sidebar'
+import { SCAN_SELECTED_MENTION, scanSettingsQuery } from '@/viewmodels/scan-sidebar'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mention: PersonMention
@@ -43,8 +43,8 @@ const target = computed(() => ({
   },
   query: {
     ...(onScan.value && {
-      // The same page keeps every setting; another page keeps the sidebar's.
-      ...(samePage.value ? route.query : sidebarSettingsQuery(route.query)),
+      // The same page keeps every setting; another page keeps the editor's.
+      ...(samePage.value ? route.query : scanSettingsQuery(route.query)),
       person: undefined,
       line: undefined,
       mention: props.mention.id,

@@ -157,13 +157,22 @@ export const SIDEBAR_QUERY_KEYS = [
   'activity_dir',
 ] as const
 
+/** URL key of the scan's link-state filter (automatic, manual, verified). */
+export const PAGE_LINK_STATE_KEY = 'page_link_state'
+
+/** URL keys of the scan's own filters: link states, shown lines and highlighted states. */
+export const SCAN_FILTER_QUERY_KEYS = [PAGE_LINK_STATE_KEY, 'lines', 'highlight'] as const
+
 /**
- * Query for opening another scan page from the sidebar: the sidebar keeps its
- * tab and settings, while filters stay behind as for any navigation (#109).
+ * Query for opening another page in the scan editor (#193): the editor keeps
+ * its filters and the sidebar its tab and settings. The page's own selections
+ * (face, line, mention) and filters of other views (#109) stay behind.
  */
-export function sidebarSettingsQuery(query: LocationQuery): LocationQueryRaw {
+export function scanSettingsQuery(query: LocationQuery): LocationQueryRaw {
   return Object.fromEntries(
-    SIDEBAR_QUERY_KEYS.flatMap((key) => (query[key] === undefined ? [] : [[key, query[key]]])),
+    [...SIDEBAR_QUERY_KEYS, ...SCAN_FILTER_QUERY_KEYS].flatMap((key) =>
+      query[key] === undefined ? [] : [[key, query[key]]],
+    ),
   )
 }
 

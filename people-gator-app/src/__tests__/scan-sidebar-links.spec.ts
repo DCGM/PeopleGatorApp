@@ -50,7 +50,7 @@ describe('scan sidebar navigation (#103)', () => {
     })
   })
 
-  it('opens another page from a scan mention with the same sidebar settings', async () => {
+  it('opens another page from a scan mention with the same editor settings', async () => {
     const router = scanRouter()
     await router.push({
       name: 'document-page',
@@ -59,6 +59,7 @@ describe('scan sidebar navigation (#103)', () => {
         panel: 'mentions',
         mention_scope: 'document',
         page_link_state: 'manual',
+        lines: 'annotated',
         person: 'f',
         line: 'l1',
       },
@@ -97,19 +98,20 @@ describe('scan sidebar navigation (#103)', () => {
     )
     const linkQuery = () =>
       (wrapper.getComponent(RouterLinkStub).props('to') as { query: Record<string, unknown> }).query
-    // Another page keeps the sidebar's settings; the evidence filter stays behind (#109).
+    // Another page keeps the editor's filters and the sidebar's settings (#193).
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toMatchObject({
       params: { pageId: 'two' },
       query: {
         panel: 'mentions',
         mention_scope: 'document',
+        page_link_state: 'manual',
+        lines: 'annotated',
         person: undefined,
         line: undefined,
         mention: 'm1',
         selectedPerson: 'ada',
       },
     })
-    expect(linkQuery()).not.toHaveProperty('page_link_state')
     // A mention on the current page keeps every setting of this view.
     await wrapper.setProps({ mention: { ...wrapper.props('mention'), pageId: 'one' } })
     expect(linkQuery()).toMatchObject({

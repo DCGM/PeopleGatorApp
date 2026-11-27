@@ -16,7 +16,7 @@ import { WORKSPACE_FACE_SORTS } from '@/viewmodels/sort-options'
 import type { ScanFaceGroup, ScanFaceItem } from '@/viewmodels/scan-faces'
 import {
   EVIDENCE_SCOPES,
-  sidebarSettingsQuery,
+  scanSettingsQuery,
   FACE_VIEWS,
   type EvidenceScope,
   type FaceView,
@@ -63,7 +63,7 @@ function location(item: ScanFaceItem) {
     name: 'document-page',
     params: { libraryId: page.library, documentId: page.document_id, pageId: page.page_id },
     query: {
-      ...sidebarSettingsQuery(route.query),
+      ...scanSettingsQuery(route.query),
       person: item.face.detection_id,
       selectedPerson: item.face.entity_id ?? undefined,
     },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRoute, type LocationQuery } from 'vue-router'
+import { RouterLink, useRoute, type LocationQueryRaw } from 'vue-router'
 import { BadgeCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDashed } from '@lucide/vue'
 import type { PageResponse } from '@/client'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { useAdjacentPages } from '@/viewmodels/adjacent-pages'
 import { GALLERY_NOT_VERIFIED_KEY, GALLERY_PERSON_KEY } from '@/viewmodels/gallery-person'
 import { GALLERY_SORT_KEYS } from '@/viewmodels/sort-options'
 import { GALLERY_VIEW_KEY } from '@/viewmodels/gallery-view'
+import { scanSettingsQuery } from '@/viewmodels/scan-sidebar'
 
 const props = defineProps<{ page: PageResponse }>()
 const route = useRoute()
@@ -40,18 +41,18 @@ const adjacent = useAdjacentPages(
   () => props.page.page_id,
 )
 
-// Like the page strip: keep strip settings and the selected person, drop page selections.
+// Like the page strip: keep editor and strip settings and the selected person; drop page
+// selections.
 const KEPT = [
   GALLERY_PERSON_KEY,
   GALLERY_NOT_VERIFIED_KEY,
   GALLERY_VIEW_KEY,
   'selectedPerson',
-  'panel',
   GALLERY_SORT_KEYS.field,
   GALLERY_SORT_KEYS.direction,
 ]
 function location(target: PageResponse) {
-  const query: LocationQuery = {}
+  const query: LocationQueryRaw = scanSettingsQuery(route.query)
   for (const key of KEPT) if (route.query[key] !== undefined) query[key] = route.query[key]!
   return {
     name: 'document-page',
