@@ -1033,14 +1033,15 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
         <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
           :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
       </div>
-      <!-- The person card floats above or below its mention, like a face's card. -->
+      <!-- The person card floats above or below its mention, like a face's card. It
+        stays inside the text area and hides once its mention scrolls out of it (#206). -->
       <Popover :open="cardOpen">
         <PopoverAnchor :reference="cardAnchor ?? undefined" as="span" class="hidden" />
         <PopoverContent v-if="$slots['mention-card']" data-mention-card side="bottom" align="start"
-          :side-offset="4" :collision-padding="8"
+          :side-offset="4" :collision-boundary="bodyElement ?? undefined" :collision-padding="8"
           sticky="always" hide-when-detached update-position-strategy="always"
           aria-label="Selected mentions"
-          class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0 transition-opacity"
+          class="max-h-(--reka-popover-content-available-height) w-64 overflow-y-auto p-0 transition-opacity"
           :class="selectingMore && 'pointer-events-none opacity-25'"
           :data-selecting-more="selectingMore ? '' : undefined"
           @open-auto-focus.prevent @close-auto-focus.prevent @interact-outside.prevent
