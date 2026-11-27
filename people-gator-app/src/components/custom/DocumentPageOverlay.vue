@@ -140,16 +140,18 @@ function returnFocus(event: Event, faceId: string) {
   ;(selected ?? detectionButton(faceId))?.focus({ preventScroll: true })
 }
 
+// Faces share the lines' colors: accent for the selection, orange for the selected person.
 const faceSelectionClasses = {
-  selected: 'z-10 border-secondary bg-secondary/25 ring-2 ring-secondary/70',
-  matched: 'border-accent bg-accent/15 ring-2 ring-accent/80',
+  selected: 'z-10 border-accent bg-accent/20 ring-1 ring-background/75',
+  selectedMatched: 'z-10 border-accent bg-accent/20 ring-2 ring-orange-500',
+  matched: 'border-orange-500 bg-orange-500/15 hover:bg-orange-500/30',
   default: 'border-gray-500/20 bg-transparent hover:bg-accent/20',
 } as const
 
 function faceSelectionState(face: Face): keyof typeof faceSelectionClasses {
-  if (face.id === props.selectedFaceId) return 'selected'
-  if (face.personId === props.selectedPersonId || face.id === props.selectedCandidateFaceId)
-    return 'matched'
+  const ofSelectedPerson = face.personId !== null && face.personId === props.selectedPersonId
+  if (face.id === props.selectedFaceId) return ofSelectedPerson ? 'selectedMatched' : 'selected'
+  if (ofSelectedPerson || face.id === props.selectedCandidateFaceId) return 'matched'
   return 'default'
 }
 

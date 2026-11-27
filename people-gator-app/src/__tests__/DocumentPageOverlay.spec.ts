@@ -177,6 +177,21 @@ describe('DocumentPageOverlay', () => {
     await face.trigger('click')
     expect(wrapper.emitted('selectFace')).toEqual([['face-identifier']])
 
+    // A selected face is accent like a selected line; its selected person adds the orange ring.
+    await wrapper.setProps({ selectedFaceId: 'face-identifier' })
+    expect(face.classes()).toEqual(expect.arrayContaining(['border-accent', 'bg-accent/20']))
+    expect(face.classes()).not.toContain('ring-orange-500')
+    await wrapper.setProps({ selectedPersonId: 'person-1' })
+    expect(face.classes()).toEqual(
+      expect.arrayContaining(['border-accent', 'bg-accent/20', 'ring-orange-500']),
+    )
+    // Another face of the selected person is orange like a mention of that person.
+    await wrapper.setProps({ selectedFaceId: null })
+    expect(face.classes()).toEqual(
+      expect.arrayContaining(['border-orange-500', 'bg-orange-500/15']),
+    )
+    await wrapper.setProps({ selectedPersonId: null })
+
     await wrapper.setProps({ showBadgeNames: false })
     expect(badge.find('span').exists()).toBe(false)
     expect(badge.find('svg').exists()).toBe(true)
