@@ -23,7 +23,8 @@ STAGING = {"HOST": "staging.peoplegator.dev", "DATABASE_URL": "postgresql://post
            "BACKUP_S3_SECRET_ACCESS_KEY": "READ_ONLY_SECRET", "OTEL_ENDPOINT": "http://lgtm:4318"}
 PRODUCTION = {"HOST": "people.example.org", "DATABASE_URL": "postgresql://people_gator:SECRET@postgres:5432/people_gator",
               "S3_BUCKET": "peoplegator", "S3_REGION": "us-east-1", "S3_ACCESS_KEY_ID": "KEY", "S3_SECRET_ACCESS_KEY": "SECRET",
-              "OTEL_ENDPOINT": "http://lgtm:4318", "OTEL_HEADERS": "Authorization=Basic BASE64"}
+              "OTEL_ENDPOINT": "http://lgtm:4318", "OTEL_HEADERS": "Authorization=Basic BASE64",
+              "PUBLIC_LOGIN": '{"username": "guest", "password": "GUEST_PASSWORD"}'}
 EXAMPLES = {"pr": PREVIEW, "staging": STAGING, "release": PRODUCTION}
 
 
@@ -71,6 +72,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(production["migration"], production["postgres"])  # one role unless MIGRATION_DATABASE_URL is given
         self.assertEqual(production["otel"]["headers"], "Authorization=Basic BASE64")
         self.assertNotIn("endpoint_url", production["storage"]["s3"])
+        self.assertEqual(production["public_login"], {"username": "guest", "password": "GUEST_PASSWORD"})
+        self.assertNotIn("public_login", staging)  # unset: the login page
 
     def test_conventions_are_fixed_and_unrelated_settings_are_gone(self):
         settings = self.load("staging", STAGING)
@@ -121,6 +124,11 @@ class ConfigurationTests(unittest.TestCase):
             self.load("pr", {**PREVIEW, "STORAGE_DIR": "media"})
         with self.assertRaisesRegex(DeployError, "PRODUCTION_MIGRATION_DATABASE_URL: must be postgresql"):
             self.load("release", {**PRODUCTION, "MIGRATION_DATABASE_URL": "nope"})
+        for value, message in (("{", "is not valid JSON"), ('{"username": "guest"}', "must be {"), ('["guest", "pw"]', "must be {"),
+                               ('{"username": "guest", "password": ""}', "must be {"), ('{"username": "guest", "password": " pw"}', "must be {"),
+                               ('{"username": "guest", "password": "pw", "scopes": []}', "must be {")):
+            with self.subTest(public_login=value), self.assertRaisesRegex(DeployError, re.escape(f"PRODUCTION_PUBLIC_LOGIN: {message}")):
+                self.load("release", {**PRODUCTION, "PUBLIC_LOGIN": value})
         self.assertFalse(self.root.exists() and any(self.root.iterdir()))
 
     def test_database_urls_are_decoded_into_persistence_settings(self):
@@ -135,6 +143,21 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("migrator", files["runtime.env"])
         self.assertIn('PEOPLE_GATOR_API__STORAGE={"local": null, "s3": {', files["runtime.env"])
         self.assertIn("PEOPLE_GATOR_API__JWK__ISSUER=https://people.example.org\n", files["runtime.env"])
+
+    def test_public_login_reaches_only_staging_and_production_backends(self):
+        login = '{"username": "guest", "password": "p$ss \\"w\\""}'
+        for environment, values in (("staging", STAGING), ("release", PRODUCTION)):
+            with self.subTest(environment=environment):
+                files = {path.name: content for path, content, _ in config.files(environment, self.load(environment, {**values, "PUBLIC_LOGIN": login}))}
+                self.assertIn("PEOPLE_GATOR_API__PUBLIC_LOGIN__USERNAME=guest\n", files["runtime.env"])
+                self.assertIn('PEOPLE_GATOR_API__PUBLIC_LOGIN__PASSWORD=p$ss "w"\n', files["runtime.env"])  # raw env files keep it literal
+                self.assertNotIn("PUBLIC_LOGIN", files.get("migration.env", ""))
+                unset = {k: v for k, v in values.items() if k != "PUBLIC_LOGIN"}
+                self.assertNotIn("PUBLIC_LOGIN", dict((p.name, c) for p, c, _ in config.files(environment, self.load(environment, unset)))["runtime.env"])
+        # Previews keep their built-in demo account; the variable is not theirs.
+        self.assertNotIn("PUBLIC_LOGIN", config.names("pr"))
+        preview = self.load("pr", PREVIEW, DEPLOY_PUBLIC_LOGIN=login)
+        self.assertNotIn("PUBLIC_LOGIN", "".join(content for _, content, _ in config.files("pr", preview)))
 
     def test_rendered_files_have_private_modes_and_are_rewritten_only_on_change(self):
         settings = self.load("pr", {**PREVIEW, "STORAGE_DIR": "/media"})

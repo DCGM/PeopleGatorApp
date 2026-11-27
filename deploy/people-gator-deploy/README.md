@@ -71,11 +71,12 @@ runners on one host stay consistent.
 Repository variables and secrets prefixed `PREVIEW_`, `STAGING_` or
 `PRODUCTION_` name the host, the database URL, the S3 storage (or a preview
 volume directory), the OTLP collector, the RUM client and, per environment, the
-preview users, the staging backup bucket or the production migration role. The
+preview users, the staging backup bucket, the production migration role or the
+staging/production public login. The
 deploy jobs pass them as `DEPLOY_<NAME>`; the utility validates them (errors name
 the variable) and renders the files the Compose stacks read into the
 environment's private state directory: `runtime.env` (storage, token
-issuer/audience, production persistence), `telemetry.env` (OTel endpoints and
+issuer/audience, public login, production persistence), `telemetry.env` (OTel endpoints and
 headers, RUM) for the API container only, `migration.env` (production migration
 role), `users.json` (previews) and `snapshot-source.json` (staging). Unchanged
 files are left alone; files for settings that were removed are deleted. The full
@@ -273,6 +274,8 @@ The production stack has no reload, debug, seed or development mounts. The
 app's login page asks for an account from `peoplegator_api/users.json` in
 `PRODUCTION_S3_BUCKET` ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)); upload that file
 before inviting users, and keep `peoplegator_api/jwks.json` there across releases.
+`PRODUCTION_PUBLIC_LOGIN` opens the app as one of those accounts without the login
+page ([Logins](../GITHUB-SETUP.md#logins)).
 
 ## Development
 

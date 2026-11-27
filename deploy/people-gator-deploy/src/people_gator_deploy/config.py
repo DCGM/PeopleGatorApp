@@ -2,8 +2,8 @@
 
 The deploy jobs pass the repository variables and secrets of one environment
 (``PREVIEW_*``, ``STAGING_*`` or ``PRODUCTION_*``) to the utility as ``DEPLOY_*``:
-the host, the database, the media storage, the OTLP collector, the RUM client
-and, for previews, the demo users. From them the utility renders the API
+the host, the database, the media storage, the OTLP collector, the RUM client,
+for previews the demo users and, for staging and production, the public login. From them the utility renders the API
 environment files and the users file into the environment's private state
 directory before each operation, because Compose env files and bind mounts must
 outlive the job.
@@ -31,7 +31,8 @@ EXAMPLE_USERS = Path(__file__).with_name("assets") / "users.example.json"
 
 # name -> (environments, secret). Required: HOST and DATABASE_URL everywhere; the
 # S3_* group for staging and production (S3_ENDPOINT_URL optional); the
-# BACKUP_S3_* group all or nothing; RUM_* needs RUM_CLIENT_TOKEN.
+# BACKUP_S3_* group all or nothing; RUM_* needs RUM_CLIENT_TOKEN. PUBLIC_LOGIN is a
+# variable, not a secret: the API serves it to every browser.
 ALL = ("pr", "staging", "release")
 VARIABLES = {
     "HOST": (ALL, False),
@@ -46,6 +47,7 @@ VARIABLES = {
     "OTEL_ENDPOINT": (ALL, False), "OTEL_HEADERS": (ALL, True),
     "RUM_CLIENT_TOKEN": (ALL, True), "RUM_SITE": (ALL, False),
     "USERS_JSON": (("pr",), True),
+    "PUBLIC_LOGIN": (("staging", "release"), False),
 }
 S3 = ("S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY")
 BACKUP = ("BACKUP_S3_ENDPOINT_URL", "BACKUP_S3_REGION", "BACKUP_S3_BUCKET", "BACKUP_S3_PREFIX",
@@ -176,6 +178,16 @@ def load(environment: str, env=None) -> dict:
             raise problem(environment, "USERS_JSON", "must map user names to objects with a hash and scopes, like people-gator-api/example.users.json")
         settings["users"] = users
         settings["users_file"] = str(root / "users.json")
+    if environment != "pr" and value("PUBLIC_LOGIN"):
+        # Previews always open as their demo account (compose.pr.yaml).
+        try:
+            login = json.loads(value("PUBLIC_LOGIN"))
+        except ValueError:
+            raise problem(environment, "PUBLIC_LOGIN", "is not valid JSON") from None
+        if (not isinstance(login, dict) or set(login) != {"username", "password"}
+                or not all(single_line(entry) and entry == entry.strip() for entry in login.values())):
+            raise problem(environment, "PUBLIC_LOGIN", 'must be {"username": "...", "password": "..."} for an account in users.json')
+        settings["public_login"] = login
     if environment == "staging":
         backup = {name: value(name) for name in BACKUP}
         if any(backup.values()):
@@ -220,6 +232,8 @@ def files(environment: str, settings: dict) -> list[tuple[Path, str, int]]:
     if environment != "pr":
         host = settings["host"]
         runtime.update({"PEOPLE_GATOR_API__JWK__ISSUER": f"https://{host}", "PEOPLE_GATOR_API__JWK__AUDIENCE": host})
+        runtime.update({f"PEOPLE_GATOR_API__PUBLIC_LOGIN__{key.upper()}": settings["public_login"][key]
+                        for key in ("username", "password") if "public_login" in settings})
     if environment == "release":
         runtime.update(persistence(settings["postgres"]))
     result = [(Path(settings["runtime_file"]), dotenv(runtime), 0o600)]

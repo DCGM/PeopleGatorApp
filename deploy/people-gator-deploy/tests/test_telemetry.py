@@ -52,10 +52,16 @@ class TelemetryTests(unittest.TestCase):
                 'USERS_FILE': str(runtime), 'RUNTIME_FILE': str(runtime), 'MIGRATION_FILE': str(runtime),
                 'CORS_ORIGIN_REGEX': '^https://app.example$', 'TELEMETRY_FILE': str(telemetry),
             }
+            # Staging and production may configure a public login; it arrives through their runtime file.
+            public = root / 'public.env'
+            public.write_text(runtime.read_text() + 'PEOPLE_GATOR_API__PUBLIC_LOGIN__USERNAME=guest\n'
+                              'PEOPLE_GATOR_API__PUBLIC_LOGIN__PASSWORD=p$ss "w"\n')
             environment = {key: os.environ[key] for key in ('PATH', 'HOME') if key in os.environ}
             environment.update(variables)
             for name in ('pr', 'pr-auth', 'staging', 'release'):
                 with self.subTest(environment=name):
+                    configured = name in ('staging', 'release')
+                    environment['RUNTIME_FILE'] = str(public if configured else runtime)
                     result = subprocess.run(['docker', 'compose', '-f', str(assets / f'compose.{name}.yaml'),
                                              '--profile', 'tools', 'config', '--format', 'json'],
                                             env=environment, capture_output=True, text=True, check=True)
@@ -76,9 +82,13 @@ class TelemetryTests(unittest.TestCase):
                     self.assertEqual(rendered['networks']['telemetry']['name'], 'web')  # only otel moves it to the collector network
                     self.assertEqual(rendered['networks']['database']['name'], 'db')
                     self.assertEqual(backend['logging']['driver'], 'json-file')
-                    # Only previews open as the demo account; the others show the login page.
-                    for key in ('USERNAME', 'PASSWORD'):
-                        self.assertEqual(env.get(f'PEOPLE_GATOR_API__PUBLIC_LOGIN__{key}'), 'test' if name == 'pr' else None)
+                    # Previews open as the demo account; staging and production as their configured login.
+                    login = {key: (env.get(f'PEOPLE_GATOR_API__PUBLIC_LOGIN__{key}') or '').replace('$$', '$') or None
+                             for key in ('USERNAME', 'PASSWORD')}
+                    self.assertEqual(login, {'USERNAME': 'guest', 'PASSWORD': 'p$ss "w"'} if configured
+                                     else dict.fromkeys(login, 'test' if name == 'pr' else None))
+                    if configured:
+                        self.assertNotIn('PUBLIC_LOGIN', json.dumps(rendered['services']['migrate']))
                     for service, settings in rendered['services'].items():
                         if service != 'backend':
                             self.assertNotIn('synthetic-rum', json.dumps(settings))
