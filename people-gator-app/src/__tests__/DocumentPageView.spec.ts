@@ -1049,18 +1049,44 @@ describe('scan sidebar (#103)', () => {
   })
 
   it('attaches the selected face from the People context menu', async () => {
-    route.query = { candidate_text: 'Ada' }
+    route.query = { candidate_text: 'Ada', candidate_mention: 'Lina' }
     faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))
     const wrapper = await mountView(true)
     wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'b')
     await flushPromises()
     wrapper.findComponent({ name: 'ScanPeoplePanel' }).vm.$emit('attach-selected-face')
     await flushPromises()
-    expect(lastQuery(mocks.push)).toMatchObject({
+    // The menu adds to the search: typed text and mention texts stay (#205).
+    const query = lastQuery(mocks.push)
+    expect(query).toMatchObject({
       candidate_face: 'b',
-      candidate_text: undefined,
-      candidate_sort: undefined,
-      people_scope: undefined,
+      candidate_text: 'Ada',
+      candidate_mention: 'Lina',
+    })
+    wrapper.unmount()
+  })
+
+  it('removes one or all attached mention texts, keeping typed text (#205)', async () => {
+    route.query = {
+      candidate_text: 'Ada',
+      candidate_face: 'a',
+      candidate_mention: ['Lina', 'Hana'],
+    } as unknown as Record<string, string>
+    const wrapper = await mountView(true)
+    const people = wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    people.vm.$emit('remove-text', 'Lina')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_mention: ['Hana'],
+      candidate_text: 'Ada',
+      candidate_face: 'a',
+    })
+    people.vm.$emit('clear-attachments')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_face: undefined,
+      candidate_mention: undefined,
+      candidate_text: 'Ada',
     })
     wrapper.unmount()
   })

@@ -69,6 +69,8 @@ export type ScanSidebarState = {
   tab: SidebarTab
   peopleText: string
   searchFaceId: string | null
+  /** Mention texts attached to People search, each a separate search term (#205). */
+  searchTexts: string[]
   /** Embedding model for face search; the face's first model when unset or unavailable. */
   searchModel: string | null
   peopleScope: PeopleScope
@@ -87,6 +89,14 @@ function single(value: unknown) {
   return typeof value === 'string' ? value : undefined
 }
 
+/** Distinct non-empty values of a repeatable URL key, in order. */
+function many(value: unknown): string[] {
+  const values = (Array.isArray(value) ? value : [value]).flatMap((item) =>
+    typeof item === 'string' && item.trim() ? [item.trim()] : [],
+  )
+  return [...new Set(values)]
+}
+
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback
 }
@@ -103,11 +113,13 @@ export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarSt
   const legacyFace = single(query.candidate_mode) === 'face' ? single(query.person) : undefined
   const peopleText = single(query.candidate_text) ?? ''
   const searchFaceId = single(query.candidate_face) || legacyFace || null
-  const defaults = peopleDefaults({ peopleText, searchFaceId })
+  const searchTexts = many(query.candidate_mention)
+  const defaults = peopleDefaults({ peopleText, searchFaceId, searchTexts })
   return {
     tab: readTab(query, hash),
     peopleText,
     searchFaceId,
+    searchTexts,
     searchModel: single(query.face_model) || null,
     peopleScope: oneOf(
       single(query.people_scope),
@@ -140,6 +152,7 @@ export const SIDEBAR_QUERY_KEYS = [
   'panel',
   'candidate_text',
   'candidate_face',
+  'candidate_mention',
   'face_model',
   'people_scope',
   'candidate_sort',
@@ -191,10 +204,10 @@ export function effectivePeopleOrder(order: PeopleOrder, scored: boolean): Peopl
   return order === 'relevance' && !scored ? 'context' : order
 }
 
-type PeopleInput = Pick<ScanSidebarState, 'peopleText' | 'searchFaceId'>
+type PeopleInput = Pick<ScanSidebarState, 'peopleText' | 'searchFaceId' | 'searchTexts'>
 
 export function hasPeopleSearch(input: Partial<PeopleInput>): boolean {
-  return Boolean(input.peopleText?.trim() || input.searchFaceId)
+  return Boolean(input.peopleText?.trim() || input.searchFaceId || input.searchTexts?.length)
 }
 
 function peopleDefaults(
@@ -232,6 +245,8 @@ export function sidebarQuery(
     query.candidate_face = changes.searchFaceId ?? undefined
     query.candidate_mode = undefined
   }
+  if ('searchTexts' in changes)
+    query.candidate_mention = changes.searchTexts?.length ? changes.searchTexts : undefined
   if ('peopleScope' in changes)
     query.people_scope =
       changes.peopleScope === defaults.peopleScope ? undefined : changes.peopleScope
@@ -293,7 +308,8 @@ export function useScanSidebarState() {
   }
 
   /**
-   * Face Search: the face becomes the sole reference, name text clears and
+   * Face Search: the face becomes the sole reference, name text and attached
+   * mention texts clear and
    * Similarity ranks all people, including when replacing an existing search.
    */
   function searchByFace(faceId: string) {
@@ -301,6 +317,7 @@ export function useScanSidebarState() {
       tab: 'people',
       searchFaceId: faceId,
       peopleText: '',
+      searchTexts: [],
       peopleScope: 'all',
       peopleOrder: 'relevance',
     })

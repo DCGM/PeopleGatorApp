@@ -39,6 +39,8 @@ export function tierSort(order: PeopleOrder, scored: boolean): SortState<EntityS
 
 export type PeopleSearchInput = {
   text: string
+  /** Attached mention texts; each is a search term of its own (#205). */
+  texts?: readonly string[]
   /** The attached reference face, once its embedding model is known. */
   face?: { id: string; embeddingModel: string } | null
 }
@@ -56,15 +58,21 @@ export function tierParams(
   }
 }
 
+/** The typed text, then attached mention texts, without blanks or repeats. */
+export function searchTerms(input: PeopleSearchInput): string[] {
+  const terms = [input.text, ...(input.texts ?? [])].map((term) => term.trim())
+  return [...new Set(terms.filter(Boolean))]
+}
+
 export function searchParams(
   base: EntityListParams,
   input: PeopleSearchInput,
   sort: SortState<EntitySortField>,
 ): EntitySearchParams {
-  const text = input.text.trim()
+  const terms = searchTerms(input)
   return {
     ...(base as EntitySearchParams),
-    ...(text && { 'query.text': [text] }),
+    ...(terms.length > 0 && { 'query.text': terms }),
     ...(input.face && {
       'query.face_id': [input.face.id],
       'query.face_embedding_model': input.face.embeddingModel,
@@ -126,7 +134,7 @@ export function useScanPeople(options: {
   pageSourceId: MaybeRefOrGetter<string>
 }) {
   const input = computed(() => toValue(options.search))
-  const scored = computed(() => Boolean(input.value.text.trim() || input.value.face))
+  const scored = computed(() => searchTerms(input.value).length > 0 || Boolean(input.value.face))
   const order = computed(() => toValue(options.order))
   const tiers = computed(() => peopleTiers(toValue(options.scope), order.value))
   const sort = computed(() => tierSort(order.value, scored.value))
@@ -271,7 +279,7 @@ export function useScanPeople(options: {
   const people = computed<SimilarPersonCandidate[]>(() => {
     const lines = toValue(options.transcription)
     const faces = toValue(options.pageFaces)
-    const text = input.value.text.trim()
+    const text = searchTerms(input.value)[0]
     const faceReference = input.value.face?.id
     return combined.value.items.map(({ record }) => {
       const found = 'score' in record ? (record as FoundEntity) : undefined

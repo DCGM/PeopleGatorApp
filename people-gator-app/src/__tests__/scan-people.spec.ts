@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   combineTiers,
   peopleTiers,
+  searchParams,
   tierSort,
   useScanPeople,
   type PeopleSearchInput,
@@ -30,6 +31,18 @@ const tier = (ids: string[][], hasNextPage = false, error: unknown = null) => ({
 })
 
 describe('People tiers (#103)', () => {
+  it('sends typed text and attached mention texts as separate terms (#205)', () => {
+    const params = searchParams(
+      { limit: 20 },
+      { text: ' Ada ', texts: ['Lina Archivist', 'Ada', ' '] },
+      { field: 'relevance', direction: 'desc' },
+    )
+    expect(params['query.text']).toEqual(['Ada', 'Lina Archivist'])
+    expect(
+      searchParams({ limit: 20 }, { text: '' }, { field: 'name', direction: 'asc' }),
+    ).not.toHaveProperty('query.text')
+  })
+
   it('nests page, document and others for context order only', () => {
     expect(peopleTiers('all', 'context')).toEqual(['page', 'document', 'all'])
     expect(peopleTiers('document', 'context')).toEqual(['page', 'document'])
