@@ -1106,17 +1106,19 @@ async function deleteSelectedMentions() {
     // Keep the mentions and confirmation available for retry.
   }
 }
-// Search by name: the distinct selected names fill People search, which gets focus.
+// Search by name starts a new People search, which gets focus. One name fills
+// the field; several become attachments, each a search term of its own (#205).
 function searchByMentionNames() {
-  const text = mentionCard.value?.texts.join(' ')
-  if (!text) return
+  const texts = mentionCard.value?.texts ?? []
+  if (!texts.length) return
+  const several = texts.length > 1
   sidebarVisible.value = true
   focusPeopleRequested.value = true
   sidebar.update({
     tab: 'people',
-    peopleText: text,
+    peopleText: several ? '' : texts[0]!,
     searchFaceId: null,
-    searchTexts: [],
+    searchTexts: several ? texts : [],
     searchModel: null,
     peopleScope: 'all',
     peopleOrder: 'relevance',

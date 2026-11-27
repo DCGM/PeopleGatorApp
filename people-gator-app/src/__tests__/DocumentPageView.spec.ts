@@ -1497,11 +1497,12 @@ describe('scan name mentions and their person card (#176)', () => {
     expect(mocks.patchMentions.mock.lastCall![0].body).toEqual([
       { mention_id: 'm1', entity_link_state: 'verified' },
     ])
-    // Search fills People with the distinct names and drops an attached face.
+    // Search attaches each distinct name as its own term and drops an attached face (#205).
     await mentionCard(wrapper)!.get('[aria-label="Search people by these names"]').trigger('click')
     await flushPromises()
     expect(lastQuery(mocks.push)).toMatchObject({
-      candidate_text: 'Jan Bulk Eva',
+      candidate_text: undefined,
+      candidate_mention: ['Jan Bulk', 'Eva'],
       candidate_face: undefined,
       panel: undefined,
     })
