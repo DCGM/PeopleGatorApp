@@ -15,7 +15,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { queryKeys } from '@/query/keys'
-import { restartPeoplePages } from './people-count-invalidation'
+import { invalidateEntityRecords } from './invalidation'
 
 /** Typed person API (#123): names, life dates and their filters/sorts live only here. */
 export type PeopleListParams = NonNullable<ListPeopleRouteApiV1PeopleGetData['query']>
@@ -61,38 +61,19 @@ export function usePatchPersonMutation() {
         }),
       ),
     onSuccess: (person) => {
-      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.person(person.entity_id), person)
       // The shared entity record is a subset of the person record.
       queryClient.setQueryData(queryKeys.entities.detail(person.entity_id), person)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEntityRecords(queryClient)
     },
   })
 }
 
 /** Cache updates after a person record is created or replaced. */
 function storePerson(queryClient: ReturnType<typeof useQueryClient>, person: PersonResponse) {
-  restartPeoplePages(queryClient)
   queryClient.setQueryData(queryKeys.entities.person(person.entity_id), person)
   queryClient.setQueryData(queryKeys.entities.detail(person.entity_id), person)
-  for (const queryKey of [
-    queryKeys.entities.lists(),
-    queryKeys.search.all,
-    queryKeys.documents.all,
-    queryKeys.sources.all,
-    queryKeys.images.all,
-    queryKeys.pages.all,
-    queryKeys.faces.all,
-    queryKeys.textMentions.all,
-  ])
-    void queryClient.invalidateQueries({ queryKey })
+  void invalidateEntityRecords(queryClient)
 }
 
 /**

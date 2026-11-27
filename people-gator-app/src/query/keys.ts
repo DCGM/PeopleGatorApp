@@ -34,8 +34,20 @@ export const queryKeys = {
   // edits that invalidate faces do not re-download every displayed portrait.
   faceCrops: {
     all: ['face-crops'] as const,
+    detection: (detectionId: string) => ['face-crops', 'aligned', detectionId] as const,
     aligned: (detectionId: string, maxWidth?: number) =>
       ['face-crops', 'aligned', detectionId, maxWidth] as const,
+  },
+  // Page and image bytes are not changed by edits either, and stay outside
+  // `pages`/`images`.
+  pageImages: {
+    all: ['page-images'] as const,
+    source: (sourceId: string) => ['page-images', sourceId] as const,
+    image: (sourceId: string, width?: number) => ['page-images', sourceId, width] as const,
+  },
+  imageContents: {
+    all: ['image-contents'] as const,
+    content: (imageId: string) => ['image-contents', imageId] as const,
   },
   textMentions: {
     all: ['text-mentions'] as const,
@@ -72,7 +84,6 @@ export const queryKeys = {
     detail: (sourceId: string) => ['pages', 'detail', sourceId] as const,
     lookup: (library: string, documentId: string, pageId: string) =>
       ['pages', 'lookup', library, documentId, pageId] as const,
-    image: (sourceId: string, width?: number) => ['pages', 'image', sourceId, width] as const,
     layout: (sourceId: string) => ['pages', 'layout', sourceId] as const,
     mentionSpans: (sourceId: string, states: string[] = []) => ['pages', 'mention-spans', sourceId, states] as const,
   },
@@ -82,7 +93,6 @@ export const queryKeys = {
     infinite: (params?: QueryParams) => ['images', 'list', 'infinite', params ?? {}] as const,
     detail: (imageId: string) => ['images', 'detail', imageId] as const,
     lookup: (url: string) => ['images', 'lookup', url] as const,
-    content: (imageId: string) => ['images', 'content', imageId] as const,
   },
   users: {
     all: ['users'] as const,
@@ -104,6 +114,20 @@ export const queryKeys = {
     documents: (params?: QueryParams) => ['search', 'documents', params ?? {}] as const,
     infiniteDocuments: (params?: QueryParams) =>
       ['search', 'documents', 'infinite', params ?? {}] as const,
+  },
+  // Filter choices and the labels of selections that arrived through a link.
+  filterOptions: {
+    all: ['people-filter-options'] as const,
+    kind: (kind: string) => ['people-filter-options', kind] as const,
+  },
+  sourceLabels: {
+    all: ['filter-source-labels'] as const,
+    selection: (kind: string, ids: string[]) => ['filter-source-labels', kind, ids] as const,
+  },
+  actorLabels: {
+    all: ['filter-actor-labels'] as const,
+    kind: (kind: string) => ['filter-actor-labels', kind] as const,
+    actor: (kind: string, id: string) => ['filter-actor-labels', kind, id] as const,
   },
   translations: {
     all: ['translations'] as const,

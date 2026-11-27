@@ -1,4 +1,3 @@
-import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -16,6 +15,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { initialCursor, nextCursor, withCursor, useFirstPageOnFilterChange } from '@/query/cursor'
+import { invalidateEvidence } from '@/query/invalidation'
 import { queryKeys } from '@/query/keys'
 
 export type FaceListParams = NonNullable<ListFacesRouteApiV1FacesGetData['query']>
@@ -97,18 +97,8 @@ export function useCreateFaceMutation() {
         }),
       ),
     onSuccess: (face) => {
-      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEvidence(queryClient)
     },
   })
 }
@@ -127,20 +117,10 @@ export function useCreateFacesMutation() {
         }),
       ),
     onSuccess: (faces) => {
-      restartPeoplePages(queryClient)
       for (const face of faces) {
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEvidence(queryClient)
     },
   })
 }
@@ -157,18 +137,8 @@ export function useAssignFaceMutation() {
         }),
       ),
     onSuccess: (face) => {
-      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
+      void invalidateEvidence(queryClient)
     },
   })
 }
@@ -188,25 +158,12 @@ export function useAssignFacesMutation() {
         }),
       ),
     onSuccess: (faces) => {
-      restartPeoplePages(queryClient)
       for (const face of faces) {
         if (!face) continue
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
     },
-    onSettled: async () => {
-      restartPeoplePages(queryClient)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.documents.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.sources.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.images.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
-      ])
-    },
+    onSettled: () => invalidateEvidence(queryClient),
   })
 }
 
@@ -238,20 +195,7 @@ export function useReviewFacesMutation() {
         throw new Error('Some selected faces are no longer available.')
       return faces
     },
-    onSettled: async () => {
-      restartPeoplePages(queryClient)
-      await Promise.all(
-        [
-          queryKeys.faces.all,
-          queryKeys.entities.all,
-          queryKeys.pages.all,
-          queryKeys.documents.all,
-          queryKeys.sources.all,
-          queryKeys.images.all,
-          queryKeys.search.all,
-        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-      )
-    },
+    onSettled: () => invalidateEvidence(queryClient),
   })
 }
 
@@ -266,21 +210,10 @@ export function useDeleteFaceMutation() {
         }),
       ),
     onSuccess: async (_data, detectionId) => {
-      restartPeoplePages(client)
       // A deleted detail must not remain available as a selected reference face.
       client.removeQueries({ queryKey: queryKeys.faces.detail(detectionId), exact: true })
-      client.removeQueries({ queryKey: ['face-crops', 'aligned', detectionId] })
-      await Promise.all(
-        [
-          queryKeys.faces.all,
-          queryKeys.entities.all,
-          queryKeys.pages.all,
-          queryKeys.documents.all,
-          queryKeys.sources.all,
-          queryKeys.images.all,
-          queryKeys.search.all,
-        ].map((queryKey) => client.invalidateQueries({ queryKey })),
-      )
+      client.removeQueries({ queryKey: queryKeys.faceCrops.detection(detectionId) })
+      await invalidateEvidence(client)
     },
   })
 }

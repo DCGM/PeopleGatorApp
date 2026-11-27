@@ -1,11 +1,4 @@
-import { restartPeoplePages } from './people-count-invalidation'
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -24,6 +17,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { initialCursor, nextCursor, withCursor, useFirstPageOnFilterChange } from '@/query/cursor'
+import { invalidateEvidence } from '@/query/invalidation'
 import { queryKeys } from '@/query/keys'
 
 export type TextMentionListParams = NonNullable<
@@ -99,21 +93,7 @@ export function useTextMentionQuery(mentionId: MaybeRefOrGetter<string>) {
 }
 
 /** Every view that shows mentions, their people or their counts. */
-export async function invalidateMentionEdits(queryClient: QueryClient) {
-  restartPeoplePages(queryClient)
-  await Promise.all(
-    [
-      queryKeys.textMentions.all,
-      queryKeys.entities.all,
-      queryKeys.pages.all,
-      queryKeys.search.all,
-      queryKeys.documents.all,
-      queryKeys.sources.all,
-      queryKeys.images.all,
-      queryKeys.faces.all,
-    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-  )
-}
+export const invalidateMentionEdits = invalidateEvidence
 
 /** A link state needs an entity: unlinked mentions are sent without one. */
 function createBody(body: TextMentionCreateRequest): TextMentionCreateRequest {

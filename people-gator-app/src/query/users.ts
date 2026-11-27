@@ -11,6 +11,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { invalidateUsers } from '@/query/invalidation'
 import { queryKeys } from '@/query/keys'
 
 export type UserListParams = NonNullable<ListUsersRouteApiV1UsersGetData['query']>
@@ -70,8 +71,7 @@ export function usePatchUserMutation() {
       ),
     onSuccess: (user) => {
       queryClient.setQueryData(queryKeys.users.detail(user.user_id), user)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.all })
+      void invalidateUsers(queryClient)
     },
   })
 }

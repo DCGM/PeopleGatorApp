@@ -147,7 +147,7 @@ export function usePersonDetail(
   const imageQueries = useQueries({
     queries: computed(() =>
       [...pages.value.keys()].map((sourceId) => ({
-        queryKey: queryKeys.pages.image(sourceId, 256),
+        queryKey: queryKeys.pageImages.image(sourceId, 256),
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchPageImage(sourceId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,
         gcTime: PERSON_DETAIL_GC_TIME,

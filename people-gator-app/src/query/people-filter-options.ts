@@ -6,6 +6,7 @@ import {
   listUserFilterOptionsRouteApiV1UserFilterOptionsGet,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { queryKeys } from '@/query/keys'
 import { fetchDocuments, fetchPages } from '@/query/media'
 import { fetchPageSearch } from '@/query/search/pages'
 import type { DocumentResponse, PageResponse } from '@/client'
@@ -44,8 +45,7 @@ export function usePeopleFilterOptions(
   })
   const query = useInfiniteQuery({
     queryKey: computed(() => [
-      'people-filter-options',
-      kind,
+      ...queryKeys.filterOptions.kind(kind),
       normalizedSearch.value,
       ...(kind === 'page' ? [scope.value] : []),
     ]),
@@ -149,7 +149,7 @@ export function usePeopleFilterOptions(
 export function useSourceLabels(kind: 'document' | 'page', ids: MaybeRefOrGetter<string[]>) {
   const selected = computed(() => [...new Set(toValue(ids))].sort())
   const query = useQuery({
-    queryKey: computed(() => ['filter-source-labels', kind, selected.value]),
+    queryKey: computed(() => queryKeys.sourceLabels.selection(kind, selected.value)),
     queryFn: async ({ signal }) => {
       const params = { 'filter.source_id': selected.value, limit: selected.value.length }
       const response =
@@ -183,7 +183,7 @@ export function useActorLabels(kind: 'user' | 'api-key', ids: MaybeRefOrGetter<s
   const queries = useQueries({
     queries: computed(() =>
       selected.value.map((id) => ({
-        queryKey: ['filter-actor-labels', kind, id],
+        queryKey: queryKeys.actorLabels.actor(kind, id),
         queryFn: async ({ signal }: { signal: AbortSignal }) => {
           const query = { q: id, limit: 1 }
           if (kind === 'user') {
