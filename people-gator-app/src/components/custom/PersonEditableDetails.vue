@@ -2,6 +2,7 @@
 import { Plus, Trash2 } from '@lucide/vue'
 import { reactive, ref, watch } from 'vue'
 
+import { useCanAnnotate } from '@/composables/can-annotate'
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
 import type {
@@ -43,6 +44,7 @@ const identifierDraft = reactive<PersonIdentifiers>({
   wikidataId: props.wikidataId,
   nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
 })
+const canEdit = useCanAnnotate()
 const editingField = ref<EditableField | null>(null)
 let savedFieldValue: string | string[] | null = null
 
@@ -155,6 +157,7 @@ watch(
             :class="editingField === 'name' && 'bg-accent/10 outline-1 outline-ring'"
           />
           <EditableActions
+            v-if="canEdit"
             :editing="editingField === 'name'"
             label="name"
             @edit="beginEditing('name')"
@@ -186,6 +189,7 @@ watch(
             </a>
             <span v-else class="font-mono text-muted-foreground">—</span>
             <EditableActions
+              v-if="canEdit"
               :editing="editingField === 'wikidataId'"
               label="Wikidata ID"
               @edit="beginEditing('wikidataId')"
@@ -214,6 +218,7 @@ watch(
             />
             <span v-else class="font-mono text-muted-foreground">—</span>
             <EditableActions
+              v-if="canEdit"
               :editing="editingField === 'nationalLibraryAuthorityId'"
               label="NLCR ID"
               @edit="beginEditing('nationalLibraryAuthorityId')"
@@ -233,6 +238,7 @@ watch(
             :class="editingField === 'shortDescription' && 'bg-accent/10 outline-1 outline-ring'"
           />
           <EditableActions
+            v-if="canEdit"
             :editing="editingField === 'shortDescription'"
             label="description"
             @edit="beginEditing('shortDescription')"
@@ -283,6 +289,7 @@ watch(
             <Plus aria-hidden="true" /> Add alias
           </Button>
           <EditableActions
+            v-if="canEdit"
             :editing="editingField === 'aliases'"
             label="aliases"
             @edit="beginEditing('aliases')"
@@ -299,6 +306,7 @@ watch(
       <div class="flex items-center justify-between gap-3">
         <h2>Detailed description</h2>
         <EditableActions
+          v-if="canEdit"
           :editing="editingField === 'article'"
           label="detailed description"
           @edit="beginEditing('article')"
@@ -314,7 +322,11 @@ watch(
         :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
       />
     </div>
-    <aside v-if="!hideStatistics" aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
+    <aside
+      v-if="!hideStatistics"
+      aria-label="Person statistics"
+      class="min-w-0 border-l-0 text-sm md:border-l md:pl-5"
+    >
       <dl class="grid content-start gap-3">
         <div>
           <dt class="text-muted-foreground">Face detections</dt>
