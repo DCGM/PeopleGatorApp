@@ -74,6 +74,7 @@ export OpenAPI locally. See [Search filters](SEARCH_FILTERS.md) for query rules.
 | --- | --- |
 | API initialization/configuration | `people-gator-api/src/people_gator_api/app.py`, `settings.py`, `services/database_service.py` |
 | API request or filter | `routes/v1/`, `routes/v1/query_dependencies.py`, corresponding `schemas/` module |
+| Live change events | `routes/v1/events.py`, `routes/v1/change_events.py`, `services/event_service.py` |
 | Persistence change | `persistence/contracts.py`, `persistence/postgres/`, `alembic/versions/` |
 | Identity/evidence transition | `persistence/entity_links.py`, Postgres repositories, `schemas/entity_links.py` |
 | Media/layout/crops | `media/`, `filesystem/`, `services/filesystem_service.py` |

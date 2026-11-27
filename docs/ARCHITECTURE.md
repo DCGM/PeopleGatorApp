@@ -94,6 +94,12 @@ them with constraints/triggers. Actual evidence and identity changes update
 last-processing metadata in the same transaction; identical writes and reads
 do not fabricate a new processing event.
 
+Clients follow changes made by others through one Server-Sent Events stream per
+session, subscribed to entity, source, face and mention topics. Mutation routes
+publish to a process-local hub after their transaction commits; events carry
+identities only and nothing is replayed. See
+[Live change events](../people-gator-api/docs/EVENTS.md).
+
 The optional Weaviate adapter does not supply PostgreSQL transaction guarantees:
 multi-object writes can partially succeed and cross-process updates use whole
 object replacement. Some operations are unsupported. Do not substitute it for

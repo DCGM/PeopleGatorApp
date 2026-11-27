@@ -51,8 +51,9 @@ Never use a retained development or project store for destructive schema tests.
   [production startup](docs/PRODUCTION-STARTUP.md) covers validation and roles.
 - [Preview seeding](docs/PREVIEW-SEEDING.md) describes repeatable synthetic data
   and feature maintenance.
-- [API-key authentication](docs/API-KEYS.md) and
-  [processing filters](docs/ENTITY-PROCESSING-FILTERS.md) provide focused references.
+- [API-key authentication](docs/API-KEYS.md),
+  [processing filters](docs/ENTITY-PROCESSING-FILTERS.md) and
+  [live change events](docs/EVENTS.md) provide focused references.
 - [Deployment](../docs/DEPLOYMENT.md), [Observability](../docs/OBSERVABILITY.md) and
   [Data maintenance](../docs/DATA_MAINTENANCE.md) cover operations.
 
