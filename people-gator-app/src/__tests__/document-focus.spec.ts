@@ -79,6 +79,18 @@ describe('document focus geometry', () => {
     )!
     expect(result).toEqual({ scale: 1, x: 0, y: 79 })
   })
+  it('pans, without zooming, to a region that fits the viewer but not its gutters', () => {
+    // 770px of an 800px viewer, clipped by 10px on the left.
+    const from = { scale: 1.6, x: 0, y: 0 }
+    const bounds = { left: -10, top: 200, width: 770, height: 100 }
+    const whole = { left: 0, top: 0, width: 100, height: 100 }
+    const result = focusTransform(whole, bounds, viewer, from)!
+    expect(result.scale).toBe(from.scale)
+    expect(result.y).toBe(0)
+    const after = edges(whole, shown(bounds, from, result))
+    expect(after.left).toBeCloseTo(15)
+    expect(after.right).toBeCloseTo(785)
+  })
   it('zooms out and centers a region that cannot fit at the current zoom', () => {
     const from = { scale: 3, x: 0, y: 0 }
     const bounds = shown(page, current, from)

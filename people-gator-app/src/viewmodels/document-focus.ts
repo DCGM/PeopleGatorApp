@@ -9,8 +9,8 @@ export const FOCUS_MARGIN = 24
  * percentages; page bounds are already transformed viewer pixels.
  *
  * A fully visible region returns the current transform. A region that fits at
- * the current zoom is panned just far enough to clear the gutter. Only a region
- * too large for the viewer is zoomed out and centered. Null means the geometry
+ * the viewer at the current zoom is panned just far enough to clear the gutter.
+ * Only a region too large for the viewer is zoomed out and centered. Null means the geometry
  * is not usable yet.
  */
 export function focusTransform(
@@ -50,8 +50,8 @@ export function focusTransform(
   const targetTop = page.top + (position.top / 100) * page.height
   const shownWidth = (position.width / 100) * page.width
   const shownHeight = (position.height / 100) * page.height
-  const shiftX = axisShift(left, shownWidth, 0, viewer.width, FOCUS_MARGIN, width)
-  const shiftY = axisShift(targetTop, shownHeight, toolbar, viewer.height, top, height)
+  const shiftX = axisShift(left, shownWidth, 0, viewer.width)
+  const shiftY = axisShift(targetTop, shownHeight, toolbar, viewer.height)
   if (shiftX !== null && shiftY !== null) {
     // Panzoom translates in unscaled coordinates.
     return {
@@ -82,20 +82,16 @@ export function focusTransform(
 
 /**
  * Viewer pixels to move a span along one axis: zero while it is inside the
- * visible range, otherwise the shortest move into the gutter-inset range.
- * Null when the span is longer than the inset range.
+ * visible range, otherwise the shortest move that leaves the gutter free. A
+ * span almost as long as the range keeps as much gutter as there is room for.
+ * Null when the span is longer than the visible range.
  */
-function axisShift(
-  start: number,
-  length: number,
-  visibleStart: number,
-  visibleEnd: number,
-  insetStart: number,
-  insetLength: number,
-) {
+function axisShift(start: number, length: number, visibleStart: number, visibleEnd: number) {
   // Tolerate sub-pixel rounding from measured rectangles.
   if (start >= visibleStart - 0.5 && start + length <= visibleEnd + 0.5) return 0
-  if (length > insetLength) return null
-  if (start < insetStart) return insetStart - start
-  return Math.min(0, insetStart + insetLength - (start + length))
+  const room = visibleEnd - visibleStart - length
+  if (room < 0) return null
+  const gutter = Math.min(FOCUS_MARGIN, room / 2)
+  if (start < visibleStart + gutter) return visibleStart + gutter - start
+  return Math.min(0, visibleEnd - gutter - (start + length))
 }
