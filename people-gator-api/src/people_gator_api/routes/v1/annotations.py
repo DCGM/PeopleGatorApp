@@ -31,6 +31,13 @@ from people_gator_api.services.auth_service import (
 from people_gator_api.services.database_service import (
     DatabaseDependency,
 )
+from people_gator_api.routes.v1.change_events import (
+    previous_faces,
+    publish_deleted_links,
+    publish_links,
+)
+from people_gator_api.schemas.events import ChangeKind, TopicKind
+from people_gator_api.services.event_service import EventHubDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 
@@ -68,11 +75,14 @@ async def create_face_route(
     payload: FaceCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> FaceResponse:
     try:
-        return await database.faces.create(payload, user)
+        face = await database.faces.create(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_links(events, TopicKind.FACE, ChangeKind.CREATED, [face])
+    return face
 
 
 @router.post(
@@ -84,11 +94,14 @@ async def create_face_batch_route(
     payload: FacesBatchCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> list[FaceResponse]:
     try:
-        return await database.faces.create_batch(payload, user)
+        faces = await database.faces.create_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_links(events, TopicKind.FACE, ChangeKind.CREATED, faces)
+    return faces
 
 
 @router.patch("/faces:batch", response_model=list[FaceResponse | None])
@@ -96,11 +109,15 @@ async def patch_face_batch_route(
     payload: FacesBatchPatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> list[FaceResponse | None]:
+    previous = await previous_faces(events, database, (item.detection_id for item in payload))
     try:
-        return await database.faces.patch_batch(payload, user)
+        faces = await database.faces.patch_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_patch", str(exc))
+    publish_links(events, TopicKind.FACE, ChangeKind.UPDATED, faces, previous)
+    return faces
 
 
 @router.delete("/faces:batch", response_model=int)
@@ -108,8 +125,12 @@ async def delete_face_batch_route(
     detection_id: list[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> int:
-    return await database.faces.delete_batch(detection_id, context=user)
+    previous = await previous_faces(events, database, detection_id)
+    deleted = await database.faces.delete_batch(detection_id, context=user)
+    publish_deleted_links(events, TopicKind.FACE, previous)
+    return deleted
 
 
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
@@ -163,13 +184,16 @@ async def patch_face_route(
     payload: FacePatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> FaceResponse:
+    previous = await previous_faces(events, database, [detection_id])
     try:
         face = await database.faces.patch(detection_id, payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_patch", str(exc))
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
+    publish_links(events, TopicKind.FACE, ChangeKind.UPDATED, [face], previous)
     return face
 
 
@@ -178,6 +202,9 @@ async def delete_face_route(
     detection_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
+    previous = await previous_faces(events, database, [detection_id])
     if not await database.faces.delete(detection_id, context=user):
         raise_api_error(404, "not_found", "Face not found")
+    publish_deleted_links(events, TopicKind.FACE, previous)
