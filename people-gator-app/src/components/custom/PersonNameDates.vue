@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, useId, watch } from 'vue'
 
+import { useCanAnnotate } from '@/composables/can-annotate'
 import EditableActions from '@/components/custom/EditableActions.vue'
 import { Input } from '@/components/ui/input'
 import {
@@ -23,6 +24,7 @@ const FIELDS = [
   // Date fields are text inputs: YYYY-MM-DD or a year (see normalizeLifeDateInput).
 ] as const
 
+const canEdit = useCanAnnotate()
 const editing = ref(false)
 const submitted = ref(false)
 const draft = reactive<PersonNameDates>({ ...props.modelValue })
@@ -117,6 +119,7 @@ function cancel() {
       </p>
     </div>
     <EditableActions
+      v-if="canEdit"
       :editing="editing"
       label="name and life dates"
       @edit="begin"

@@ -1,7 +1,18 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const access = vi.hoisted(() => ({ scopes: ['people-gator:annotate', 'people-gator:admin'] }))
+vi.mock('@/composables/can-annotate', async () => {
+  const { ref } = await import('vue')
+  const useHasScope = (scope: string) => ref(access.scopes.includes(scope))
+  return { useHasScope, useCanAnnotate: () => useHasScope('people-gator:annotate') }
+})
 
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
+
+afterEach(() => {
+  access.scopes = ['people-gator:annotate', 'people-gator:admin']
+})
 
 describe('PersonEditableDetails', () => {
   it('edits identity authority IDs in the person header', async () => {
@@ -56,6 +67,17 @@ describe('PersonEditableDetails', () => {
     birthDate: '1890-03-14',
     deathDate: '',
   }
+
+  it('shows details without edit controls to viewers lacking the annotate scope', () => {
+    access.scopes = []
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: { ...base, nameDates },
+    })
+    expect(wrapper.text()).toContain('Karel Vrba')
+    expect(wrapper.get('[aria-label="Name and life dates"]').text()).toContain('1890')
+    expect(wrapper.find('[aria-label^="Edit "]').exists()).toBe(false)
+  })
 
   it('shows and edits structured names and life dates', async () => {
     const wrapper = mount(PersonEditableDetails, {

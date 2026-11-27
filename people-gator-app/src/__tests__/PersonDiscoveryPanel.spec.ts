@@ -1,5 +1,12 @@
 import { mount, RouterLinkStub } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const access = vi.hoisted(() => ({ scopes: ['people-gator:annotate', 'people-gator:admin'] }))
+vi.mock('@/composables/can-annotate', async () => {
+  const { ref } = await import('vue')
+  const useHasScope = (scope: string) => ref(access.scopes.includes(scope))
+  return { useHasScope, useCanAnnotate: () => useHasScope('people-gator:annotate') }
+})
 
 vi.mock('@vueuse/core', async (original) => {
   const { ref } = await import('vue')
@@ -27,6 +34,10 @@ function face(id: string, score = 93): PersonDiscoveryFace {
     pageLabel: `page-${id}`,
   }
 }
+
+afterEach(() => {
+  access.scopes = ['people-gator:annotate', 'people-gator:admin']
+})
 
 describe('PersonDiscoveryPanel', () => {
   it('builds compact entity queries with canonical annotation choices', () => {
@@ -482,5 +493,44 @@ it('bounds found faces to two rows, uses cached results first and keeps retry in
   await wrapper.setProps({ faceModel: 'other' })
   expect(wrapper.findAll('[data-found-face-card]')).toHaveLength(13)
   expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+  wrapper.unmount()
+})
+
+it('offers face assignment only with annotate and merge only with admin', () => {
+  const mountPanel = () =>
+    mount(PersonDiscoveryPanel, {
+      props: {
+        faces: [face('face-1')],
+        people: [
+          {
+            id: 'person-1',
+            name: 'Ada King',
+            shortDescription: '',
+            aliases: [],
+            portrait: '',
+            portraitLoading: false,
+          },
+        ],
+        currentName: 'Ada Lovelace',
+        referenceFaceCount: 1,
+      },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+    })
+  const assign = '[aria-label="Select face face-1 for assignment"]'
+  const merge = '[aria-label="Select Ada King for merge"]'
+
+  access.scopes = ['people-gator:annotate']
+  let wrapper = mountPanel()
+  expect(wrapper.find(assign).exists()).toBe(true)
+  expect(wrapper.find(merge).exists()).toBe(false)
+  wrapper.unmount()
+
+  access.scopes = []
+  wrapper = mountPanel()
+  expect(wrapper.find(assign).exists()).toBe(false)
+  expect(wrapper.find(merge).exists()).toBe(false)
+  // Viewers can still open the matches.
+  expect(wrapper.find('[aria-label="Open Ada King"]').exists()).toBe(true)
+  expect(wrapper.find('[data-face-selection-target="open"]').exists()).toBe(true)
   wrapper.unmount()
 })

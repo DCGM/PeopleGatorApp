@@ -15,6 +15,7 @@ import {
   UserRoundSearch,
 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import { useCanAnnotate, useHasScope } from '@/composables/can-annotate'
 import { FACE_GRID_CLASSES, useFaceGrid } from '@/composables/face-grid'
 import FaceGridAction from './FaceGridAction.vue'
 
@@ -35,6 +36,9 @@ import type { SortOption, SortState } from '@/lib/sorting'
 
 const route = useRoute()
 const router = useRouter()
+// Assignment needs the annotate scope; merging deletes records and needs admin.
+const canAssign = useCanAnnotate()
+const canMerge = useHasScope('people-gator:admin')
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
   faceCount?: number
@@ -416,6 +420,7 @@ watch(
           </ItemMedia>
           <ArchiveLink :url="face.pageUrl" class="absolute left-3 top-3" />
           <FaceSelectionControl
+            v-if="canAssign"
             :face-id="face.id"
             :selected="selectedFaceIds.has(face.id)"
             :disabled="props.assigningFaces"
@@ -609,6 +614,7 @@ watch(
             :class="selectedPersonIds.has(person.id) && 'border-secondary bg-secondary/20'"
           >
             <PersonSelectionControl
+              v-if="canMerge"
               :name="person.name"
               :selected="selectedPersonIds.has(person.id)"
               :disabled="props.mergingPeople"
