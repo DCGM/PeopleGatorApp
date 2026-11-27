@@ -1,4 +1,5 @@
 """Release tag provenance, idempotent/stale delivery, migration gates, activation and recovery."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,9 @@ class FakeRelease(release.Release):
         self.schema = {"current": True}
         self.events = []
         self.fail = None
+        self.clients = []
+        self.archive = b"PGDMP synthetic archive"
+        self.docker.run = self.docker_run
 
     def check_access(self):
         pass
@@ -71,6 +75,19 @@ class FakeRelease(release.Release):
             self.schema["current"] = True
         if self.fail and self.fail in operation:
             raise DeployError("Injected failure")
+        return ""
+
+    def docker_run(self, args, *, stdout=None, stdin=None, extra_env=None, **options):
+        """pg_dump / pg_restore --list in the throwaway PostgreSQL client container."""
+        tool = next(value for value in args if value.startswith("pg_"))
+        self.events.append(tool)
+        self.clients.append({"args": list(args), "env": extra_env or {}})
+        if self.fail == tool:
+            raise DeployError(f"{tool} failed")
+        if tool == "pg_dump":
+            stdout.write(self.archive)
+        else:
+            assert stdin.read() == self.archive
         return ""
 
     def readiness(self, attempts=30):
@@ -131,18 +148,60 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(DeployError, "moved tags are rejected"):
             self.release.deploy("v1.0.0")
 
-    def test_migration_requires_backup_record_and_older_retries_cannot_replace_newer(self):
+    def test_migration_backs_up_first_and_a_failed_backup_never_migrates(self):
+        self.release.deploy("v1.0.0")
+        self.assertEqual(self.release.clients, [])  # no migration, no backup
+        before = self.state()
+        backups = self.release.root / "backups"
+        self.release.schema["current"] = False  # v1.1.0 needs a migration
+        for failure, archive in (("pg_dump", None), ("pg_restore", None), (None, b"")):
+            with self.subTest(failure=failure, archive=archive):
+                self.release.events.clear()
+                self.release.fail, self.release.archive = failure, self.release.archive if archive is None else archive
+                with self.assertRaisesRegex(DeployError, "backup before v1.1.0 failed.*nothing was migrated"):
+                    self.release.deploy("v1.1.0")
+                self.assertNotIn("run --rm --no-deps migrate", self.release.events)
+                self.assertFalse(any(event.startswith("up ") for event in self.release.events))
+                self.assertEqual(self.state(), before)
+                self.assertEqual(list(backups.iterdir()), [])  # no partial or unverified archive
+        self.release.fail, self.release.archive = None, b"PGDMP synthetic archive"
+        self.release.events.clear()
+        self.release.deploy("v1.1.0")
+        order = [self.release.events.index(event) for event in
+                 ("pg_dump", "pg_restore", "run --rm --no-deps migrate", "up -d --wait --wait-timeout 300 backend")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(self.release.events[order[2] + 1], "run --rm --no-deps check")  # runtime role accepts the schema
+        dump, record = sorted(backups.iterdir())
+        self.assertRegex(dump.name, r"^\d{8}T\d{6}Z-before-v1\.1\.0\.dump$")
+        self.assertEqual(dump.read_bytes(), self.release.archive)
+        for path in (backups, dump, record):
+            self.assertEqual(path.stat().st_mode & 0o077, 0, path)
+        recorded = json.loads(record.read_text())
+        self.assertEqual((recorded["file"], recorded["bytes"], recorded["before"], recorded["deployed"]),
+                         (str(dump), len(self.release.archive), "v1.1.0", "v1.0.0"))
+        self.assertEqual(recorded["sha256"], hashlib.sha256(self.release.archive).hexdigest())
+        self.assertEqual(self.state()["backup_record"], str(record))
+        # The dump reads as the migration role on the database network; its password stays out of argv.
+        client = self.release.clients[-2]
+        self.assertEqual(client["env"], {"PGPASSWORD": "pw"})
+        self.assertNotIn("pw", client["args"])
+        self.assertIn("production-db", client["args"])
+        self.assertEqual(client["args"][client["args"].index("-U") + 1], "migrator")
+
+    def test_supplied_backup_record_replaces_the_automatic_backup_and_older_retries_cannot_replace_newer(self):
         self.release.deploy("v1.0.0")
         before = self.state()
         self.release.schema["current"] = False  # v1.1.0 needs a migration
         self.release.events.clear()
-        with self.assertRaisesRegex(DeployError, "backup-record"):
-            self.release.deploy("v1.1.0")
+        self.record.chmod(0o644)
+        with self.assertRaisesRegex(DeployError, "private mode-600"):
+            self.release.deploy("v1.1.0", backup_record=self.record)
         self.assertNotIn("run --rm --no-deps migrate", self.release.events)
-        self.assertFalse(any(event.startswith("up ") for event in self.release.events))
         self.assertEqual(self.state(), before)
-        self.release.events.clear()
+        self.record.chmod(0o600)
         self.release.deploy("v1.1.0", backup_record=self.record)
+        self.assertEqual(self.release.clients, [])
+        self.assertEqual(self.state()["backup_record"], str(self.record))
         order = [self.release.events.index(event) for event in
                  ("run --rm --no-deps migrate", "up -d --wait --wait-timeout 300 backend")]
         self.assertEqual(order, sorted(order))

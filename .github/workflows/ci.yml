@@ -25,7 +25,7 @@ on:
         options: [update, snapshot-init, refresh]
         default: update
       backup_record:
-        description: Absolute path of a private host file recording a completed backup (staging refresh, release migration)
+        description: Absolute path of a private host file recording a completed backup (staging refresh; optional for a release, which otherwise backs up itself)
         type: string
   schedule:
     - cron: '17 3 * * *'   # daily preview pruning, run from main

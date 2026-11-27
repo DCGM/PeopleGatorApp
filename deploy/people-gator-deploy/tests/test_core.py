@@ -33,6 +33,17 @@ class CoreTests(unittest.TestCase):
             run([sys.executable, "-c", "print('private-password'); raise SystemExit(4)"])
         self.assertNotIn("private-password", str(error.exception))
 
+    def test_binary_output_streams_to_a_file_and_failures_stay_private(self):
+        archive = bytes(range(256))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "archive"
+            with open(path, "wb") as stream:
+                self.assertEqual(run([sys.executable, "-c", f"import sys; sys.stdout.buffer.write({archive!r})"],
+                                     stdout=stream), "")
+            self.assertEqual(path.read_bytes(), archive)
+            with open(path, "wb") as stream, self.assertRaises(DeployError):
+                run([sys.executable, "-c", "raise SystemExit(4)"], stdout=stream, diagnostic=Path(directory) / "log")
+
 
 if __name__ == "__main__":
     unittest.main()

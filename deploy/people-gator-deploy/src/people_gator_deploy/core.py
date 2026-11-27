@@ -48,12 +48,13 @@ def lock(path: Path):
         yield
 
 
-def run(args, *, env=None, input=None, stdin=None, timeout=600, diagnostic=None, echo=False, progress=None):
+def run(args, *, env=None, input=None, stdin=None, stdout=None, timeout=600, diagnostic=None, echo=False, progress=None):
     """Argument lists only; suppress private output on failure; reap process groups.
 
     ``diagnostic`` receives failed output in a private file. ``echo`` relays it
     only for commands known to process synthetic data and no secret input.
     ``progress`` streams stderr into a private file an operator can follow.
+    ``stdout`` receives the command's raw output (a binary archive) instead of memory.
     """
     options: dict = {"stdin": stdin} if stdin is not None else {"stdin": subprocess.PIPE if input is not None else subprocess.DEVNULL}
     stream = None
@@ -61,7 +62,7 @@ def run(args, *, env=None, input=None, stdin=None, timeout=600, diagnostic=None,
         Path(progress).parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         stream = open(os.open(progress, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600), "w")
     try:
-        process = subprocess.Popen([str(a) for a in args], **options, stdout=subprocess.PIPE,
+        process = subprocess.Popen([str(a) for a in args], **options, stdout=stdout or subprocess.PIPE,
                                    stderr=stream or subprocess.PIPE, text=True, env=env, start_new_session=True)
     except BaseException:
         if stream:
@@ -69,7 +70,7 @@ def run(args, *, env=None, input=None, stdin=None, timeout=600, diagnostic=None,
         raise
     try:
         output, error = process.communicate(input=input, timeout=timeout)
-        error = error or ""
+        output, error = output or "", error or ""
     except BaseException:
         os.killpg(process.pid, signal.SIGTERM)
         try:

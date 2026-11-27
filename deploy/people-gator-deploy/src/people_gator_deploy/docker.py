@@ -41,7 +41,7 @@ class Docker:
             return True
         return args[3] == "compose" and "run" in args and "exec" not in args
 
-    def run(self, args, *, input=None, stdin=None, timeout=600, diagnostic=None, echo=False, progress=None, extra_env=None):
+    def run(self, args, *, input=None, stdin=None, stdout=None, timeout=600, diagnostic=None, echo=False, progress=None, extra_env=None):
         """``extra_env`` reaches only this subprocess, for ``docker run -e NAME`` pass-through of secrets."""
         args = [str(value) for value in args]
         owned = None
@@ -56,7 +56,7 @@ class Docker:
                     owned = "people-gator-operation-" + secrets.token_hex(12)
                     args[index + 1:index + 1] = ["--name", owned]
         try:
-            return run(args, env=self.environment(extra_env), input=input, stdin=stdin, timeout=timeout,
+            return run(args, env=self.environment(extra_env), input=input, stdin=stdin, stdout=stdout, timeout=timeout,
                        diagnostic=diagnostic, echo=echo, progress=progress)
         except BaseException:
             if owned:
