@@ -292,15 +292,17 @@ class Environment:
         return {"environment": self.name, "removed": removed}
 
     def database_migrate(self, *, backup_record=None):
-        """Release-only explicit migration with the migration role, then a full runtime-role check."""
-        self.private_record(backup_record, "database-migrate", "a completed pre-migration backup")
+        """Release-only explicit migration: backup, migration role, then a full runtime-role check."""
+        if backup_record:
+            self.private_record(backup_record, "database-migrate", "a completed pre-migration backup")
         self.prerequisites()
         with self.environment_lock():
             controller = self.controller()
             compose = self.active(controller, None)
+            backup_record = backup_record or controller.backup("database-migrate")
             self.docker.run(compose("run", "--rm", "--no-deps", "migrate"), diagnostic=controller.diagnostic_path())
             self.docker.run(compose("run", "--rm", "--no-deps", "check"), diagnostic=controller.diagnostic_path())
-        return {"environment": self.name, "migrated": True}
+        return {"environment": self.name, "migrated": True, "backup_record": str(backup_record)}
 
     # Dispatch ------------------------------------------------------------------------
 

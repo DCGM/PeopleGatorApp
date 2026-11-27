@@ -108,12 +108,12 @@ overrides it for unusual hosts).
 | `preflight` | ✓ | ✓ | ✓ | Settings, secret files, Docker/Compose, networks and the shared PostgreSQL/collector; no changes |
 | `status` | ✓ (`--pr`) | ✓ | ✓ | Read-only: configured / running / healthy, recorded SHA/images |
 | `check` | ✓ (`--pr`) | ✓ | ✓ | Runtime-role database check and routed readiness; nonzero when unhealthy |
-| `update` | `--pr --sha` | `--sha` | `--tag [--sha] [--backup-record]` | Deploy the tested commit's images |
+| `update` | `--pr --sha` | `--sha` | `--tag [--sha] [--backup-record]` | Deploy the tested commit's images; a release backs up before migrating |
 | `start` / `stop` | `--pr` | ✓ | ✓ | Same images; `start` repeats the check and readiness gates |
 | `logs` | `--pr` | ✓ | ✓ | Private operator output (`--tail`) |
 | `cleanup` / `reconcile` | ✓ | | | Remove one closed preview / all previews GitHub reports closed |
 | `snapshot-init` / `refresh` | | `--sha` | | Populate once / replace with `--backup-record` |
-| `database-migrate` | | | ✓ | Migration role then runtime check, with `--backup-record` |
+| `database-migrate` | | | ✓ | Backup, migration role, then runtime check (`[--backup-record]`) |
 | `recover` | | | ✓ | Reactivate retained previous images (`--backup-record --compatibility-reviewed`) |
 
 `people-gator-deploy deployments supersede <preview|staging|production> [--ref <branch>]`,
@@ -250,11 +250,18 @@ tests and images; the workflow first requires the tagged commit to be on `main`.
 The tag resolves to its commit (annotated or lightweight); a moved tag, a tag not
 on `main`, or a commit other than `--sha` is rejected, and the images built for
 that commit are promoted by digest. If the runtime check reports a pending
-migration, delivery stops until the workflow is rerun on the tag with a
-`backup_record` input (take and verify a backup first — see
-[backup](../backup/README.md)); then migrate → full runtime-role check → backend
-startup → routed readiness → state commit. Expect downtime while the backend
-restarts. Re-delivering the deployed tag is a no-op; a tag that does not contain
+migration, the release first backs up the database: `pg_dump` (custom format,
+migration role) into `<state dir>/backups/<UTC time>-before-<tag>.dump`, checked
+with `pg_restore --list`, with a `.json` record beside it (file, SHA-256, size,
+replaced tag). A failed backup stops the release before anything is migrated.
+Then migrate → full runtime-role check → backend startup → routed readiness →
+state commit; the state and job summary name the backup record. Releases without
+a migration take no backup. Backups are mode-600, are never pruned and share the
+host's disk: remove old ones and keep the scheduled off-host
+[backup](../backup/README.md). To rely on your own backup instead, run the
+workflow manually on the tag with its private record as `backup_record`. Restore
+an archive with `pg_restore` from the same PostgreSQL client image. Expect
+downtime while the backend restarts. Re-delivering the deployed tag is a no-op; a tag that does not contain
 the deployed commit is refused. `release recover` reactivates the retained
 previous images only if their database check accepts the current schema;
 changing images never undoes migrations and nothing downgrades a schema. After a

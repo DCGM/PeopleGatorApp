@@ -3,16 +3,20 @@
 A release tag selects its commit through the GitHub API (annotated or
 lightweight). The commit must be on main and must be the one this workflow run
 tested and published as ``sha-<commit>`` images, which are pinned by digest.
-Routine updates never seed, restore or replace data. Migrations require a
-recorded backup, then a full runtime-role check, backend startup and routed
+Routine updates never seed, restore or replace data. A pending migration first
+dumps the database into the private ``backups`` directory and verifies the
+archive; then migration, a full runtime-role check, backend startup and routed
 readiness gate activation.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import secrets
+import time
 
 from .core import DeployError
 from .host import INSTALL_DIR, Host, routed_readiness, summary, write_private
@@ -91,6 +95,53 @@ class Release(Host):
         except DeployError:
             return False
 
+    def backup(self, label: str) -> Path:
+        """Dump the database before a migration; return the private record of the verified archive.
+
+        The custom-format ``pg_dump`` archive lands in ``<state_dir>/backups`` and
+        must pass ``pg_restore --list``. Any failure leaves no archive and raises,
+        so the caller never migrates without a restorable backup.
+        """
+        directory = self.root / "backups"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory.chmod(0o700)
+        connection = self.config["migration"]
+        created = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        dump = directory / f"{created}-before-{label}.dump"
+        partial = directory / f".{dump.name}.partial"
+        try:
+            with open(os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as stream:
+                self.docker.run(self.postgres("pg_dump", "--format=custom", "--no-password", "-d", connection["database"],
+                                              role="migration"),
+                                stdout=stream, extra_env=self.postgres_env("migration"), timeout=3600,
+                                diagnostic=self.diagnostic_path())
+                stream.flush()
+                os.fsync(stream.fileno())
+            digest, size = hashlib.sha256(), 0
+            with open(partial, "rb") as stream:
+                while chunk := stream.read(1 << 20):
+                    digest.update(chunk)
+                    size += len(chunk)
+            if not size:
+                raise DeployError("pg_dump wrote an empty archive")
+            with open(partial, "rb") as stream:
+                self.docker.run(self.postgres("pg_restore", "--list"), stdin=stream, timeout=3600,
+                                diagnostic=self.diagnostic_path())
+            os.replace(partial, dump)
+        except DeployError as error:
+            raise DeployError(f"Database backup before {label} failed ({error}); nothing was migrated. Fix the cause "
+                              f"(database access, space in {directory}) and rerun the release") from None
+        finally:
+            partial.unlink(missing_ok=True)
+        current = self.state()
+        record = dump.with_suffix(".json")
+        write_private(record, json.dumps({
+            "file": str(dump), "sha256": digest.hexdigest(), "bytes": size, "created": created, "before": label,
+            "deployed": current and current["tag"], "database": connection["database"], "host": connection["host"],
+            "format": "pg_dump custom", "client_image": self.config.get("postgres_image", "pgvector/pgvector:pg18")}))
+        print(f"Database backup before {label}: {dump} ({size} bytes, sha256 {digest.hexdigest()})", flush=True)
+        return record
+
     def pending_activation(self):
         pending = self.state("activation.json")
         if pending and "record" not in pending:
@@ -164,10 +215,12 @@ class Release(Host):
         write_private(candidate, self.dotenv(self.values(tag, resolved, images)))
         self.command(self.compose_release(candidate, "config", "--quiet"))
         if not self.schema_current(candidate):
-            if not backup_record or not config.private_file(Path(backup_record)):
-                raise DeployError(f"Release {tag} needs a schema migration (or the database is unreachable). Take and "
-                                  "verify a database backup, then rerun with --backup-record <private file>; "
-                                  "see `release check` diagnostics in " + str(self.diagnostic_path()))
+            # A pending migration (or an unreachable database, which the dump
+            # reports) never proceeds without a verified backup.
+            if backup_record and not config.private_file(Path(backup_record)):
+                raise DeployError(f"Release {tag}: --backup-record must be a private mode-600 file; omit it to let "
+                                  "the release take its own backup")
+            backup_record = backup_record or self.backup(tag)
             self.command(self.compose_release(candidate, "run", "--rm", "--no-deps", "migrate"))
             self.command(self.compose_release(candidate, "run", "--rm", "--no-deps", "check"))
         record = {"tag": tag, "commit": resolved, "images": images,
@@ -177,7 +230,8 @@ class Release(Host):
         url = f"https://{self.host}"
         print(f"Release {tag} ready: {url} · {resolved}")
         summary(f"Release {tag}: [{url}]({url}) · `{resolved}`\n\n"
-                + "".join(f"- {part}: `{image}`\n" for part, image in images.items()) + "\n")
+                + "".join(f"- {part}: `{image}`\n" for part, image in images.items())
+                + (f"- pre-migration backup record: `{backup_record}`\n" if backup_record else "") + "\n")
         return {"tag": tag, "commit": resolved, "images": images, "changed": True}
 
     def recover(self) -> dict:

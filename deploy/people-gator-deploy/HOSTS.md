@@ -158,7 +158,7 @@ Releases need an external PostgreSQL on `db` (already migrated or
 new) with the application role from `PRODUCTION_DATABASE_URL` and, optionally,
 a separate migration role from `PRODUCTION_MIGRATION_DATABASE_URL`; private
 object storage holding users,
-API keys and JWKs, preserved across releases; and a backup before any release
-that migrates ([backup](../backup/README.md)), recorded in a mode-600 host file
-for the workflow's `backup_record` input. The frontend embeds demo auto-login
+API keys and JWKs, preserved across releases; and disk space in the state
+directory's `backups/` for the database dump each migrating release takes
+([releases](README.md#environments)). The frontend embeds demo auto-login
 credentials: put the release behind a reviewed access boundary.
