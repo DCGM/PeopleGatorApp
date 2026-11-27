@@ -179,8 +179,10 @@ Staging and production show the login page unless `STAGING_PUBLIC_LOGIN` or
 `PRODUCTION_PUBLIC_LOGIN` names one of those accounts; the app then opens as it and
 offers **Sign in** for personal accounts. Its password is served to every browser,
 so give the account only the scopes anyone may use (`people-gator:browse` for
-read-only). A change applies with the next deployment: a push to `main` for
-staging, a new release tag for production.
+read-only). Setting, changing or removing the variable applies with the next
+deployment: a push to `main` for staging, a new release tag for production. To
+close guest access at once, remove that account from `users.json`: nobody can
+sign in as it again, and tokens already issued expire within two hours.
 
 ```sh
 # In people-gator-api: hash a password, then upload the file
