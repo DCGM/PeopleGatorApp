@@ -230,8 +230,12 @@ Compare `scan-toolbar-assigned` (all three toggles pressed, only the verified
 face and mention on page 2) with **All** (no states selected, also includes the
 unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
 and manual evidence selected together. Toggle each state, reset, reload and use
-browser back/forward to compare pressed states, the page-specific
-`page_link_state` URL setting and evidence. Workspace `link_state` is retained separately. Check the
+browser back/forward to compare pressed states, the editor's
+`page_link_state` URL setting and evidence. Workspace `link_state` is retained separately.
+With a state pressed, lines set to **Annotated** and a non-default Faces scope, use
+**Next page**, the page strip and a sidebar face or mention on another page: each
+opens that page with the same settings, without the previous page's selected
+face, line or mention (#193). Check the
 neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
 In light and dark themes, the toolbar container is transparent: the scan stays
 visible in the gaps between the controls, including when they wrap on mobile.

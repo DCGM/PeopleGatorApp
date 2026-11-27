@@ -3,10 +3,13 @@ import { computed, defineComponent, h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import PersonMentionEntry from '@/components/custom/PersonMentionEntry.vue'
+import ScanFacesPanel from '@/components/custom/ScanFacesPanel.vue'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import { useRouteQueryPatch } from '@/composables/route-query'
 import { SCAN_SELECTED_MENTION } from '@/viewmodels/scan-sidebar'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
+import type { ScanFaceItem } from '@/viewmodels/scan-faces'
+import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import type { Face } from '@/viewmodels/document-workspace.types'
 
 const page = { template: '<div />' }
@@ -119,6 +122,69 @@ describe('scan sidebar navigation (#103)', () => {
       panel: 'mentions',
       mention: 'm1',
     })
+  })
+
+  it('opens another page from a scan face with the same editor settings (#193)', async () => {
+    const router = scanRouter()
+    await router.push({
+      name: 'document-page',
+      params: { libraryId: 'lib', documentId: 'doc', pageId: 'one' },
+      query: {
+        panel: 'faces',
+        face_scope: 'document',
+        page_link_state: ['manual', 'verified'],
+        lines: 'annotated',
+        highlight: 'manual',
+        person: 'here',
+        selectedPerson: 'nora',
+        line: 'l1',
+      },
+    })
+    const face = (id: string, pageId: string, entity?: string): ScanFaceItem =>
+      ({
+        face: { detection_id: id, entity_id: entity },
+        page: { library: 'lib', document_id: 'doc', page_id: pageId },
+        onPage: pageId === 'one',
+      }) as unknown as ScanFaceItem
+    const items = [face('here', 'one', 'nora'), face('there', 'two', 'ada')]
+    const thumbnail = defineComponent({
+      props: ['item', 'to'],
+      setup: () => () => h('div'),
+    })
+    const wrapper = mount(ScanFacesPanel, {
+      props: {
+        items,
+        groups: [],
+        loading: false,
+        hasNextPage: false,
+        isFetching: false,
+        selectedFaceId: 'here',
+        scope: 'document',
+        view: 'flat',
+        sort: FACE_DEFAULT,
+        loadMore: async () => {},
+        retry: () => {},
+      },
+      global: { plugins: [router], stubs: { ScanFaceThumbnail: thumbnail, ListPagination: true } },
+    })
+    const [onPage, offPage] = wrapper.findAllComponents(thumbnail)
+    // A face on this page selects in place.
+    expect(onPage!.props('to')).toBeUndefined()
+    // Another page keeps the editor's settings and takes the face as its selection.
+    expect(offPage!.props('to')).toEqual({
+      name: 'document-page',
+      params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
+      query: {
+        panel: 'faces',
+        face_scope: 'document',
+        page_link_state: ['manual', 'verified'],
+        lines: 'annotated',
+        highlight: 'manual',
+        person: 'there',
+        selectedPerson: 'ada',
+      },
+    })
+    wrapper.unmount()
   })
 
   it('cancels a new-person draft on Escape without closing the card', async () => {

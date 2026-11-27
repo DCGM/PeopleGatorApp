@@ -377,7 +377,8 @@ validation messages. Copied workspace URL values are not forwarded to other view
 search. Text lookup works without selecting a face. The explicit page annotation
 link-state control uses `page_link_state`; it affects annotation display rather
 than the page's identity membership or global candidates. The workspace's
-`link_state` remains separate. Page navigation drops the page-specific setting.
+`link_state` remains separate. Switching pages inside the editor keeps the
+setting (#193); leaving the editor drops it.
 
 ### Person mention display and selection
 
