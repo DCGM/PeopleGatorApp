@@ -1,5 +1,6 @@
 import { Bot, Hand, BadgeCheck, UserRoundX } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
+import type { FaceListParams } from '@/query/faces'
 
 export const linkStates: EntityLinkState[] = ['automatic', 'manual', 'verified']
 export const linkStateVisuals = {
@@ -69,4 +70,39 @@ export function linkTooltip(link: LinkMetadata) {
 export function parseLinkStates(value: unknown): EntityLinkState[] {
   const values = Array.isArray(value) ? value : [value]
   return linkStates.filter((state) => values.includes(state))
+}
+
+/** A link state, or no link at all. An empty selection means every annotation. */
+export type AnnotationState = EntityLinkState | 'unassigned'
+export const annotationStates: readonly AnnotationState[] = [...linkStates, 'unassigned']
+export function parseAnnotationStates(value: unknown): AnnotationState[] {
+  const values = Array.isArray(value) ? value : [value]
+  return annotationStates.filter((state) => values.includes(state))
+}
+
+/** An unlinked annotation, or a link without a recorded state, counts as unassigned. */
+export function annotationState(record: {
+  entity_id?: string | null
+  entity_link_state?: EntityLinkState | null
+}): AnnotationState {
+  return record.entity_id ? (record.entity_link_state ?? 'unassigned') : 'unassigned'
+}
+
+export type FaceStateFilter = Pick<
+  FaceListParams,
+  'filter.entity_link_state' | 'filter.is_assigned'
+>
+/**
+ * Face list filters for the chosen states. The API cannot combine link states
+ * with unassigned faces in one request, so a mixed selection is the union of
+ * two: the linked faces, then the unassigned ones.
+ */
+export function faceStateFilters(states: readonly AnnotationState[]): FaceStateFilter[] {
+  const linked = linkStates.filter((state) => states.includes(state))
+  const unassigned = states.includes('unassigned')
+  if (!states.length || (unassigned && linked.length === linkStates.length)) return [{}]
+  return [
+    ...(linked.length ? [{ 'filter.entity_link_state': linked }] : []),
+    ...(unassigned ? [{ 'filter.is_assigned': false }] : []),
+  ]
 }

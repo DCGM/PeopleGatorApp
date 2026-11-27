@@ -1,7 +1,7 @@
 import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
-import { linkMetadata } from '@/lib/entity-links'
+import { annotationState, linkMetadata, type AnnotationState } from '@/lib/entity-links'
 import { listSortParams, type SortState } from '@/lib/sorting'
 import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import {
@@ -138,26 +138,30 @@ export function useDocumentWorkspace(
   documentId: MaybeRefOrGetter<string>,
   pageId: MaybeRefOrGetter<string>,
   selectedFaceId: MaybeRefOrGetter<string | null>,
-  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  faceStates: MaybeRefOrGetter<AnnotationState[]> = [],
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
   const hasPage = computed(() => Boolean(sourceId.value))
   const layoutQuery = usePageLayoutQuery(sourceId)
-  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates)
+  const spanQuery = usePageMentionSpansQuery(sourceId)
   const faceQuery = useFaceListQuery(
     computed(() => ({
       'filter.source_id': [sourceId.value],
-      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       ...listSortParams(toValue(faceSort)),
       limit: 100,
     })),
     hasPage,
   )
-  const faceRecords = computed(() =>
-    (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
-  )
+  // Every face of the page is loaded, so the toolbar's states narrow them here.
+  const faceRecords = computed(() => {
+    const states = toValue(faceStates)
+    const records = (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items)
+    return states.length
+      ? records.filter((face) => states.includes(annotationState(face)))
+      : records
+  })
   // Resolve the reference directly even when page annotation controls hide its gallery entry.
   const selectedFaceQuery = useFaceQuery(computed(() => toValue(selectedFaceId) ?? ''))
   const selectedFaceRecord = computed(() => {

@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 
-import type { EntityLinkState } from '@/client'
+import { annotationStates, parseAnnotationStates, type AnnotationState } from '@/lib/entity-links'
 import type { TranscriptionEntitySpan, TranscriptionLine } from './document-workspace.types'
 
 /**
@@ -23,13 +23,8 @@ export const lineVisibilityLabels: Record<LineVisibility, string> = {
  * Annotation states to highlight; an empty list highlights every annotation.
  * Highlighting never changes which lines are shown.
  */
-export type HighlightState = EntityLinkState | 'unassigned'
-export const HIGHLIGHT_STATES: readonly HighlightState[] = [
-  'automatic',
-  'manual',
-  'verified',
-  'unassigned',
-]
+export type HighlightState = AnnotationState
+export const HIGHLIGHT_STATES = annotationStates
 
 /** Lines revealed per expand action; shorter gaps expand completely in one action. */
 export const EXPAND_STEP = 5
@@ -38,10 +33,7 @@ export function parseLineVisibility(value: unknown): LineMode {
   return LINE_VISIBILITIES.includes(value as LineMode) ? (value as LineMode) : 'all'
 }
 
-export function parseHighlightStates(value: unknown): HighlightState[] {
-  const values = Array.isArray(value) ? value : [value]
-  return HIGHLIGHT_STATES.filter((state) => values.includes(state))
-}
+export const parseHighlightStates = parseAnnotationStates
 
 /** An unlinked span, or a link without a recorded state, counts as unassigned. */
 export function spanHighlightState(span: TranscriptionEntitySpan): HighlightState {

@@ -374,9 +374,14 @@ explicit face Search resets to global similarity. Ordinary face selection leaves
 the search attachment alone. It does not inherit workspace source,
 assignment, actor/date or API key predicates, and shows no workspace tags or
 validation messages. Copied workspace URL values are not forwarded to other views. Invalid workspace values cannot block page entities or
-search. Text lookup works without selecting a face. The explicit page annotation
-link-state control uses `page_link_state`; it affects annotation display rather
-than the page's identity membership or global candidates. The workspace's
+search. Text lookup works without selecting a face. The scan toolbar's
+state toggles (Automatic, Manual, Verified, Unassigned) use `page_link_state`
+and narrow faces only, on the scan and in the Faces tab; pressed states combine
+as a union and none pressed shows every face. Link states chosen together with
+Unassigned list linked faces first, then unassigned ones, each in the chosen
+order. Mentions follow the transcription's own state toggles (`highlight`). The
+setting does not change
+the page's identity membership or global candidates. The workspace's
 `link_state` remains separate. Switching pages inside the editor keeps the
 setting (#193); leaving the editor drops it.
 

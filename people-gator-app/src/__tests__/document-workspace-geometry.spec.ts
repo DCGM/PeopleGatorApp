@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import { fetchPageLayout, fetchPageMentionSpans } from '@/query/pages'
+import type { AnnotationState } from '@/lib/entity-links'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 
 const api = vi.hoisted(() => ({
@@ -221,4 +222,51 @@ it('loads a global scan reference hidden by the explicit page annotation control
   selected.value = null
   await flushPromises()
   expect(model.referenceFace.value).toBeNull()
+})
+
+it('narrows the page faces by toolbar state without filtering mentions (#195)', async () => {
+  const box = { x: 0, y: 0, width: 10, height: 10 }
+  api.faces.mockResolvedValue({
+    data: {
+      items: [
+        { detection_id: 'free', entity_id: null, entity_link_state: null },
+        { detection_id: 'linked', entity_id: 'ada', entity_link_state: 'manual' },
+      ].map((face) => ({ ...face, embeddings: [], confidence: 1, bounding_box: box })),
+      limit: 100,
+      cursor: null,
+    },
+  })
+  const states = ref<AnnotationState[]>([])
+  let model!: ReturnType<typeof useDocumentWorkspace>
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        model = useDocumentWorkspace('library', 'document', 'page', null, states)
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  )
+  cleanup.push(() => {
+    wrapper.unmount()
+    queryClient.clear()
+  })
+  await flushPromises()
+  const ids = () => model.faces.value.map((face) => face.id)
+  expect(ids()).toEqual(['free', 'linked'])
+  const requests = api.faces.mock.calls.length
+  states.value = ['unassigned']
+  await nextTick()
+  expect(ids()).toEqual(['free'])
+  states.value = ['unassigned', 'manual']
+  await nextTick()
+  expect(ids()).toEqual(['free', 'linked'])
+  states.value = ['verified']
+  await flushPromises()
+  expect(ids()).toEqual([])
+  // The loaded faces are narrowed in place; mention spans never take the states.
+  expect(api.faces).toHaveBeenCalledTimes(requests)
+  expect(api.spans).toHaveBeenCalledTimes(1)
+  expect(JSON.stringify(api.spans.mock.calls[0]![0].query ?? {})).not.toContain('entity_link_state')
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FaceResponse } from '@/client'
+import { annotationState, faceStateFilters, parseAnnotationStates } from '@/lib/entity-links'
 import { groupFacesByPerson, scanFaceParams, type ScanFaceItem } from '@/viewmodels/scan-faces'
 
 const item = (id: string, entity: string | null): ScanFaceItem => ({
@@ -12,23 +13,58 @@ describe('scan faces (#103)', () => {
   it('pages one scope and keeps people contiguous when grouped', () => {
     expect(
       scanFaceParams('page', 'flat', { field: 'confidence', direction: 'desc' }, sources, []),
-    ).toEqual({
-      'filter.page_source_id': ['page-source'],
-      sort: 'confidence',
-      sort_direction: 'desc',
-      limit: 30,
-      return_total_count: true,
-    })
+    ).toEqual([
+      {
+        'filter.page_source_id': ['page-source'],
+        sort: 'confidence',
+        sort_direction: 'desc',
+        limit: 30,
+        return_total_count: true,
+      },
+    ])
     expect(
       scanFaceParams('document', 'person', { field: 'confidence', direction: 'desc' }, sources, [
         'manual',
       ]),
-    ).toMatchObject({
-      'filter.document_source_id': ['document-source'],
-      'filter.entity_link_state': ['manual'],
-      sort: 'person',
-      sort_direction: 'asc',
-    })
+    ).toMatchObject([
+      {
+        'filter.document_source_id': ['document-source'],
+        'filter.entity_link_state': ['manual'],
+        sort: 'person',
+        sort_direction: 'asc',
+      },
+    ])
+  })
+
+  it('lists link states and unassigned faces as a union of requests (#195)', () => {
+    expect(faceStateFilters([])).toEqual([{}])
+    expect(faceStateFilters(['unassigned'])).toEqual([{ 'filter.is_assigned': false }])
+    expect(faceStateFilters(['verified', 'manual'])).toEqual([
+      { 'filter.entity_link_state': ['manual', 'verified'] },
+    ])
+    // The API has no single filter for linked-or-unassigned faces.
+    expect(faceStateFilters(['unassigned', 'manual'])).toEqual([
+      { 'filter.entity_link_state': ['manual'] },
+      { 'filter.is_assigned': false },
+    ])
+    // Every state is every face.
+    expect(faceStateFilters(['automatic', 'manual', 'verified', 'unassigned'])).toEqual([{}])
+    expect(parseAnnotationStates(['unassigned', 'bogus', 'manual'])).toEqual([
+      'manual',
+      'unassigned',
+    ])
+    expect(annotationState({ entity_id: null })).toBe('unassigned')
+    expect(annotationState({ entity_id: 'ada', entity_link_state: 'verified' })).toBe('verified')
+    const sort = { field: 'confidence', direction: 'desc' } as const
+    expect(
+      scanFaceParams('page', 'flat', sort, sources, ['manual', 'unassigned']).map((params) => [
+        params['filter.entity_link_state'],
+        params['filter.is_assigned'],
+      ]),
+    ).toEqual([
+      [['manual'], undefined],
+      [undefined, false],
+    ])
   })
 
   it('groups by person with Unassigned last and never repeats a group across batches', () => {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
+import AnnotationStateToggles from './AnnotationStateToggles.vue'
 import { scanToolbarButtonClass } from './scan-toolbar'
-import type { EntityLinkState } from '@/client'
-const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
+import type { AnnotationState } from '@/lib/entity-links'
+/** States of the faces shown on the scan and in the Faces tab. */
+const linkStates = defineModel<AnnotationState[]>('linkStates', { default: () => [] })
 import { LocateFixed, Minus, Plus, Tags } from '@lucide/vue'
 
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,10 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <EntityLinkStateFilter v-model="linkStates" toolbar />
+    <AnnotationStateToggles
+      v-model="linkStates"
+      label="Face link state"
+      group-label="Face link state controls"
+    />
   </div>
 </template>
