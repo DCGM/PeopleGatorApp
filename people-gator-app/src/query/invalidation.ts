@@ -11,10 +11,12 @@ import { restartPeoplePages } from './people-count-invalidation'
  * - Entity records feed the same views through names and portraits.
  * - Media deletion cascades to evidence and touches the affected people, and
  *   media changes alter the document/page filter choices and selected labels.
- * - A user's name appears in user choices and selected actor labels.
+ * - A user's name appears in user choices, selected actor labels and the
+ *   created-by/last-touched-by columns of media records.
  *
- * Image bytes (`pageImages`, `imageContents`, `faceCrops`) are immutable and
- * live outside these groups, so no edit downloads them again.
+ * Image bytes (`pageImages`, `imageContents`, `faceCrops`) are not changed by
+ * any edit made here and live outside these groups, so no edit downloads them
+ * again. Bytes replaced by an import are picked up when the image is reopened.
  */
 const EVIDENCE_VIEWS = [
   queryKeys.faces.all,
@@ -28,8 +30,8 @@ const EVIDENCE_VIEWS = [
 
 /**
  * Refresh every query under the given key prefixes exactly once. A key already
- * covered by another prefix is dropped: invalidating both would cancel and
- * restart the same refetch.
+ * covered by a broader prefix is dropped, and equivalent keys are kept once:
+ * invalidating both would cancel and restart the same refetch.
  */
 export function invalidateOnce(client: QueryClient, groups: readonly QueryKey[]) {
   const disjoint = groups.filter(
@@ -38,7 +40,7 @@ export function invalidateOnce(client: QueryClient, groups: readonly QueryKey[])
         (other, otherIndex) =>
           otherIndex !== index &&
           partialMatchKey(key, other) &&
-          (other.length < key.length || otherIndex < index),
+          (!partialMatchKey(other, key) || otherIndex < index),
       ),
   )
   return Promise.all(disjoint.map((queryKey) => client.invalidateQueries({ queryKey })))
@@ -79,5 +81,10 @@ export function invalidateUsers(client: QueryClient) {
     queryKeys.auth.all,
     queryKeys.filterOptions.kind('user'),
     queryKeys.actorLabels.kind('user'),
+    queryKeys.documents.all,
+    queryKeys.pages.all,
+    queryKeys.images.all,
+    queryKeys.sources.all,
+    queryKeys.search.all,
   ])
 }

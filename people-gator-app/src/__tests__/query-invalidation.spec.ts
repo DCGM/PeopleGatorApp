@@ -90,6 +90,7 @@ vi.mock('@/client', () => {
       state.pages = [...state.pages, 'p3']
       return page('p3')
     }),
+    deleteSourceRouteApiV1SourcesSourceIdDelete: endpoint('deleteSource', () => null),
     patchUserRouteApiV1UsersUserIdPatch: endpoint('patchUser', ({ body }) => {
       state.userName = (body as { display_name: string }).display_name
       return { user_id: 'u1', display_name: state.userName }
@@ -113,6 +114,7 @@ import { queryKeys } from '@/query/keys'
 import {
   useCreatePageMutation,
   useDeletePageMutation,
+  useDeleteSourceMutation,
   useImageContentQuery,
   usePageImageQuery,
   usePageQuery,
@@ -167,6 +169,7 @@ function workspace() {
       patchEntity: usePatchEntityMutation(),
       deleteEntities: useDeleteEntitiesMutation(),
       deletePage: useDeletePageMutation(),
+      deleteSource: useDeleteSourceMutation(),
       createPage: useCreatePageMutation(),
       patchUser: usePatchUserMutation(),
     }
@@ -187,6 +190,14 @@ type Workspace = ReturnType<typeof workspace>
 
 const MEDIA_BYTES = ['pageImage', 'imageContent', 'faceCrop']
 const EVIDENCE_VIEWS = ['page', 'faces', 'mentionGroups', 'entity', 'person']
+
+/** Cached views nobody is showing: counts and names on media records and search. */
+const INACTIVE_VIEWS = [
+  queryKeys.documents.list({ limit: 1 }),
+  queryKeys.sources.list({ limit: 1 }),
+  queryKeys.images.list({ limit: 1 }),
+  queryKeys.search.pages({ limit: 1 }),
+]
 
 function fetches(names: string[]) {
   return Object.fromEntries(names.map((name) => [name, api.state.calls[name]]))
@@ -251,8 +262,11 @@ describe('evidence and identity mutations (#74)', () => {
   it.each(mutations)(
     '%s refreshes each dependent view once and keeps image bytes',
     async (_name, mutate) => {
+      for (const key of INACTIVE_VIEWS) view.client.setQueryData(key, {})
       await mutate(view)
       await flushPromises()
+      for (const key of INACTIVE_VIEWS)
+        expect(view.client.getQueryState(key)?.isInvalidated).toBe(true)
       expect(fetches(EVIDENCE_VIEWS)).toEqual(each(EVIDENCE_VIEWS, 2))
       expect(fetches(MEDIA_BYTES)).toEqual(each(MEDIA_BYTES, 1))
       expect(api.state.aborts).toBe(0)
@@ -341,6 +355,38 @@ describe('overlapping invalidations (#74)', () => {
   })
 })
 
+describe('prefix deduplication (#74)', () => {
+  it.each([
+    ['an optional trailing part', [['a', undefined], ['a']], [['a', undefined]]],
+    [
+      'a narrower object filter first',
+      [
+        ['a', { x: 1, y: 2 }],
+        ['a', { x: 1 }],
+      ],
+      [['a', { x: 1 }]],
+    ],
+    [
+      'a narrower object filter last',
+      [
+        ['a', { x: 1 }],
+        ['a', { x: 1, y: 2 }],
+      ],
+      [['a', { x: 1 }]],
+    ],
+    ['repeated nested prefixes', [['a', 'b'], ['a'], ['a', 'b'], ['a']], [['a']]],
+    ['unrelated prefixes', [['a'], ['b']], [['a'], ['b']]],
+  ])('keeps one covering key for %s', async (_name, groups, kept) => {
+    const invalidate = vi.spyOn(view.client, 'invalidateQueries')
+    await invalidateOnce(view.client, groups)
+    expect(
+      invalidate.mock.calls.map(
+        ([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey,
+      ),
+    ).toEqual(kept)
+  })
+})
+
 describe('media mutations (#74)', () => {
   it('refreshes evidence, people, page choices and source labels after a deletion', async () => {
     expect(view.pageOptions.options.value.map((option) => option.id)).toEqual(['p1', 'p2'])
@@ -369,6 +415,17 @@ describe('media mutations (#74)', () => {
     expect(api.state.aborts).toBe(0)
   })
 
+  it('drops both kinds of cached bytes for a deleted source', async () => {
+    const bytes = [queryKeys.pageImages.image('s1', 256), queryKeys.imageContents.content('s1')]
+    const kept = [queryKeys.pageImages.image('s2', 256), queryKeys.imageContents.content('s2')]
+    for (const key of [...bytes, ...kept]) view.client.setQueryData(key, new Blob())
+    await view.deleteSource.mutateAsync('s1')
+    await flushPromises()
+    for (const key of bytes) expect(view.client.getQueryData(key)).toBeUndefined()
+    for (const key of kept) expect(view.client.getQueryData(key)).toBeDefined()
+    expect(fetches(EVIDENCE_VIEWS)).toEqual(each(EVIDENCE_VIEWS, 2))
+  })
+
   it('adds a created page to the page choices', async () => {
     await view.createPage.mutateAsync({} as never)
     await flushPromises()
@@ -386,6 +443,9 @@ describe('user mutations (#74)', () => {
     const apiKeys = [...queryKeys.actorLabels.actor('api-key', 'k1')]
     view.client.setQueryData(apiKeys, 'Importer')
 
+    const accounts = [queryKeys.users.list({ limit: 1 }), queryKeys.auth.me()]
+    for (const key of [...INACTIVE_VIEWS, ...accounts]) view.client.setQueryData(key, {})
+
     await view.patchUser.mutateAsync({ userId: 'u1', body: { display_name: 'Rita Renamed' } })
     await flushPromises()
 
@@ -394,7 +454,10 @@ describe('user mutations (#74)', () => {
     expect(view.userOptions.labels.value).toEqual({ u1: 'Rita Renamed' })
     expect(view.userLabels.labels.value).toEqual({ u1: 'Rita Renamed' })
     expect(view.client.getQueryState(apiKeys)?.isInvalidated).toBe(false)
-    expect(fetches(EVIDENCE_VIEWS)).toEqual(each(EVIDENCE_VIEWS, 1))
+    for (const key of [...INACTIVE_VIEWS, ...accounts])
+      expect(view.client.getQueryState(key)?.isInvalidated).toBe(true)
+    // Media records name their creator; faces, mentions and people do not.
+    expect(fetches(EVIDENCE_VIEWS)).toEqual({ ...each(EVIDENCE_VIEWS, 1), page: 2 })
     expect(api.state.aborts).toBe(0)
   })
 })

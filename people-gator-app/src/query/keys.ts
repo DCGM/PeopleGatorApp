@@ -34,10 +34,12 @@ export const queryKeys = {
   // edits that invalidate faces do not re-download every displayed portrait.
   faceCrops: {
     all: ['face-crops'] as const,
+    detection: (detectionId: string) => ['face-crops', 'aligned', detectionId] as const,
     aligned: (detectionId: string, maxWidth?: number) =>
       ['face-crops', 'aligned', detectionId, maxWidth] as const,
   },
-  // Page and image bytes are immutable too, and stay outside `pages`/`images`.
+  // Page and image bytes are not changed by edits either, and stay outside
+  // `pages`/`images`.
   pageImages: {
     all: ['page-images'] as const,
     source: (sourceId: string) => ['page-images', sourceId] as const,

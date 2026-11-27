@@ -112,8 +112,7 @@ TanStack Vue Query caches server state. Filters and searches are synchronized
 with router query parameters; changes reset cursor pagination and select a new
 cache entry. Page media uses managed object URLs. Mutations refresh dependent
 caches through the groups in `src/query/invalidation.ts`, once per affected
-query; immutable image bytes have their own keys and are not refreshed by
-edits. Vitest covers these query,
+query; image bytes have their own keys and are not refreshed by edits. Vitest covers these query,
 viewmodel and component contracts. Update the SDK by exporting a local schema as
 described in [Development](DEVELOPMENT.md#updating-the-api-client).
 

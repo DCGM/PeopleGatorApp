@@ -212,7 +212,7 @@ export function useDeleteFaceMutation() {
     onSuccess: async (_data, detectionId) => {
       // A deleted detail must not remain available as a selected reference face.
       client.removeQueries({ queryKey: queryKeys.faces.detail(detectionId), exact: true })
-      client.removeQueries({ queryKey: ['face-crops', 'aligned', detectionId] })
+      client.removeQueries({ queryKey: queryKeys.faceCrops.detection(detectionId) })
       await invalidateEvidence(client)
     },
   })
