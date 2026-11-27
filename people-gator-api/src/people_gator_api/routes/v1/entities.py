@@ -32,6 +32,13 @@ from people_gator_api.services.auth_service import (
     BrowseActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
+from people_gator_api.routes.v1.change_events import (
+    publish_bulk_delete,
+    publish_entities,
+    publish_merge,
+)
+from people_gator_api.schemas.events import ChangeKind, TopicKind
+from people_gator_api.services.event_service import EventHubDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 
@@ -84,11 +91,14 @@ async def create_entity_route(
     payload: EntityCreateRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> EntityResponse:
     try:
-        return await database.entities.create(payload, user)
+        entity = await database.entities.create(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_entities(events, ChangeKind.CREATED, [entity.entity_id])
+    return entity
 
 
 @router.post(
@@ -100,11 +110,14 @@ async def create_entity_batch_route(
     payload: EntityBatchCreateRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> list[EntityResponse]:
     try:
-        return await database.entities.create_batch(payload, user)
+        created = await database.entities.create_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_entities(events, ChangeKind.CREATED, (item.entity_id for item in created))
+    return created
 
 
 @router.patch(
@@ -115,11 +128,14 @@ async def patch_entity_batch_route(
     payload: EntityBatchPatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> list[EntityResponse | None]:
     try:
-        return await database.entities.patch_batch(payload, user)
+        patched = await database.entities.patch_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_patch", str(exc))
+    publish_entities(events, ChangeKind.UPDATED, (item.entity_id for item in patched if item is not None))
+    return patched
 
 
 @router.patch("/entities/{entity_id}", response_model=EntityResponse)
@@ -128,6 +144,7 @@ async def patch_entity_route(
     payload: EntityPatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> EntityResponse:
     try:
         entity = await database.entities.patch(entity_id, payload, user)
@@ -135,6 +152,7 @@ async def patch_entity_route(
         raise_api_error(422, "invalid_patch", str(exc))
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
+    publish_entities(events, ChangeKind.UPDATED, [entity_id])
     return entity
 
 
@@ -158,6 +176,7 @@ async def put_entity_route(
     response: Response,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> EntityResponse:
     try:
         result = await database.entities.put(entity_id, payload, user)
@@ -167,6 +186,9 @@ async def put_entity_route(
         raise_api_error(422, "invalid_reference", str(exc))
     if result.created:
         response.status_code = status.HTTP_201_CREATED
+    publish_entities(
+        events, ChangeKind.CREATED if result.created else ChangeKind.UPDATED, [entity_id]
+    )
     return result.entity
 
 
@@ -175,9 +197,11 @@ async def delete_entity_route(
     entity_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
     if not await database.entities.delete(entity_id, context=user):
         raise_api_error(404, "not_found", "Entity not found")
+    publish_entities(events, ChangeKind.DELETED, [entity_id])
 
 
 @router.post(
@@ -191,6 +215,7 @@ async def merge_entity_route(
     payload: EntityMergeFromRequest,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> EntityMergeResponse:
     try:
         result = await database.entities.merge(
@@ -200,6 +225,7 @@ async def merge_entity_route(
         raise_api_error(409, "invalid_merge", str(exc))
     if result is None:
         raise_api_error(404, "not_found", "Source or target entity not found")
+    publish_merge(events, target_entity_id, [result.source_entity_id])
     return result
 
 
@@ -214,6 +240,7 @@ async def merge_entity_batch_route(
     payload: EntityMergeBatchRequest,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> EntityMergeBatchResponse:
     try:
         result = await database.entities.merge_batch(
@@ -223,6 +250,7 @@ async def merge_entity_batch_route(
         raise_api_error(409, "invalid_merge", str(exc))
     if result is None:
         raise_api_error(404, "not_found", "Target or source entity not found")
+    publish_merge(events, target_entity_id, result.source_entity_ids)
     return result
 
 
@@ -235,8 +263,12 @@ async def delete_entities_route(
     payload: EntityDeleteManyRequest,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> EntityDeleteManyResponse:
     try:
-        return await database.entities.delete_many(payload, context=user)
+        result = await database.entities.delete_many(payload, context=user)
     except ValueError as exc:
         raise_api_error(422, "invalid_selector", str(exc))
+    # Only a count is known, so entity-specific topics are not notified.
+    publish_bulk_delete(events, TopicKind.ENTITY, result.deleted_count)
+    return result

@@ -56,6 +56,12 @@ from people_gator_api.services.database_service import (
     DatabaseContextDependency,
     DatabaseDependency,
 )
+from people_gator_api.routes.v1.change_events import (
+    document_source_ids,
+    publish_sources,
+)
+from people_gator_api.schemas.events import ChangeKind
+from people_gator_api.services.event_service import EventHubDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 from people_gator_api.schemas.mentions import TextMentionListFilter
@@ -146,10 +152,12 @@ async def create_document_route(
     payload: DocumentCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> DocumentResponse:
     document, result = await database.sources.get_or_create_document(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Document already registered")
+    publish_sources(events, ChangeKind.CREATED, [document.source_id])
     return document
 
 
@@ -163,11 +171,15 @@ async def create_document_batch_route(
     payload: DocumentBatchCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> list[DocumentResponse]:
-    return [
-        response
-        for response, _ in await database.sources.get_or_create_document_batch(payload, context=user)
-    ]
+    results = await database.sources.get_or_create_document_batch(payload, context=user)
+    publish_sources(
+        events,
+        ChangeKind.CREATED,
+        (response.source_id for response, result in results if result == CreateResult.CREATED),
+    )
+    return [response for response, _ in results]
 
 
 @router.get(
@@ -217,10 +229,12 @@ async def delete_document_route(
     document_source_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
     if await database.sources.get_document(document_source_id) is None:
         raise_api_error(404, "not_found", "Document not found")
     await database.sources.delete(document_source_id, context=user)
+    publish_sources(events, ChangeKind.DELETED, [document_source_id])
 
 
 # -----------------------------------------------------------------------------
@@ -263,10 +277,13 @@ async def create_page_route(
     payload: PageCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> PageResponse:
     page, result = await database.sources.get_or_create_page(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Page already registered")
+    parents = await document_source_ids(events, database, [page])
+    publish_sources(events, ChangeKind.CREATED, [page.source_id], parents)
     return page
 
 
@@ -280,11 +297,19 @@ async def create_page_batch_route(
     payload: PageBatchCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> list[PageResponse]:
-    return [
-        response
-        for response, _ in await database.sources.get_or_create_page_batch(payload, context=user)
-    ]
+    results = await database.sources.get_or_create_page_batch(payload, context=user)
+    parents = await document_source_ids(
+        events, database, [response for response, result in results if result == CreateResult.CREATED]
+    )
+    publish_sources(
+        events,
+        ChangeKind.CREATED,
+        (response.source_id for response, result in results if result == CreateResult.CREATED),
+        parents,
+    )
+    return [response for response, _ in results]
 
 
 @router.get("/pages/lookup", response_model=PageResponse, tags=["pages"])
@@ -310,10 +335,12 @@ async def lookup_page_route(
 
 
 @router.patch("/pages/{page_source_id:uuid}", response_model=PageResponse, tags=["pages"])
-async def patch_page_route(page_source_id: uuid.UUID, payload: PagePatchRequest, database: DatabaseDependency, user: AnnotatorActorDependency) -> PageResponse:
+async def patch_page_route(page_source_id: uuid.UUID, payload: PagePatchRequest, database: DatabaseDependency, user: AnnotatorActorDependency, events: EventHubDependency) -> PageResponse:
     page = await database.sources.patch_page(page_source_id, payload, context=user)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
+    parents = await document_source_ids(events, database, [page])
+    publish_sources(events, ChangeKind.UPDATED, [page_source_id], parents)
     return page
 
 
@@ -373,12 +400,14 @@ async def put_page_image_by_id_route(
     file: UploadFile,
     database_context: DatabaseContextDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> FileUploadResponse:
     """Create or replace a page scan from a multipart image file upload."""
     del user
     # Only the detached response is needed during file I/O and page-lock waits.
     async with database_context as database:
         page = await database.sources.get_page(page_source_id)
+        parents = await document_source_ids(events, database, [page] if page else [])
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
@@ -387,6 +416,7 @@ async def put_page_image_by_id_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
+    publish_sources(events, ChangeKind.UPDATED, [page.source_id], parents)
     return FileUploadResponse(
         source_id=page.source_id,
         uploaded_at=datetime.now(UTC),
@@ -424,11 +454,13 @@ async def put_page_layout_by_id_route(
     payload: PageLayoutModel,
     database_context: DatabaseContextDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> FileUploadResponse:
     """Create or replace a page's layout with a validated JSON document."""
     del user
     async with database_context as database:
         page = await database.sources.get_page(page_source_id)
+        parents = await document_source_ids(events, database, [page] if page else [])
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
@@ -437,6 +469,7 @@ async def put_page_layout_by_id_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
+    publish_sources(events, ChangeKind.UPDATED, [page.source_id], parents)
     return FileUploadResponse(
         source_id=page.source_id,
         uploaded_at=datetime.now(UTC),
@@ -473,10 +506,14 @@ async def delete_page_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
-    if await database.sources.get_page(page_source_id) is None:
+    page = await database.sources.get_page(page_source_id)
+    if page is None:
         raise_api_error(404, "not_found", "Page not found")
+    parents = await document_source_ids(events, database, [page])
     await database.sources.delete(page_source_id, context=user)
+    publish_sources(events, ChangeKind.DELETED, [page_source_id], parents)
 
 
 # -----------------------------------------------------------------------------
@@ -516,10 +553,12 @@ async def create_image_route(
     payload: ImageCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> ImageResponse:
     image, result = await database.sources.get_or_create_image(payload, context=user)
     if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Image already registered")
+    publish_sources(events, ChangeKind.CREATED, [image.source_id])
     return image
 
 
@@ -533,11 +572,15 @@ async def create_image_batch_route(
     payload: ImageBatchCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> list[ImageResponse]:
-    return [
-        response
-        for response, _ in await database.sources.get_or_create_image_batch(payload, context=user)
-    ]
+    results = await database.sources.get_or_create_image_batch(payload, context=user)
+    publish_sources(
+        events,
+        ChangeKind.CREATED,
+        (response.source_id for response, result in results if result == CreateResult.CREATED),
+    )
+    return [response for response, _ in results]
 
 
 @router.get("/images/lookup", response_model=ImageResponse, tags=["images"])
@@ -593,10 +636,12 @@ async def delete_image_route(
     image_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
     if await database.sources.get_image(image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
     await database.sources.delete(image_id, context=user)
+    publish_sources(events, ChangeKind.DELETED, [image_id])
 
 
 @router.get("/document-library-filter-options", response_model=DocumentLibraryOptionsResponse, tags=["documents"])

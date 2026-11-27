@@ -81,6 +81,7 @@ from people_gator_api.seeding.fixtures import (
     Person,
 )
 from people_gator_api.services import filesystem_service
+from people_gator_api.services.event_service import EventHub
 from people_gator_api.settings import settings
 from conftest import migrated_schema
 from preview_seed_snapshot import SeedTemplate, fresh_seed, owns_template, shared_template, starts_with_seed
@@ -738,7 +739,7 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
     request = DocumentCreateRequest(
         library="names-test", document_id=uuid.uuid4(), name="  Named album  "
     )
-    created = await create_document_route(payload=request, database=database, user=actor)
+    created = await create_document_route(payload=request, database=database, user=actor, events=EventHub())
     assert created.name == "Named album"
     assert (
         await get_document_route(
@@ -758,10 +759,11 @@ async def test_document_registration_api_names_and_legacy_requests(seed_target):
         payload=[request.model_copy(update={"name": "Replacement"}), legacy],
         database=database,
         user=actor,
+        events=EventHub(),
     )
     assert [item.name for item in batch] == ["Named album", None]
     with pytest.raises(HTTPException) as conflict:
-        await create_document_route(payload=request, database=database, user=actor)
+        await create_document_route(payload=request, database=database, user=actor, events=EventHub())
     assert conflict.value.status_code == 409
     listed = await list_documents_route(
         database=database,

@@ -30,6 +30,13 @@ from people_gator_api.services.auth_service import (
     DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
+from people_gator_api.routes.v1.change_events import (
+    previous_mentions,
+    publish_deleted_links,
+    publish_links,
+)
+from people_gator_api.schemas.events import ChangeKind, TopicKind
+from people_gator_api.services.event_service import EventHubDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 
@@ -101,11 +108,14 @@ async def create_text_mention_route(
     payload: TextMentionCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> TextMentionResponse:
     try:
-        return await database.text_mentions.create(payload, user)
+        mention = await database.text_mentions.create(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_links(events, TopicKind.MENTION, ChangeKind.CREATED, [mention])
+    return mention
 
 
 @router.post(
@@ -117,11 +127,14 @@ async def create_text_mention_batch_route(
     payload: TextMentionsBatchCreateRequest,
     database: DatabaseDependency,
     user: DataIngestActorDependency,
+    events: EventHubDependency,
 ) -> list[TextMentionResponse]:
     try:
-        return await database.text_mentions.create_batch(payload, user)
+        mentions = await database.text_mentions.create_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_reference", str(exc))
+    publish_links(events, TopicKind.MENTION, ChangeKind.CREATED, mentions)
+    return mentions
 
 
 @router.patch(
@@ -132,11 +145,15 @@ async def patch_text_mention_batch_route(
     payload: TextMentionsBatchPatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> list[TextMentionResponse | None]:
+    previous = await previous_mentions(events, database, (item.mention_id for item in payload))
     try:
-        return await database.text_mentions.patch_batch(payload, user)
+        mentions = await database.text_mentions.patch_batch(payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_patch", str(exc))
+    publish_links(events, TopicKind.MENTION, ChangeKind.UPDATED, mentions, previous)
+    return mentions
 
 
 @router.delete("/text-mentions:batch", response_model=int)
@@ -144,8 +161,12 @@ async def delete_text_mention_batch_route(
     mention_id: list[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> int:
-    return await database.text_mentions.delete_batch(mention_id, context=user)
+    previous = await previous_mentions(events, database, mention_id)
+    deleted = await database.text_mentions.delete_batch(mention_id, context=user)
+    publish_deleted_links(events, TopicKind.MENTION, previous)
+    return deleted
 
 
 @router.get(
@@ -173,13 +194,16 @@ async def patch_text_mention_route(
     payload: TextMentionPatchRequest,
     database: DatabaseDependency,
     user: AnnotatorActorDependency,
+    events: EventHubDependency,
 ) -> TextMentionResponse:
+    previous = await previous_mentions(events, database, [mention_id])
     try:
         mention = await database.text_mentions.patch(mention_id, payload, user)
     except ValueError as exc:
         raise_api_error(422, "invalid_patch", str(exc))
     if mention is None:
         raise_api_error(404, "not_found", "Text mention not found")
+    publish_links(events, TopicKind.MENTION, ChangeKind.UPDATED, [mention], previous)
     return mention
 
 
@@ -191,6 +215,9 @@ async def delete_text_mention_route(
     mention_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
+    previous = await previous_mentions(events, database, [mention_id])
     if not await database.text_mentions.delete(mention_id, context=user):
         raise_api_error(404, "not_found", "Text mention not found")
+    publish_deleted_links(events, TopicKind.MENTION, previous)

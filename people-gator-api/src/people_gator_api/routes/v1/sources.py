@@ -20,6 +20,12 @@ from people_gator_api.services.auth_service import (
     DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
+from people_gator_api.routes.v1.change_events import (
+    page_parent,
+    publish_sources,
+)
+from people_gator_api.schemas.events import ChangeKind
+from people_gator_api.services.event_service import EventHubDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
 
@@ -89,6 +95,9 @@ async def delete_source_route(
     source_id: uuid.UUID,
     database: DatabaseDependency,
     user: AdminActorDependency,
+    events: EventHubDependency,
 ) -> None:
+    parents = await page_parent(events, database, source_id)
     if not await database.sources.delete(source_id, context=user):
         raise_api_error(404, "not_found", "Source not found")
+    publish_sources(events, ChangeKind.DELETED, [source_id], parents)

@@ -1,0 +1,339 @@
+"""Process-local hub for live change notifications.
+
+A client subscribes a session to topics and reads its events from one stream;
+the session belongs to that stream's user only while the stream is open.
+Mutation routes describe what they changed in a :class:`ChangeSet` and publish
+it after their transaction committed. Each session keeps a bounded queue, also
+while briefly disconnected, and drops its oldest events when full. Nothing is
+persisted, and other processes do not see each other's changes.
+The public contract is documented in ``docs/EVENTS.md``.
+"""
+
+import asyncio
+import time
+import uuid
+from collections import deque
+from collections.abc import AsyncIterator, Callable, Generator, Iterable
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Annotated
+
+from fastapi import Depends
+
+from people_gator_api.schemas.events import (
+    MAX_SESSION_TOPICS,
+    ChangeEvent,
+    ChangeKind,
+    ObjectRef,
+    SessionEvent,
+    SubscriptionsResponse,
+    Topic,
+    TopicKind,
+    TopicScope,
+)
+
+
+type _Hit = tuple[ChangeKind, ObjectRef | None]
+
+
+class SessionOwnershipError(Exception):
+    """Another user's stream is attached to the session."""
+
+
+class SessionLimitError(Exception):
+    """The user has the maximum number of open streams, or the hub is full."""
+
+
+class TopicLimitError(ValueError):
+    """The session would exceed its topic limit."""
+
+
+class ChangeSet:
+    """What one request changed, grouped by the topics it concerns."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.hits: dict[Topic, list[_Hit]] = {}
+
+    def changed(self, kind: TopicKind, object_id: uuid.UUID, change: ChangeKind) -> ObjectRef:
+        """Record a change of the object itself."""
+        ref = ObjectRef(kind=kind, id=object_id)
+        self.hits.setdefault(Topic(kind=kind, id=object_id), []).append((change, ref))
+        self.hits.setdefault(Topic(kind=kind), []).append((change, ref))
+        return ref
+
+    def several(self, kind: TopicKind, change: ChangeKind) -> None:
+        """Record a bulk change whose objects are not known individually."""
+        self.hits.setdefault(Topic(kind=kind), []).append((change, None))
+
+    def related(
+        self,
+        kind: TopicKind,
+        parent_id: uuid.UUID,
+        change: ChangeKind,
+        ref: ObjectRef | None,
+    ) -> None:
+        """Record that something related to an entity or source changed."""
+        topic = Topic(kind=kind, id=parent_id, scope=TopicScope.RELATED)
+        self.hits.setdefault(topic, []).append((change, ref))
+
+    def link(
+        self,
+        kind: TopicKind,
+        change: ChangeKind,
+        object_id: uuid.UUID,
+        source_id: uuid.UUID,
+        *entity_ids: uuid.UUID | None,
+    ) -> None:
+        """Record a face or mention change for its source and its old/new entity."""
+        ref = self.changed(kind, object_id, change)
+        self.related(TopicKind.SOURCE, source_id, change, ref)
+        for entity_id in dict.fromkeys(entity_ids):
+            if entity_id is not None:
+                self.related(TopicKind.ENTITY, entity_id, change, ref)
+
+    def entity(self, change: ChangeKind, entity_id: uuid.UUID) -> None:
+        ref = self.changed(TopicKind.ENTITY, entity_id, change)
+        if change is ChangeKind.DELETED:
+            self.related(TopicKind.ENTITY, entity_id, change, ref)
+
+    def merge(self, target_id: uuid.UUID, merged_ids: Iterable[uuid.UUID]) -> None:
+        """Record a merge: the target changed and gained links, the others are gone."""
+        self.entity(ChangeKind.UPDATED, target_id)
+        self.related(TopicKind.ENTITY, target_id, ChangeKind.UPDATED, None)
+        for merged_id in merged_ids:
+            self.entity(ChangeKind.DELETED, merged_id)
+
+    def source(
+        self,
+        change: ChangeKind,
+        source_id: uuid.UUID,
+        parent_id: uuid.UUID | None = None,
+    ) -> None:
+        """Record a source change; a page also concerns its document (the parent)."""
+        ref = self.changed(TopicKind.SOURCE, source_id, change)
+        if change is ChangeKind.DELETED:
+            self.related(TopicKind.SOURCE, source_id, change, ref)
+        if parent_id is not None:
+            self.related(TopicKind.SOURCE, parent_id, change, ref)
+
+
+def _event(topic: Topic, hits: list[_Hit]) -> ChangeEvent:
+    """One event per topic and request; several objects collapse to ``object: null``."""
+    distinct = list(dict.fromkeys(hits))
+    if len(distinct) == 1:
+        change, ref = distinct[0]
+        return ChangeEvent(topic=topic, change=change, object=ref)
+    changes = {change for change, _ in distinct}
+    change = changes.pop() if len(changes) == 1 else ChangeKind.UPDATED
+    return ChangeEvent(topic=topic, change=change, object=None)
+
+
+@dataclass(slots=True)
+class _Session:
+    idle_deadline: float | None
+    events: deque[ChangeEvent]
+    # The user of the attached stream; nobody owns a session without a stream.
+    user_id: uuid.UUID | None = None
+    connection: object | None = None
+    topics: dict[Topic, None] = field(default_factory=dict[Topic, None])
+    wakeup: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+@dataclass(frozen=True, slots=True)
+class Connection:
+    """An attached stream: the hello frame, then events until a newer stream takes over."""
+
+    hello: SessionEvent
+    _session: _Session
+    _token: object
+
+    async def events(self) -> AsyncIterator[ChangeEvent]:
+        session = self._session
+        while session.connection is self._token:
+            if session.events:
+                yield session.events.popleft()
+                continue
+            session.wakeup.clear()
+            await session.wakeup.wait()
+
+
+class EventHub:
+    """Sessions, their topic subscriptions and best-effort fan-out."""
+
+    def __init__(
+        self,
+        *,
+        idle_seconds: float = 60.0,
+        queue_size: int = 1000,
+        max_user_sessions: int = 16,
+        max_sessions: int = 4096,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        super().__init__()
+        self._idle_seconds = idle_seconds
+        self._queue_size = queue_size
+        self._max_user_sessions = max_user_sessions
+        self._max_sessions = max_sessions
+        self._clock = clock
+        self._sessions: dict[uuid.UUID, _Session] = {}
+        self._subscribers: dict[Topic, set[uuid.UUID]] = {}
+
+    @property
+    def active(self) -> bool:
+        """Whether any session is subscribed; publishers skip their work otherwise."""
+        self._purge()
+        return bool(self._subscribers)
+
+    def subscriptions(
+        self, session_id: uuid.UUID, user_id: uuid.UUID, *, connecting: bool = False
+    ) -> SubscriptionsResponse:
+        """Return the session, creating it when it does not exist.
+
+        With ``connecting`` the call also fails when the user could not attach
+        a stream, so that a route can refuse before its response starts.
+        """
+        session = self._session(session_id, user_id)
+        if connecting:
+            self._check_stream_limit(session, user_id)
+        return self._response(session_id, session)
+
+    def update(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        *,
+        subscribe: Iterable[Topic] = (),
+        unsubscribe: Iterable[Topic] = (),
+    ) -> SubscriptionsResponse:
+        session = self._session(session_id, user_id)
+        topics = dict(session.topics)
+        for topic in unsubscribe:
+            topics.pop(topic, None)
+        topics.update(dict.fromkeys(subscribe))
+        if len(topics) > MAX_SESSION_TOPICS:
+            raise TopicLimitError(f"A session can follow at most {MAX_SESSION_TOPICS} topics")
+        for topic in session.topics.keys() - topics.keys():
+            self._unsubscribe(session_id, topic)
+        for topic in topics.keys() - session.topics.keys():
+            self._subscribers.setdefault(topic, set()).add(session_id)
+        session.topics = topics
+        return self._response(session_id, session)
+
+    @contextmanager
+    def connect(self, session_id: uuid.UUID, user_id: uuid.UUID) -> Generator[Connection]:
+        """Attach the session's single stream and own the session while it is open.
+
+        Events queued while no stream was attached are delivered first. A newer
+        stream of the same user ends the older one.
+        """
+        session = self._session(session_id, user_id)
+        self._check_stream_limit(session, user_id)
+        token = object()
+        session.user_id = user_id
+        session.connection = token
+        session.idle_deadline = None
+        session.wakeup.set()  # ends the stream this one replaces
+        hello = SessionEvent(session_id=session_id, topics=list(session.topics))
+        try:
+            yield Connection(hello, session, token)
+        finally:
+            if session.connection is token:
+                session.connection = None
+                session.user_id = None
+                session.idle_deadline = self._clock() + self._idle_seconds
+
+    def publish(self, changes: ChangeSet) -> None:
+        """Queue one event per subscribed topic; a full queue drops its oldest event."""
+        self._purge()
+        for topic, hits in changes.hits.items():
+            subscribers = self._subscribers.get(topic)
+            if not subscribers:
+                continue
+            event = _event(topic, hits)
+            for session_id in subscribers:
+                session = self._sessions[session_id]
+                session.events.append(event)  # a full deque discards its oldest event
+                session.wakeup.set()
+
+    def _session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> _Session:
+        self._purge()
+        session = self._sessions.get(session_id)
+        if session is not None:
+            if session.user_id not in (None, user_id):
+                raise SessionOwnershipError
+            return session
+        if len(self._sessions) >= self._max_sessions:
+            idle = [
+                (value.idle_deadline, key)
+                for key, value in self._sessions.items()
+                if value.idle_deadline is not None
+            ]
+            if not idle:
+                raise SessionLimitError
+            self._remove(min(idle, key=lambda item: item[0])[1])
+        session = _Session(
+            idle_deadline=self._clock() + self._idle_seconds,
+            events=deque(maxlen=self._queue_size),
+        )
+        self._sessions[session_id] = session
+        return session
+
+    def _check_stream_limit(self, session: _Session, user_id: uuid.UUID) -> None:
+        if session.user_id is not None:
+            return  # the user's own stream is replaced, not added
+        streams = sum(1 for other in self._sessions.values() if other.user_id == user_id)
+        if streams >= self._max_user_sessions:
+            raise SessionLimitError
+
+    def _response(self, session_id: uuid.UUID, session: _Session) -> SubscriptionsResponse:
+        return SubscriptionsResponse(
+            session_id=session_id,
+            connected=session.connection is not None,
+            topics=list(session.topics),
+        )
+
+    def _unsubscribe(self, session_id: uuid.UUID, topic: Topic) -> None:
+        subscribers = self._subscribers[topic]
+        subscribers.discard(session_id)
+        if not subscribers:
+            del self._subscribers[topic]
+
+    def _remove(self, session_id: uuid.UUID) -> None:
+        session = self._sessions.pop(session_id)
+        for topic in session.topics:
+            self._unsubscribe(session_id, topic)
+
+    def _purge(self) -> None:
+        """Forget sessions that stayed without a stream for the idle period."""
+        now = self._clock()
+        expired = [
+            session_id
+            for session_id, session in self._sessions.items()
+            if session.idle_deadline is not None and session.idle_deadline <= now
+        ]
+        for session_id in expired:
+            self._remove(session_id)
+
+
+_event_hub = EventHub()
+
+
+def get_event_hub() -> EventHub:
+    """Return the application-wide hub."""
+    return _event_hub
+
+
+type EventHubDependency = Annotated[EventHub, Depends(get_event_hub)]
+
+
+__all__ = [
+    "ChangeSet",
+    "Connection",
+    "EventHub",
+    "EventHubDependency",
+    "SessionLimitError",
+    "SessionOwnershipError",
+    "TopicLimitError",
+    "get_event_hub",
+]
