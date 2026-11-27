@@ -357,6 +357,18 @@ it('expands the selected tag into one card through viewport movement and collaps
     await settle()
     expect(panel()).not.toBeNull()
 
+    // A click on a face box only selects: the selected one stays, another one takes over.
+    for (const id of ['one', 'two']) {
+      const box = wrapper.get(`[data-detection-id="${id}"]`)
+      press(box.element, 'pointerdown', 10)
+      press(window, 'pointerup', 10)
+      await box.trigger('click')
+      await settle()
+      expect(wrapper.emitted('clearFace')).toHaveLength(2)
+      expect(wrapper.emitted('selectFace')!.slice(-1)).toEqual([[id]])
+    }
+    expect(panel()).not.toBeNull()
+
     // A touch drag sends no click, so a later click on the toolbar must not report it.
     const touch = (target: EventTarget, type: string) => {
       const event = new MouseEvent(type, { bubbles: true })

@@ -114,6 +114,8 @@ function pressOutside(event: CustomEvent<{ originalEvent: PointerEvent }>, faceI
   const press = event.detail.originalEvent
   const { clientX, clientY, pointerType, target } = press
   if (props.viewer && !(target instanceof Node && props.viewer.contains(target))) return
+  // A press on a face box selects that face; clearing first would flash the selection off.
+  if (target instanceof Element && target.closest('[data-region-type="face"]')) return
   if (pointerType === 'touch') {
     if (press === latestPress) clickOff(faceId)
     return
