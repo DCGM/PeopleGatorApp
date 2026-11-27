@@ -993,6 +993,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}?"
                 + urlencode({"page_link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
+            # #195: the toolbar's Unassigned toggle on the same page; faces only.
+            "scan-toolbar-unassigned": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}?"
+                + urlencode({"page_link_state": ["unassigned"]}, doseq=True)
+            ),
             "viewport-focus": focus_path,
             # #112: drag from inside the faces and OCR lines of the same page, with
             # and without open face actions. Entry points only; no fixture changes.

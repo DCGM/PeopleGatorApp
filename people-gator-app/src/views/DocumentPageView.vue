@@ -40,7 +40,7 @@ import {
   useTextMentionQuery,
 } from '@/query/text-mentions'
 import { useQueryClient } from '@tanstack/vue-query'
-import { linkMetadata } from '@/lib/entity-links'
+import { linkMetadata, parseAnnotationStates } from '@/lib/entity-links'
 import {
   mentionOrder,
   nextMentionSelection,
@@ -176,7 +176,7 @@ function showPanel(side: 'left' | 'right') {
 }
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
-const linkStates = useLinkStateFilter(PAGE_LINK_STATE_KEY)
+const linkStates = useLinkStateFilter(PAGE_LINK_STATE_KEY, parseAnnotationStates)
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -1683,8 +1683,6 @@ onBeforeUnmount(() => {
               v-model:sort="mentionSort"
               v-model:group-sort="mentionGroupSort"
               :sources="sources"
-              :link-states="linkStates"
-              @reset-filters="linkStates = []"
             />
           </TabsContent>
           <TabsContent value="info" class="mt-0 flex min-h-0 flex-1 flex-col">

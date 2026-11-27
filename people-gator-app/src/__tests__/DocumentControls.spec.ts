@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it } from 'vitest'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
+import { parseAnnotationStates } from '@/lib/entity-links'
 
 const props = {
   zoomPercent: 82,
@@ -16,7 +17,7 @@ describe('scan toolbar', () => {
   it('keeps inline selections and reset synchronized with direct URLs and history', async () => {
     const harness = defineComponent({
       setup() {
-        const states = useLinkStateFilter()
+        const states = useLinkStateFilter('link_state', parseAnnotationStates)
         return () =>
           h(DocumentControls, {
             ...props,
@@ -36,7 +37,7 @@ describe('scan toolbar', () => {
     const state = (name: string) => wrapper.get(`button[aria-label="${name}"]`)
     const all = () => wrapper.findAll('button').find((button) => button.text() === 'All')!
     const expectSelection = (labels: string[]) => {
-      for (const label of ['Automatic', 'Manual', 'Verified']) {
+      for (const label of ['Automatic', 'Manual', 'Verified', 'Unassigned']) {
         expect(state(label).attributes('aria-pressed')).toBe(String(labels.includes(label)))
         // Tooltip triggers must not overwrite the state used by standard
         // ToggleGroup styling with their own open/closed state.
@@ -50,7 +51,9 @@ describe('scan toolbar', () => {
     }
     try {
       expect(wrapper.get('[role="toolbar"]').attributes('aria-label')).toBe('Scan tools')
-      expect(wrapper.get('[data-slot="toggle-group"]').attributes('aria-label')).toBe('Link state')
+      expect(wrapper.get('[data-slot="toggle-group"]').attributes('aria-label')).toBe(
+        'Face link state',
+      )
       expectSelection(['Verified'])
       await state('Automatic').trigger('click')
       await flushPromises()
@@ -65,6 +68,18 @@ describe('scan toolbar', () => {
         'verified',
       ])
       await state('Automatic').trigger('click')
+      await flushPromises()
+      expectSelection(['Manual', 'Verified'])
+      // Unassigned combines with link states (#195).
+      await state('Unassigned').trigger('click')
+      await flushPromises()
+      expectSelection(['Manual', 'Verified', 'Unassigned'])
+      expect(router.currentRoute.value.query.link_state).toEqual([
+        'manual',
+        'verified',
+        'unassigned',
+      ])
+      await state('Unassigned').trigger('click')
       await flushPromises()
       expectSelection(['Manual', 'Verified'])
       await all().trigger('click')

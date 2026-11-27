@@ -1,12 +1,17 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { parseLinkStates } from '@/lib/entity-links'
-export function useLinkStateFilter(key = 'link_state') {
+export function useLinkStateFilter<
+  State extends string = ReturnType<typeof parseLinkStates>[number],
+>(
+  key = 'link_state',
+  parse: (value: unknown) => State[] = parseLinkStates as (value: unknown) => State[],
+) {
   const route = useRoute()
   const router = useRouter()
   return computed({
-    get: () => parseLinkStates(route.query[key]),
-    set: (value) => {
+    get: () => parse(route.query[key]),
+    set: (value: State[]) => {
       void router.push({ query: { ...route.query, [key]: value.length ? value : undefined } })
     },
   })

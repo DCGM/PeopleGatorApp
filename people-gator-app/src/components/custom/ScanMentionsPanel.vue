@@ -22,23 +22,22 @@ import {
 
 const props = defineProps<{
   sources: { page: string; document: string } | null
-  linkStates: EntityLinkState[]
 }>()
+// The scan toolbar's states filter faces only; mentions list every state.
+const linkStates: EntityLinkState[] = []
 const scope = defineModel<EvidenceScope>('scope', { required: true })
 const view = defineModel<MentionView>('view', { required: true })
 const sort = defineModel<SortState<TextMentionSortField>>('sort', { required: true })
 const groupSort = defineModel<SortState<TextMentionGroupSortField>>('groupSort', {
   required: true,
 })
-const emit = defineEmits<{ resetFilters: [] }>()
 
-// Linked and unlinked occurrences alike, unless link states narrow the evidence.
+// Linked and unlinked occurrences alike.
 const filters = computed<TextMentionListParams>(() => ({
   ...(props.sources &&
     (scope.value === 'page'
       ? { 'filter.page_source_id': [props.sources.page] }
       : { 'filter.document_source_id': [props.sources.document] })),
-  ...(props.linkStates.length && { 'filter.entity_link_state': props.linkStates }),
 }))
 const tags = computed<ActiveFilter[]>(() =>
   scope.value === 'page'
@@ -87,7 +86,6 @@ const tags = computed<ActiveFilter[]>(() =>
             card-titles
             automatic
             :selectable="false"
-            @broaden="emit('resetFilters')"
           />
           <ScanMentionsByPerson
             v-else-if="view === 'person'"

@@ -218,18 +218,22 @@ storage initialization → migrations → seed → application startup.
 ### Inline scan toolbar (#14)
 
 The CLI's `scan-toolbar` link opens **Link state review / page 2** with verified
-and unassigned faces and mentions. The inline **Automatic**, **Manual** and
-**Verified** multi-select toggles sit beside navigation, zoom, Names and translation.
+and unassigned faces and mentions. The inline **Automatic**, **Manual**,
+**Verified** and **Unassigned** multi-select toggles sit beside navigation, zoom, Names
+and translation. They narrow faces only, on the scan and in the Faces tab; mentions keep
+their own state toggles in the transcription (#195).
 Their icons stay directly available on mobile (labels appear at wide viewports);
 each has an accessible name and a native title description. The toolbar wraps within the
 viewer, including below 640px, without sliders, active-filter tags or a generic
 clear-filters row. This scan-toolbar exception does not change the comboboxes,
 tags or mobile collapse behavior of actual search/filter panels.
 
-Compare `scan-toolbar-assigned` (all three toggles pressed, only the verified
-face and mention on page 2) with **All** (no states selected, also includes the
-unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
-and manual evidence selected together. Toggle each state, reset, reload and use
+Compare `scan-toolbar-assigned` (three toggles pressed, only the verified face on
+page 2) with `scan-toolbar-unassigned` (only the unassigned face) and **All** (no
+states selected, both faces). Both mentions stay in the transcription and the
+Mentions tab throughout. Press **Verified** with **Unassigned** to list both faces
+again, linked first. `scan-toolbar-union` opens page 1 with automatic
+and manual faces selected together. Toggle each state, reset, reload and use
 browser back/forward to compare pressed states, the editor's
 `page_link_state` URL setting and evidence. Workspace `link_state` is retained separately.
 With a state pressed, lines set to **Annotated** and a non-default Faces scope, use

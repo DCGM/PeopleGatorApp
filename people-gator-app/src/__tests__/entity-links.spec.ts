@@ -4,7 +4,7 @@ import { computed, defineComponent, h, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EntityLinkStateBadge from '@/components/custom/EntityLinkStateBadge.vue'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
+import AnnotationStateToggles from '@/components/custom/AnnotationStateToggles.vue'
 import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
@@ -13,6 +13,8 @@ import { queryKeys } from '@/query/keys'
 import { useFaceListQuery, useDeleteFaceMutation } from '@/query/faces'
 import { usePageResultsQuery } from '@/query/search/pages'
 import { usePersonDetail } from '@/viewmodels/person-detail'
+import { useScanFaces } from '@/viewmodels/scan-faces'
+import type { AnnotationState } from '@/lib/entity-links'
 import type { EntityLinkState } from '@/client'
 
 const api = vi.hoisted(() => ({
@@ -100,12 +102,11 @@ describe('entity link review', () => {
   })
 
   it('supports OR selections and distinguishes all assigned states from All', async () => {
-    const selected = ref<EntityLinkState[]>([])
+    const selected = ref<AnnotationState[]>([])
     const wrapper = mount(
       defineComponent({
         setup: () => () =>
-          h(EntityLinkStateFilter, {
-            toolbar: true,
+          h(AnnotationStateToggles, {
             modelValue: selected.value,
             'onUpdate:modelValue': (value) => {
               selected.value = value
@@ -124,6 +125,59 @@ describe('entity link review', () => {
     await wrapper.get('[aria-label="Manual"]').trigger('click')
     await wrapper.get('[aria-label="Manual"]').trigger('click')
     expect(selected.value).toEqual([])
+    await wrapper.get('[aria-label="Unassigned"]').trigger('click')
+    await wrapper.get('[aria-label="Verified"]').trigger('click')
+    expect(selected.value).toEqual(['verified', 'unassigned'])
+  })
+
+  it('lists linked faces, then unassigned ones, for a mixed scan selection (#195)', async () => {
+    const face = (id: string, entity: string | null) => ({
+      detection_id: id,
+      entity_id: entity,
+      source_id: 'page-source',
+    })
+    api.page.mockResolvedValue({ data: { source_id: 'page-source', page_id: 'one' } })
+    api.faces.mockImplementation(({ query }) =>
+      Promise.resolve({
+        data:
+          query['filter.is_assigned'] === false
+            ? { items: [face('free', null)], limit: 30, total_count: 1, cursor: null }
+            : { items: [face('linked', 'ada')], limit: 30, total_count: 1, cursor: null },
+      }),
+    )
+    const states = ref<AnnotationState[]>(['manual', 'unassigned'])
+    let faces!: ReturnType<typeof useScanFaces>
+    renderQuery(() => {
+      faces = useScanFaces({
+        sources: { page: 'page-source', document: 'document-source' },
+        scope: 'page',
+        view: 'flat',
+        sort: { field: 'detection_id', direction: 'asc' },
+        linkStates: states,
+      })
+      return () => h('div')
+    })
+    await flushPromises()
+    expect(api.faces.mock.calls.map(([args]) => args.query)).toEqual([
+      expect.objectContaining({ 'filter.entity_link_state': ['manual'] }),
+      expect.objectContaining({ 'filter.is_assigned': false }),
+    ])
+    expect(faces.items.value.map((item) => item.face.detection_id)).toEqual(['linked', 'free'])
+    expect(faces.totalCount.value).toBe(2)
+    expect(faces.hasNextPage.value).toBe(false)
+    // One kind of state needs one request.
+    api.faces.mockClear()
+    states.value = ['unassigned']
+    await flushPromises()
+    expect(
+      api.faces.mock.calls.every(
+        ([args]) =>
+          args.query['filter.is_assigned'] === false &&
+          args.query['filter.entity_link_state'] === undefined,
+      ),
+    ).toBe(true)
+    expect(faces.items.value.map((item) => item.face.detection_id)).toEqual(['free'])
+    expect(faces.totalCount.value).toBe(1)
   })
 
   it('restores repeated URL states on back/forward and preserves other query parameters', async () => {

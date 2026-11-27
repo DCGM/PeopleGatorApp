@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import PanelBar from './PanelBar.vue'
-import TeleprompterHighlightFilter from './TeleprompterHighlightFilter.vue'
+import AnnotationStateToggles from './AnnotationStateToggles.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
 import { linkTooltip, mentionStateClasses } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
@@ -960,7 +960,7 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
           {{ lineVisibilityLabels.custom }}
         </ToggleGroupItem>
       </ToggleGroup>
-      <TeleprompterHighlightFilter v-model="annotationHighlight" />
+      <AnnotationStateToggles v-model="annotationHighlight" />
       <template v-if="$slots['panel-actions']" #end>
         <slot name="panel-actions" />
       </template>
