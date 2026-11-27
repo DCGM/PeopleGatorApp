@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { focusTransform, FOCUS_MARGIN, MINIMUM_ZOOM } from '@/viewmodels/document-focus'
 
 const page = { left: 100, top: -200, width: 540, height: 900 }
-const viewer = { width: 800, height: 600, toolbarBottom: 80 }
+const viewer = { width: 800, height: 600 }
 const current = { scale: 1, x: 0, y: 0 }
 type Transform = { scale: number; x: number; y: number }
 /** The page bounds after replacing one Panzoom transform with another. */
@@ -29,7 +29,7 @@ function edges(position: typeof page, bounds: typeof page) {
 }
 describe('document focus geometry', () => {
   it('keeps zoom and position when the region is fully visible', () => {
-    // 262-370px across and 250-340px down: clear of the toolbar and every edge.
+    // 262-370px across and 250-340px down: clear of every edge.
     const target = { left: 30, top: 50, width: 20, height: 10 }
     expect(focusTransform(target, page, viewer, current)).toEqual(current)
     const zoomed = { scale: 2, x: 30, y: -70 }
@@ -40,7 +40,7 @@ describe('document focus geometry', () => {
     // Inside the gutter still counts as visible.
     const edge = { left: 0, top: 0, width: 10, height: 10 }
     expect(
-      focusTransform(edge, { left: 0, top: 80, width: 800, height: 520 }, viewer, current),
+      focusTransform(edge, { left: 0, top: 0, width: 800, height: 600 }, viewer, current),
     ).toEqual(current)
   })
   it('pans the shortest distance to a region outside the view, keeping the zoom', () => {
@@ -58,26 +58,25 @@ describe('document focus geometry', () => {
       const after = edges(target, shown(bounds, from, result))
       expect(after.left).toBeGreaterThanOrEqual(-0.001)
       expect(after.right).toBeLessThanOrEqual(viewer.width + 0.001)
-      expect(after.top).toBeGreaterThanOrEqual(viewer.toolbarBottom - 0.001)
+      expect(after.top).toBeGreaterThanOrEqual(-0.001)
       expect(after.bottom).toBeLessThanOrEqual(viewer.height + 0.001)
       // An axis that moved stops at the gutter on the side it came from.
       if (before.left < 0) expect(after.left).toBeCloseTo(FOCUS_MARGIN)
       if (before.right > viewer.width) expect(after.right).toBeCloseTo(viewer.width - FOCUS_MARGIN)
-      if (before.top < viewer.toolbarBottom)
-        expect(after.top).toBeCloseTo(viewer.toolbarBottom + FOCUS_MARGIN)
+      if (before.top < 0) expect(after.top).toBeCloseTo(FOCUS_MARGIN)
       if (before.bottom > viewer.height)
         expect(after.bottom).toBeCloseTo(viewer.height - FOCUS_MARGIN)
     }
   })
   it('moves only the axis that is out of view', () => {
-    // Visible across, hidden under the toolbar.
+    // Visible across, cut off above the viewer.
     const result = focusTransform(
-      { left: 30, top: 25, width: 20, height: 5 },
+      { left: 30, top: 20, width: 20, height: 5 },
       page,
       viewer,
       current,
     )!
-    expect(result).toEqual({ scale: 1, x: 0, y: 79 })
+    expect(result).toEqual({ scale: 1, x: 0, y: 44 })
   })
   it('pans, without zooming, to a region that fits the viewer but not its gutters', () => {
     // 770px of an 800px viewer, clipped by 10px on the left.
@@ -100,7 +99,7 @@ describe('document focus geometry', () => {
     expect(result.scale).toBeGreaterThan(MINIMUM_ZOOM)
     const after = edges(target, shown(bounds, from, result))
     expect((after.left + after.right) / 2).toBeCloseTo(400)
-    expect((after.top + after.bottom) / 2).toBeCloseTo(340)
+    expect((after.top + after.bottom) / 2).toBeCloseTo(300)
     expect(after.left).toBeGreaterThanOrEqual(FOCUS_MARGIN)
     expect(after.right).toBeLessThanOrEqual(viewer.width - FOCUS_MARGIN)
   })
@@ -127,7 +126,7 @@ describe('document focus geometry', () => {
       focusTransform(
         { left: 0, top: 0, width: 10, height: 10 },
         page,
-        { width: 30, height: 50, toolbarBottom: 70 },
+        { width: 30, height: 50 },
         current,
       ),
     ).toBeNull()

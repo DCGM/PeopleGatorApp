@@ -370,7 +370,6 @@ function applyPendingFocus() {
   }
   const viewerRect = viewer.getBoundingClientRect()
   const pageRect = pageNode.getBoundingClientRect()
-  const toolbar = viewer.querySelector('.viewer-tools')?.getBoundingClientRect()
   const transform = focusTransform(
     position,
     {
@@ -379,11 +378,7 @@ function applyPendingFocus() {
       width: pageRect.width,
       height: pageRect.height,
     },
-    {
-      width: viewerRect.width,
-      height: viewerRect.height,
-      toolbarBottom: toolbar ? toolbar.bottom - viewerRect.top : 0,
-    },
+    { width: viewerRect.width, height: viewerRect.height },
     { scale: panzoom.getScale(), ...panzoom.getPan() },
   )
   if (!transform) return

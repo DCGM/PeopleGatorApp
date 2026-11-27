@@ -169,7 +169,7 @@ beforeEach(() => {
       left: 0,
       top,
       right: 800,
-      bottom: this.classList.contains('viewer-tools') ? 80 : top + 600,
+      bottom: top + 600,
       width: 800,
       height: 600,
       x: 0,

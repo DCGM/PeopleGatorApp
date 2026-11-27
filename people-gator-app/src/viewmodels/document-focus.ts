@@ -16,7 +16,7 @@ export const FOCUS_MARGIN = 24
 export function focusTransform(
   position: PageViewportBounds,
   page: PageViewportBounds,
-  viewer: { width: number; height: number; toolbarBottom: number },
+  viewer: { width: number; height: number },
   current: { scale: number; x: number; y: number },
 ) {
   if (
@@ -40,10 +40,8 @@ export function focusTransform(
     current.scale <= 0
   )
     return null
-  const toolbar = Math.max(0, viewer.toolbarBottom)
-  const top = toolbar + FOCUS_MARGIN
   const width = viewer.width - FOCUS_MARGIN * 2
-  const height = viewer.height - top - FOCUS_MARGIN
+  const height = viewer.height - FOCUS_MARGIN * 2
   if (width <= 0 || height <= 0) return null
   // The region as currently shown, in viewer pixels.
   const left = page.left + (position.left / 100) * page.width
@@ -51,7 +49,7 @@ export function focusTransform(
   const shownWidth = (position.width / 100) * page.width
   const shownHeight = (position.height / 100) * page.height
   const shiftX = axisShift(left, shownWidth, 0, viewer.width)
-  const shiftY = axisShift(targetTop, shownHeight, toolbar, viewer.height)
+  const shiftY = axisShift(targetTop, shownHeight, 0, viewer.height)
   if (shiftX !== null && shiftY !== null) {
     // Panzoom translates in unscaled coordinates.
     return {
@@ -73,10 +71,7 @@ export function focusTransform(
   return {
     scale,
     x: current.x - (centerX - viewer.width / 2) / current.scale,
-    y:
-      current.y -
-      (centerY - viewer.height / 2) / current.scale +
-      (top + height / 2 - viewer.height / 2) / scale,
+    y: current.y - (centerY - viewer.height / 2) / current.scale,
   }
 }
 
