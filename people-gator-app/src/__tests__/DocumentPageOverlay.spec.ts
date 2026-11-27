@@ -329,15 +329,16 @@ it('expands the selected tag into one card through viewport movement and collaps
     expect(panel()).toBe(reopened)
     await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
     expect(panel()).toBe(reopened)
-    // A click outside closes the actions but keeps the face selected.
+    // A click off the face unselects it; its actions close at once.
     press(document.body, 'pointerdown', 10)
     press(window, 'pointerup', 12)
     await settle()
     expect(panel()).toBeNull()
-    expect(wrapper.emitted('clearFace')).toHaveLength(1)
-    expect(detection.attributes('aria-pressed')).toBe('true')
-    expect(detection.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    await wrapper.setProps({ selectedFaceId: null })
+    expect(detection.attributes('aria-pressed')).toBe('false')
     await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
     await settle()
     expect(panel()).not.toBeNull()
 
@@ -354,19 +355,23 @@ it('expands the selected tag into one card through viewport movement and collaps
     toolbar.click()
     await settle()
     expect(panel()).not.toBeNull()
-    // A tap outside still closes them.
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    // A tap off the face still unselects it.
     touch(document.body, 'pointerdown')
     document.body.click()
     await settle()
     expect(panel()).toBeNull()
+    expect(wrapper.emitted('clearFace')).toHaveLength(3)
     toolbar.remove()
+    await wrapper.setProps({ selectedFaceId: null })
     await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
     await settle()
     expect(panel()).not.toBeNull()
 
     // Escape on the selected box clears the selection in one press.
     await detection.trigger('keydown', { key: 'Escape' })
-    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    expect(wrapper.emitted('clearFace')).toHaveLength(4)
 
     // Selecting another face collapses the previous card to its tag.
     await wrapper.setProps({ selectedFaceId: 'two' })
