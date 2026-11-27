@@ -26,21 +26,33 @@ from people_gator_api.utils.http_errors import raise_api_error
 router = APIRouter(prefix="/events", tags=["events"])
 
 
-def _owned_session(
-    session_id: uuid.UUID,
-    user: BrowseActorDependency,
-    hub: EventHubDependency,
+def _resolve(
+    session_id: uuid.UUID, user: BrowseActorDependency, hub: EventHubDependency, connecting: bool
 ) -> SubscriptionsResponse:
-    """Resolve the caller's session before any response starts."""
     try:
-        return hub.subscriptions(session_id, user.user_id)
+        return hub.subscriptions(session_id, user.user_id, connecting=connecting)
     except SessionOwnershipError:
         raise_api_error(404, "not_found", "Session not found")
     except SessionLimitError:
         raise_api_error(429, "too_many_sessions", "Too many open event sessions")
 
 
-type OwnedSessionDependency = Annotated[SubscriptionsResponse, Depends(_owned_session)]
+def _session(
+    session_id: uuid.UUID, user: BrowseActorDependency, hub: EventHubDependency
+) -> SubscriptionsResponse:
+    """Resolve a session the caller may use."""
+    return _resolve(session_id, user, hub, connecting=False)
+
+
+def _stream_session(
+    session_id: uuid.UUID, user: BrowseActorDependency, hub: EventHubDependency
+) -> SubscriptionsResponse:
+    """Refuse a stream the caller may not open before the response starts."""
+    return _resolve(session_id, user, hub, connecting=True)
+
+
+type OwnedSessionDependency = Annotated[SubscriptionsResponse, Depends(_session)]
+type StreamSessionDependency = Annotated[SubscriptionsResponse, Depends(_stream_session)]
 
 
 @router.get(
@@ -53,12 +65,12 @@ type OwnedSessionDependency = Annotated[SubscriptionsResponse, Depends(_owned_se
     description=(
         "Open the session's event stream; the client chooses the session UUID. "
         "The first frame lists the session's topics, each later frame reports one "
-        "changed topic. Only one stream per session stays open, and events sent "
-        "while no stream was open are not replayed."
+        "changed topic, starting with those queued while no stream was open. The "
+        "session belongs to the stream's user until the stream closes."
     ),
 )
 async def stream_events_route(
-    session: OwnedSessionDependency,
+    session: StreamSessionDependency,
     user: BrowseActorDependency,
     hub: EventHubDependency,
 ) -> AsyncIterable[SessionEvent | ChangeEvent]:
@@ -84,7 +96,7 @@ async def get_event_topics_route(session: OwnedSessionDependency) -> Subscriptio
     description=(
         "Add and remove topics while the stream stays open. Repeating a "
         "subscription or removing an unknown topic changes nothing. A session "
-        "without a stream is forgotten after a minute."
+        "without a stream keeps queueing and is forgotten after a minute."
     ),
 )
 async def update_event_topics_route(

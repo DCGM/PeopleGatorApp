@@ -79,8 +79,8 @@ class Api:
         while not self.hub.subscriptions(self.session, USER).connected:
             await asyncio.sleep(0)
         await act()
-        queue = self.hub._sessions[self.session].queue  # pyright: ignore[reportPrivateUsage]
-        while queue is not None and not queue.empty():  # let the stream send what was published
+        queued = self.hub._sessions[self.session].events  # pyright: ignore[reportPrivateUsage]
+        while queued:  # let the stream send what was published
             await asyncio.sleep(0)
         with self.hub.connect(self.session, USER):  # a newer stream ends the request
             response = await stream
@@ -161,16 +161,32 @@ async def test_subscriptions_are_configured_beside_the_stream() -> None:
 
 
 @pytest.mark.asyncio
-async def test_another_users_session_is_not_found() -> None:
+async def test_a_connected_session_is_not_found_for_another_user() -> None:
     hub = EventHub()
     async with _api(hub=hub) as owner, _api(user_id=uuid.uuid4(), hub=hub) as intruder:
         await owner.subscribe(_topic("face"))
         url = f"/api/v1/events/{owner.session}"
 
-        assert (await intruder.client.get(url)).status_code == 404
-        assert (await intruder.client.get(url + "/topics")).status_code == 404
-        assert (await intruder.client.patch(url + "/topics", json={})).status_code == 404
+        async def intrude() -> None:
+            assert (await intruder.client.get(url)).status_code == 404
+            assert (await intruder.client.get(url + "/topics")).status_code == 404
+            assert (await intruder.client.patch(url + "/topics", json={})).status_code == 404
+
+        await owner.frames(intrude)
         assert hub.subscriptions(owner.session, USER).topics
+        # Once the stream is closed nobody owns the session.
+        assert (await intruder.client.get(url + "/topics")).json()["topics"] == [_topic("face")]
+
+
+@pytest.mark.asyncio
+async def test_too_many_streams_are_refused_before_the_response_starts() -> None:
+    hub = EventHub(max_user_sessions=1)
+    async with _api(hub=hub) as api:
+        async def second() -> None:
+            response = await api.client.get(f"/api/v1/events/{uuid.uuid4()}")
+            assert response.status_code == 429
+
+        await api.frames(second)
 
 
 @pytest.mark.asyncio
@@ -408,8 +424,8 @@ async def test_postgres_reassignment_and_delete_reach_subscribers(
         assert (await api.client.delete(url)).status_code == 204
         assert (await api.client.get(url)).status_code == 404
 
-        queue = api.hub._sessions[api.session].queue  # pyright: ignore[reportPrivateUsage]
-        while queue is not None and not queue.empty():
+        queued = api.hub._sessions[api.session].events  # pyright: ignore[reportPrivateUsage]
+        while queued:
             await asyncio.sleep(0)
         with api.hub.connect(api.session, user.user_id):
             response = await stream

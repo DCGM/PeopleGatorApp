@@ -13,15 +13,19 @@ it carries no data, so the client refetches. All three routes need
 
 ## Sessions
 
-The client picks a random UUID as its session ID. Either route creates the
-session on first use, owned by the calling user; another user gets 404.
-A session has one stream: opening a second one ends the first.
+The client picks a random UUID as its session ID; either route creates the
+session on first use. A session has one stream: opening a second one ends the
+first.
 
-Subscriptions belong to the session, not to the connection, so they survive a
-reconnect. A session without a stream is forgotten after 60 seconds, and all
-sessions are lost when the API restarts. A user can hold 16 sessions; beyond
-that the longest-idle one is dropped, or the request returns 429 when all are
-connected.
+A session belongs to the user of its open stream, and another user gets 404.
+Closing the stream clears the ownership: until a stream is opened again, any
+user who knows the ID can configure or connect the session, so keep it private.
+
+Subscriptions and queued events belong to the session, not to the connection,
+so they survive a reconnect. The queue holds 1000 events, also while no stream
+is open; a full queue drops its oldest event. A session without a stream is
+forgotten after 60 seconds, and all sessions are lost when the API restarts. A
+user can have 16 open streams; one more returns 429.
 
 ## Topics
 
@@ -85,11 +89,13 @@ generated client's `streamEventsRouteApiV1EventsSessionIdGet`.
 
 ## What a client must handle
 
-Delivery is best effort and nothing is replayed.
+Delivery is best effort.
 
-- **On every `session` frame** (first connect and each reconnect) refetch what
-  is shown, and re-subscribe if `topics` is missing entries.
-- A client that falls 1000 events behind is disconnected and should reconnect.
+- **On every `session` frame** (first connect and each reconnect) reload all
+  shown data, and re-subscribe if `topics` is missing entries. Events queued
+  during a short disconnection follow the frame, but the queue may have dropped
+  older ones or the session may have expired, and nothing says so.
+- A connected client that falls 1000 events behind silently loses the oldest.
 - **Cascades reach the parent, not each child.** Deleting or merging an entity
   sends `deleted` to its own and its `related` topic, and a merge sends one
   `updated` with `object: null` to the target's `related` topic; the moved

@@ -1070,7 +1070,7 @@ export const healthApiV1HealthGet = <ThrowOnError extends boolean = false>(optio
 /**
  * Stream a session's events
  *
- * Open the session's event stream; the client chooses the session UUID. The first frame lists the session's topics, each later frame reports one changed topic. Only one stream per session stays open, and events sent while no stream was open are not replayed.
+ * Open the session's event stream; the client chooses the session UUID. The first frame lists the session's topics, each later frame reports one changed topic, starting with those queued while no stream was open. The session belongs to the stream's user until the stream closes.
  */
 export const streamEventsRouteApiV1EventsSessionIdGet = <ThrowOnError extends boolean = false>(options: Options<StreamEventsRouteApiV1EventsSessionIdGetData, ThrowOnError, StreamEventsRouteApiV1EventsSessionIdGetResponse>) => (options.client ?? client).sse.get<StreamEventsRouteApiV1EventsSessionIdGetResponses, StreamEventsRouteApiV1EventsSessionIdGetErrors, ThrowOnError>({
     responseType: 'text',
@@ -1092,7 +1092,7 @@ export const getEventTopicsRouteApiV1EventsSessionIdTopicsGet = <ThrowOnError ex
 /**
  * Subscribe and unsubscribe a session
  *
- * Add and remove topics while the stream stays open. Repeating a subscription or removing an unknown topic changes nothing. A session without a stream is forgotten after a minute.
+ * Add and remove topics while the stream stays open. Repeating a subscription or removing an unknown topic changes nothing. A session without a stream keeps queueing and is forgotten after a minute.
  */
 export const updateEventTopicsRouteApiV1EventsSessionIdTopicsPatch = <ThrowOnError extends boolean = false>(options: Options<UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchData, ThrowOnError>) => (options.client ?? client).patch<UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchResponses, UpdateEventTopicsRouteApiV1EventsSessionIdTopicsPatchErrors, ThrowOnError>({
     responseType: 'json',

@@ -1,15 +1,18 @@
 """Process-local hub for live change notifications.
 
-A client owns a session, subscribes it to topics and reads its events from one
-stream. Mutation routes describe what they changed in a :class:`ChangeSet` and
-publish it after their transaction committed. Delivery is best effort: nothing
-is stored or replayed, and other processes do not see each other's changes.
+A client subscribes a session to topics and reads its events from one stream;
+the session belongs to that stream's user only while the stream is open.
+Mutation routes describe what they changed in a :class:`ChangeSet` and publish
+it after their transaction committed. Each session keeps a bounded queue, also
+while briefly disconnected, and drops its oldest events when full. Nothing is
+persisted, and other processes do not see each other's changes.
 The public contract is documented in ``docs/EVENTS.md``.
 """
 
 import asyncio
 import time
 import uuid
+from collections import deque
 from collections.abc import AsyncIterator, Callable, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -34,11 +37,11 @@ type _Hit = tuple[ChangeKind, ObjectRef | None]
 
 
 class SessionOwnershipError(Exception):
-    """The session ID belongs to another user."""
+    """Another user's stream is attached to the session."""
 
 
 class SessionLimitError(Exception):
-    """The user already has the maximum number of connected sessions."""
+    """The user has the maximum number of open streams, or the hub is full."""
 
 
 class TopicLimitError(ValueError):
@@ -128,22 +131,31 @@ def _event(topic: Topic, hits: list[_Hit]) -> ChangeEvent:
 
 @dataclass(slots=True)
 class _Session:
-    user_id: uuid.UUID
     idle_deadline: float | None
+    events: deque[ChangeEvent]
+    # The user of the attached stream; nobody owns a session without a stream.
+    user_id: uuid.UUID | None = None
+    connection: object | None = None
     topics: dict[Topic, None] = field(default_factory=dict[Topic, None])
-    queue: asyncio.Queue[ChangeEvent | None] | None = None
+    wakeup: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 @dataclass(frozen=True, slots=True)
 class Connection:
-    """An attached stream: the hello frame, then events until the stream is ended."""
+    """An attached stream: the hello frame, then events until a newer stream takes over."""
 
     hello: SessionEvent
-    _queue: asyncio.Queue[ChangeEvent | None]
+    _session: _Session
+    _token: object
 
     async def events(self) -> AsyncIterator[ChangeEvent]:
-        while (event := await self._queue.get()) is not None:
-            yield event
+        session = self._session
+        while session.connection is self._token:
+            if session.events:
+                yield session.events.popleft()
+                continue
+            session.wakeup.clear()
+            await session.wakeup.wait()
 
 
 class EventHub:
@@ -155,12 +167,14 @@ class EventHub:
         idle_seconds: float = 60.0,
         queue_size: int = 1000,
         max_user_sessions: int = 16,
+        max_sessions: int = 4096,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         super().__init__()
         self._idle_seconds = idle_seconds
         self._queue_size = queue_size
         self._max_user_sessions = max_user_sessions
+        self._max_sessions = max_sessions
         self._clock = clock
         self._sessions: dict[uuid.UUID, _Session] = {}
         self._subscribers: dict[Topic, set[uuid.UUID]] = {}
@@ -171,9 +185,18 @@ class EventHub:
         self._purge()
         return bool(self._subscribers)
 
-    def subscriptions(self, session_id: uuid.UUID, user_id: uuid.UUID) -> SubscriptionsResponse:
-        """Return the session, creating it for this user when it does not exist."""
-        return self._response(session_id, self._session(session_id, user_id))
+    def subscriptions(
+        self, session_id: uuid.UUID, user_id: uuid.UUID, *, connecting: bool = False
+    ) -> SubscriptionsResponse:
+        """Return the session, creating it when it does not exist.
+
+        With ``connecting`` the call also fails when the user could not attach
+        a stream, so that a route can refuse before its response starts.
+        """
+        session = self._session(session_id, user_id)
+        if connecting:
+            self._check_stream_limit(session, user_id)
+        return self._response(session_id, session)
 
     def update(
         self,
@@ -199,22 +222,29 @@ class EventHub:
 
     @contextmanager
     def connect(self, session_id: uuid.UUID, user_id: uuid.UUID) -> Generator[Connection]:
-        """Attach the session's single stream; a newer connection ends the older one."""
+        """Attach the session's single stream and own the session while it is open.
+
+        Events queued while no stream was attached are delivered first. A newer
+        stream of the same user ends the older one.
+        """
         session = self._session(session_id, user_id)
-        self._end(session)
-        queue = asyncio.Queue[ChangeEvent | None](maxsize=self._queue_size)
-        session.queue = queue
+        self._check_stream_limit(session, user_id)
+        token = object()
+        session.user_id = user_id
+        session.connection = token
         session.idle_deadline = None
+        session.wakeup.set()  # ends the stream this one replaces
+        hello = SessionEvent(session_id=session_id, topics=list(session.topics))
         try:
-            yield Connection(
-                SessionEvent(session_id=session_id, topics=list(session.topics)), queue
-            )
+            yield Connection(hello, session, token)
         finally:
-            if session.queue is queue:
-                self._detach(session)
+            if session.connection is token:
+                session.connection = None
+                session.user_id = None
+                session.idle_deadline = self._clock() + self._idle_seconds
 
     def publish(self, changes: ChangeSet) -> None:
-        """Queue one event per subscribed topic. Never blocks or raises for a slow client."""
+        """Queue one event per subscribed topic; a full queue drops its oldest event."""
         self._purge()
         for topic, hits in changes.hits.items():
             subscribers = self._subscribers.get(topic)
@@ -223,36 +253,43 @@ class EventHub:
             event = _event(topic, hits)
             for session_id in subscribers:
                 session = self._sessions[session_id]
-                if session.queue is None:
-                    continue
-                try:
-                    session.queue.put_nowait(event)
-                except asyncio.QueueFull:
-                    # The client fell behind. End its stream so that it
-                    # reconnects and refetches instead of acting on a gap.
-                    self._end(session)
+                session.events.append(event)  # a full deque discards its oldest event
+                session.wakeup.set()
 
     def _session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> _Session:
         self._purge()
         session = self._sessions.get(session_id)
         if session is not None:
-            if session.user_id != user_id:
+            if session.user_id not in (None, user_id):
                 raise SessionOwnershipError
             return session
-        owned = [(key, value) for key, value in self._sessions.items() if value.user_id == user_id]
-        if len(owned) >= self._max_user_sessions:
-            idle = [(value.idle_deadline, key) for key, value in owned if value.idle_deadline is not None]
+        if len(self._sessions) >= self._max_sessions:
+            idle = [
+                (value.idle_deadline, key)
+                for key, value in self._sessions.items()
+                if value.idle_deadline is not None
+            ]
             if not idle:
                 raise SessionLimitError
             self._remove(min(idle, key=lambda item: item[0])[1])
-        session = _Session(user_id=user_id, idle_deadline=self._clock() + self._idle_seconds)
+        session = _Session(
+            idle_deadline=self._clock() + self._idle_seconds,
+            events=deque(maxlen=self._queue_size),
+        )
         self._sessions[session_id] = session
         return session
+
+    def _check_stream_limit(self, session: _Session, user_id: uuid.UUID) -> None:
+        if session.user_id is not None:
+            return  # the user's own stream is replaced, not added
+        streams = sum(1 for other in self._sessions.values() if other.user_id == user_id)
+        if streams >= self._max_user_sessions:
+            raise SessionLimitError
 
     def _response(self, session_id: uuid.UUID, session: _Session) -> SubscriptionsResponse:
         return SubscriptionsResponse(
             session_id=session_id,
-            connected=session.queue is not None,
+            connected=session.connection is not None,
             topics=list(session.topics),
         )
 
@@ -261,20 +298,6 @@ class EventHub:
         subscribers.discard(session_id)
         if not subscribers:
             del self._subscribers[topic]
-
-    def _detach(self, session: _Session) -> None:
-        session.queue = None
-        session.idle_deadline = self._clock() + self._idle_seconds
-
-    def _end(self, session: _Session) -> None:
-        """End the attached stream, dropping what it had not read yet."""
-        queue = session.queue
-        if queue is None:
-            return
-        self._detach(session)
-        while not queue.empty():
-            queue.get_nowait()
-        queue.put_nowait(None)
 
     def _remove(self, session_id: uuid.UUID) -> None:
         session = self._sessions.pop(session_id)

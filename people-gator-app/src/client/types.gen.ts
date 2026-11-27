@@ -3360,8 +3360,9 @@ export type ScoreFusion = 'rrf';
  *
  * First frame of every connection: the session's current subscriptions.
  *
- * Events published while no stream was connected are not replayed, so a
- * client refetches what it shows and re-subscribes missing topics.
+ * Events queued while no stream was connected follow it, but the queue is
+ * bounded and drops its oldest events, so a client reloads what it shows on
+ * every session frame and re-subscribes missing topics.
  */
 export type SessionEvent = {
     /**

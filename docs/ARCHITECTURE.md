@@ -97,7 +97,7 @@ do not fabricate a new processing event.
 Clients follow changes made by others through one Server-Sent Events stream per
 session, subscribed to entity, source, face and mention topics. Mutation routes
 publish to a process-local hub after their transaction commits; events carry
-identities only and nothing is replayed. See
+identities only and each session keeps a bounded queue that drops its oldest. See
 [Live change events](../people-gator-api/docs/EVENTS.md).
 
 The optional Weaviate adapter does not supply PostgreSQL transaction guarantees:

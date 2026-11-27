@@ -186,15 +186,48 @@ async def test_a_page_change_notifies_its_document() -> None:
     assert event.object == ObjectRef(kind=TopicKind.SOURCE, id=page)
 
 
-def test_a_session_belongs_to_its_first_user() -> None:
+def test_a_session_belongs_to_its_streams_user_until_it_disconnects() -> None:
     hub = EventHub()
-    session = uuid.uuid4()
-    hub.subscriptions(session, USER)
+    session, other = uuid.uuid4(), uuid.uuid4()
+    hub.update(session, USER, subscribe=[_topic(TopicKind.FACE)])
 
-    with pytest.raises(SessionOwnershipError):
-        hub.update(session, uuid.uuid4(), subscribe=[_topic(TopicKind.FACE)])
-    with pytest.raises(SessionOwnershipError), hub.connect(session, uuid.uuid4()):
-        pass
+    with hub.connect(session, USER):
+        with pytest.raises(SessionOwnershipError):
+            hub.update(session, other, subscribe=[_topic(TopicKind.MENTION)])
+        with pytest.raises(SessionOwnershipError):
+            hub.subscriptions(session, other, connecting=True)
+        with pytest.raises(SessionOwnershipError), hub.connect(session, other):
+            pass
+        assert hub.subscriptions(session, USER).connected  # the refused stream changed nothing
+
+    # Disconnecting clears the ownership; the session and its topics remain.
+    with hub.connect(session, other) as connection:
+        assert connection.hello.topics == [_topic(TopicKind.FACE)]
+        with pytest.raises(SessionOwnershipError):
+            hub.subscriptions(session, USER)
+
+
+@pytest.mark.asyncio
+async def test_events_queued_while_disconnected_are_sent_on_reconnect() -> None:
+    hub = EventHub(queue_size=3)
+    session = uuid.uuid4()
+    hub.update(session, USER, subscribe=[_topic(TopicKind.FACE)])
+    faces = [uuid.uuid4() for _ in range(5)]
+
+    def publish(face: uuid.UUID) -> None:
+        changes = ChangeSet()
+        changes.changed(TopicKind.FACE, face, ChangeKind.CREATED)
+        hub.publish(changes)
+
+    publish(faces[0])  # before the first stream
+    with hub.connect(session, USER) as connection:
+        assert [event.object and event.object.id for event in await _drain(connection)] == faces[:1]
+    for face in faces[1:]:
+        publish(face)  # one more than the queue holds: the oldest is dropped
+
+    with hub.connect(session, USER) as connection:
+        assert [event.object and event.object.id for event in await _drain(connection)] == faces[2:]
+        assert await _drain(connection) == []
 
 
 def test_topic_and_session_limits() -> None:
@@ -208,11 +241,34 @@ def test_topic_and_session_limits() -> None:
     assert len(hub.update(session, USER, subscribe=[_topic(TopicKind.FACE)], unsubscribe=topics[:1]).topics) == MAX_SESSION_TOPICS
 
     with hub.connect(session, USER), hub.connect(uuid.uuid4(), USER):
+        extra = uuid.uuid4()
+        hub.subscriptions(extra, USER)  # configuring needs no stream
+        with pytest.raises(SessionLimitError):
+            hub.subscriptions(extra, USER, connecting=True)
+        with pytest.raises(SessionLimitError), hub.connect(extra, USER):
+            pass
+        with hub.connect(session, USER):  # replacing an own stream is not a new one
+            pass
+        with hub.connect(uuid.uuid4(), uuid.uuid4()):  # another user is unaffected
+            pass
+    # A closed stream makes room for a new one.
+    with hub.connect(extra, USER):
+        pass
+
+
+def test_a_full_hub_drops_its_longest_idle_session() -> None:
+    now = [0.0]
+    hub = EventHub(max_sessions=2, clock=lambda: now[0])
+    oldest, newer, connected = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    hub.update(oldest, USER, subscribe=[_topic(TopicKind.FACE)])
+    now[0] = 1
+    hub.update(newer, USER, subscribe=[_topic(TopicKind.MENTION)])
+
+    hub.subscriptions(connected, USER)
+    assert hub.subscriptions(newer, USER).topics
+    with hub.connect(connected, USER), hub.connect(newer, USER):
         with pytest.raises(SessionLimitError):
             hub.subscriptions(uuid.uuid4(), USER)
-        hub.subscriptions(uuid.uuid4(), uuid.uuid4())  # another user is unaffected
-    # A detached session makes room for a new one.
-    hub.subscriptions(uuid.uuid4(), USER)
 
 
 def test_sessions_without_a_stream_expire() -> None:
@@ -245,21 +301,24 @@ async def test_a_newer_stream_ends_the_older_one() -> None:
             assert [event async for event in older.events()] == []
             assert len(await _drain(newer)) == 1
         assert not hub.subscriptions(session, USER).connected
+        with hub.connect(session, uuid.uuid4()):
+            pass
     # The older stream's late cleanup must not disturb the session.
     assert hub.subscriptions(session, USER).topics
 
 
 @pytest.mark.asyncio
-async def test_a_client_that_falls_behind_is_disconnected() -> None:
+async def test_a_client_that_falls_behind_loses_its_oldest_events() -> None:
     hub = EventHub(queue_size=2)
     session = uuid.uuid4()
     hub.update(session, USER, subscribe=[_topic(TopicKind.FACE)])
+    faces = [uuid.uuid4() for _ in range(3)]
 
     with hub.connect(session, USER) as connection:
-        for _ in range(3):
+        for face in faces:
             changes = ChangeSet()
-            changes.changed(TopicKind.FACE, uuid.uuid4(), ChangeKind.CREATED)
+            changes.changed(TopicKind.FACE, face, ChangeKind.CREATED)
             hub.publish(changes)
 
-        assert [event async for event in connection.events()] == []
-        assert not hub.subscriptions(session, USER).connected
+        assert [event.object and event.object.id for event in await _drain(connection)] == faces[1:]
+        assert hub.subscriptions(session, USER).connected
