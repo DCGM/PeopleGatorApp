@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import PanelBar from './PanelBar.vue'
 import AnnotationStateToggles from './AnnotationStateToggles.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
@@ -8,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { cardInUse, movedIntoNestedLayer, useHoverCard } from '@/composables/hover-card'
 import {
   AlignJustify,
   ArrowDownFromLine,
@@ -102,6 +102,8 @@ const emit = defineEmits<{
     shown: string[],
   ]
   'clear-mentions': []
+  /** The mention whose card is shown on hover or focus, without selecting it (#203). */
+  'preview-mention': [mentionId: string | null]
   'create-mention': [mention: { lineIndex: number; name: string; context: string }]
   'change-mention': [mention: { mentionId: string; name: string; context: string }]
   /** Several overlapped mentions become one covering the selected words. */
@@ -119,14 +121,12 @@ const lineVisibilityIcons = {
 
 const hoveredEntityKey = ref<string | null>(null)
 const bodyElement = ref<HTMLElement | null>(null)
-/** The scan view's state badge with the assigned name, floating beside the active mention. */
-const mentionBadge = ref<{
+/** The mention whose person card is shown on hover or focus, before any selection (#203). */
+const hoverCard = useHoverCard<{
   entity: TranscriptionEntitySpan
-  name: string
-  left: number
-  top: number
-} | null>(null)
-const MENTION_BADGE_HEIGHT = 24
+  index: number
+  element: HTMLElement
+}>((hovered) => !isSelectedMention(hovered.entity))
 
 function mentionName(entity: TranscriptionEntitySpan) {
   if (!entity.entity_id) return undefined
@@ -151,28 +151,31 @@ function mentionLabel(entity: TranscriptionEntitySpan) {
   return `${entityText(entity)}: ${name ? `${name}, ` : ''}${linkTooltip(entity)}`
 }
 
-function showMentionBadge(event: Event, entity: TranscriptionEntitySpan) {
-  hoveredEntityKey.value = entityKey(entity)
-  // A selected mention already shows its card.
-  if (isSelectedMention(entity) && slots['mention-card']) return
-  const body = bodyElement.value
-  const mark = event.currentTarget as HTMLElement | null
-  if (!body || !mark) return
-  const bounds = body.getBoundingClientRect()
-  const target = mark.getBoundingClientRect()
-  const above = target.top - bounds.top - MENTION_BADGE_HEIGHT - 4
-  mentionBadge.value = {
-    entity,
-    name: mentionName(entity) ?? 'Unassigned',
-    left: Math.max(0, target.left - bounds.left),
-    // Near the top edge, show the badge below the mention instead of clipping it.
-    top: above >= 0 ? above : target.bottom - bounds.top + 4,
+/** Focus from a press is followed by its click; only keyboard focus opens the card. */
+function keyboardFocused(element: HTMLElement) {
+  try {
+    return element.matches(':focus-visible')
+  } catch {
+    return true
   }
 }
 
-function hideMentionBadge() {
+function showMentionCard(event: Event, index: number, entity: TranscriptionEntitySpan) {
+  hoveredEntityKey.value = entityKey(entity)
+  const element = event.currentTarget as HTMLElement | null
+  // A selected mention already shows its card.
+  if (!element || !entity.mention_id || isSelectedMention(entity)) return hoverCard.close()
+  if (event instanceof MouseEvent) {
+    // Not while dragging a text selection or adding mentions with a modifier.
+    if (event.buttons || event.shiftKey || event.ctrlKey || event.metaKey) return
+  } else if (!keyboardFocused(element)) return
+  if (cardInUse(mentionCardElement())) return
+  hoverCard.open({ entity, index, element }, !(event instanceof MouseEvent))
+}
+
+function hideMentionCard() {
   hoveredEntityKey.value = null
-  mentionBadge.value = null
+  hoverCard.close()
 }
 const scrollElement = ref<HTMLElement | null>(null)
 const translationElement = ref<HTMLElement | null>(null)
@@ -471,9 +474,12 @@ function updateCardAnchor() {
   const visible = (element: HTMLElement | null | undefined) =>
     element && !element.closest('[data-hidden]') ? element : null
   const key = props.selectedEntityKey
+  // A card opened on hover stays at the hovered fragment once its mention is selected.
+  const hovered = hoverCard.target.value?.element
   cardAnchor.value =
     (props.selectedMentionIds.length &&
-      ((key &&
+      ((key && hovered?.isConnected && hovered.dataset.occurrence === key && visible(hovered)) ||
+        (key &&
         visible(scroller?.querySelector<HTMLElement>(`mark[data-occurrence="${quoted(key)}"]`))) ||
         visible(
           [...(scroller?.querySelectorAll<HTMLElement>('mark[aria-pressed="true"]') ?? [])].find(
@@ -487,8 +493,43 @@ watch(
   () => void nextTick(updateCardAnchor),
   { flush: 'post', immediate: true },
 )
-const slots = defineSlots<{ 'mention-card'?: () => unknown; 'panel-actions'?: () => unknown }>()
-const cardOpen = computed(() => Boolean(cardAnchor.value && slots['mention-card']))
+defineSlots<{ 'mention-card'?: () => unknown; 'panel-actions'?: () => unknown }>()
+
+/** The hovered mention's card replaces the selection's card until the pointer leaves. */
+const preview = computed(() => {
+  const hovered = hoverCard.target.value
+  return hovered && !isSelectedMention(hovered.entity) ? hovered : null
+})
+watch(
+  () => preview.value?.entity.mention_id ?? null,
+  (id) => emit('preview-mention', id),
+)
+// Another selection, or changed text, takes over from a hovered card.
+watch(
+  () => [props.selectedMentionIds, props.selectedEntityKey, props.transcription],
+  () => {
+    const hovered = hoverCard.target.value
+    if (hovered && (!isSelectedMention(hovered.entity) || !hovered.element.isConnected))
+      hoverCard.close(true)
+  },
+)
+// Selecting the hovered mention keeps its card in place, so a press inside it completes.
+const shownCardAnchor = computed(() => {
+  if (preview.value) return preview.value.element
+  const hovered = hoverCard.target.value
+  return hovered && entityKey(hovered.entity) === props.selectedEntityKey
+    ? hovered.element
+    : cardAnchor.value
+})
+/** Using the previewed card selects its mention, so the card's actions apply to it. */
+function selectPreview() {
+  const hovered = preview.value
+  if (hovered) emit('select-entity', hovered.index, hovered.entity, 'replace', shownMentionOrder())
+}
+function leaveCard(event: MouseEvent) {
+  if (movedIntoNestedLayer(event, event.currentTarget as Element)) selectPreview()
+  else hoverCard.close()
+}
 
 /**
  * The card may cover nearby mentions. While Ctrl, Cmd or Shift is held, it
@@ -523,6 +564,7 @@ function clearMentions() {
       ?.focus({ preventScroll: true })
 }
 
+const SELECTION_ACTION_HEIGHT = 24
 type SelectionAction = {
   kind: 'create' | 'change' | 'merge'
   lineIndex: number
@@ -642,7 +684,7 @@ function measureSelectionAction(): SelectionAction | null {
     typeof range.getBoundingClientRect === 'function'
       ? range.getBoundingClientRect()
       : first.getBoundingClientRect()
-  const above = rect.top - bounds.top - MENTION_BADGE_HEIGHT - 4
+  const above = rect.top - bounds.top - SELECTION_ACTION_HEIGHT - 4
   return {
     kind: overlappedIds.length > 1 ? 'merge' : target ? 'change' : 'create',
     lineIndex: indices[0]!,
@@ -970,7 +1012,7 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
       class="relative grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 px-3 sm:grid-cols-[minmax(0,1fr)_3.5rem] sm:px-6">
       <section ref="scrollElement" tabindex="0"
         class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); mentionBadge = null" @keydown="handleKeydown"
+        aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); hoverCard.close(true)" @keydown="handleKeydown"
         @click="clearOutsideLines"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
@@ -1012,11 +1054,11 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
                     :data-mention-id="segment.entity.mention_id"
                     class="transcription-entity cursor-pointer" :class="mentionClasses(segment.entity)"
                     :data-selection="mentionSelectionState(segment.entity)"
-                    @mouseenter="showMentionBadge($event, segment.entity)" @mouseleave="hideMentionBadge"
-                    @focus="showMentionBadge($event, segment.entity)" @blur="hideMentionBadge"
+                    @mouseenter="showMentionCard($event, index, segment.entity)" @mouseleave="hideMentionCard"
+                    @focus="showMentionCard($event, index, segment.entity)" @blur="hideMentionCard"
                     @keydown.enter.stop.prevent="activateEntity(index, segment.entity, $event)"
                     @keydown.space.stop.prevent="activateEntity(index, segment.entity, $event)"
-                    @keydown.esc="selectedMentionIds.length && ($event.stopPropagation(), clearMentions())"
+                    @keydown.esc="preview ? hoverCard.close(true) : selectedMentionIds.length && ($event.stopPropagation(), clearMentions())"
                     @mousedown="keepTextSelection" @click.stop="activateEntity(index, segment.entity, $event)">
                     {{ segment.text }}
                   </mark>
@@ -1026,20 +1068,17 @@ defineExpose({ scrollPage, navigateTo, focusMentionCard })
             </div>
         </template>
       </section>
-      <!-- Outside the text, so it never shifts lines or joins a selection or copy. -->
-      <!-- Positioned by its own wrapper: the badge component renders inside a span of its own. -->
-      <div v-if="mentionBadge" class="pointer-events-none absolute z-10"
-        :style="{ left: `${mentionBadge.left}px`, top: `${mentionBadge.top}px` }">
-        <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
-          :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
-      </div>
       <!-- The person card floats above or below its mention, like a face's card. -->
-      <Popover :open="cardOpen">
-        <PopoverAnchor :reference="cardAnchor ?? undefined" as="span" class="hidden" />
+      <!-- Outside the text, so it never shifts lines or joins a selection or copy. -->
+      <Popover :open="Boolean(shownCardAnchor && $slots['mention-card'])">
+        <PopoverAnchor :reference="shownCardAnchor ?? undefined" as="span" class="hidden" />
         <PopoverContent v-if="$slots['mention-card']" data-mention-card side="bottom" align="start"
           :side-offset="4" :collision-padding="8"
           sticky="always" hide-when-detached update-position-strategy="always"
-          aria-label="Selected mentions"
+          :aria-label="preview ? 'Mention details' : 'Selected mentions'"
+          :data-preview="preview ? '' : undefined"
+          @mouseenter="hoverCard.hold" @mouseleave="leaveCard"
+          @pointerdown.capture="selectPreview" @focusin="selectPreview"
           class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0 transition-opacity"
           :class="selectingMore && 'pointer-events-none opacity-25'"
           :data-selecting-more="selectingMore ? '' : undefined"

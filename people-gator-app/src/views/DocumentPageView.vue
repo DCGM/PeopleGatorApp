@@ -279,6 +279,8 @@ const selectedEntityKey = ref<string | null>(null)
 // Name mentions selected for the person card (#176), independent of the face.
 const NO_MENTIONS: MentionSelection = { ids: [], anchor: null }
 const mentionSelection = ref<MentionSelection>(NO_MENTIONS)
+// The hovered mention, whose card is shown without selecting it (#203).
+const previewMentionId = ref<string | null>(null)
 // A created or changed mention, selected once the page's spans show it.
 const pendingMention = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
@@ -405,6 +407,7 @@ watch(
 watch(focusPageKey, () => {
   selectedEntityKey.value = null
   mentionSelection.value = NO_MENTIONS
+  previewMentionId.value = null
   pendingMention.value = null
   selectedLineIndex.value = 0
   scanViewport.reset()
@@ -988,14 +991,21 @@ const selectedMentionLines = computed(() => {
     line.entities?.some((span) => span.mention_id && ids.has(span.mention_id)) ? [index] : [],
   )
 })
+// The card shows the hovered mention, else the selection (#203). Its actions
+// apply to the selection: using a hovered card selects its mention first.
+const cardMentionList = computed(() =>
+  previewMentionId.value
+    ? selectedMentions(transcription.value, [previewMentionId.value])
+    : selectedMentionList.value,
+)
 const mentionCardPerson = useEntityQuery(
   computed(() => {
-    const ids = new Set(selectedMentionList.value.map((mention) => mention.entityId))
+    const ids = new Set(cardMentionList.value.map((mention) => mention.entityId))
     return ids.size === 1 ? ([...ids][0] ?? '') : ''
   }),
 )
 const mentionCard = computed<MentionCardTarget | null>(() => {
-  const list = selectedMentionList.value
+  const list = cardMentionList.value
   if (!list.length) return null
   const people = new Set(list.map((mention) => mention.entityId))
   const personId = people.size === 1 ? ([...people][0] ?? null) : null
@@ -1331,6 +1341,7 @@ onBeforeUnmount(() => {
                   @select-line="selectLine"
                   @select-entity="selectEntity"
                   @clear-mentions="clearMentions"
+                  @preview-mention="previewMentionId = $event"
                   @create-mention="createMention"
                   @change-mention="changeMention"
                   @merge-mentions="mergeMentions"

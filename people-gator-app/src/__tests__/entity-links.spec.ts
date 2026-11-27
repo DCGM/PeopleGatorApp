@@ -405,18 +405,12 @@ describe('entity link review', () => {
     const mention = wrapper.findAll('mark')[2]!
     expect(mention.attributes('aria-label')).toContain('Ada Novak: Ada Novak, Manually linked')
     expect(mention.attributes('tabindex')).toBe('0')
-    // Hover and focus show the scan view's state badge with the assigned name, outside the text.
+    // Hover highlights the mention; no compact state badge is shown (#203).
     await mention.trigger('mouseenter')
     expect(mention.attributes('data-selection')).toBe('hovered')
-    const badge = wrapper.get('[data-mention-badge]')
-    expect(badge.text()).toBe('Ada Novak')
-    expect(text.find('[data-mention-badge]').exists()).toBe(false)
+    expect(wrapper.find('[data-face-status-badge]').exists()).toBe(false)
     await mention.trigger('mouseleave')
-    expect(wrapper.find('[data-mention-badge]').exists()).toBe(false)
-    await wrapper.findAll('mark')[0]!.trigger('focus')
-    expect(wrapper.get('[data-mention-badge]').attributes('aria-label')).toBe('Verified link')
-    await wrapper.findAll('mark')[0]!.trigger('blur')
-    expect(wrapper.find('[data-mention-badge]').exists()).toBe(false)
+    expect(mention.attributes('data-selection')).toBe('default')
     for (const event of ['click', 'keydown.enter', 'keydown.space']) {
       await mention.trigger(event)
     }

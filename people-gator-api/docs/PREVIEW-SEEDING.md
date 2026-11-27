@@ -436,8 +436,11 @@ coverage checks equivalent repository matches, unchanged times on rerun and
 identical verification, plus upgrades from the previously deployed revision.
 
 The `scan-annotation-hover` example opens the same ledger with all annotations
-visible. Move between the automatic and verified face regions, transcription
-mentions and Page faces badges: no annotation status/type tooltip should cover
+visible. Rest the pointer on a face region or a transcription mention: its full
+person card opens, with the same actions as after a click, and no separate
+status badge or tooltip. Move into the card and use an action; that selects the
+face or mention. Move away without using it and the card closes, leaving the
+selection as it was. Page faces badges show no annotation status/type tooltip over
 content. State icons, accessible annotation names and selection remain available.
 Check Enter/Space selection and mobile touch selection; use the link-state scan
 examples for manual and unassigned faces. This entry point reuses existing local
@@ -1772,9 +1775,10 @@ The additive **Mention editing practice** document (`mention-editing`,
 
 Open `mention-editing`:
 
-- Click a name in the transcription to open its person card, which floats
-  above or below the mention like a face's card and hides when the mention
-  scrolls out of view. Only the clicked mention is selected, and its line is
+- Hover or click a name in the transcription to open its person card, which
+  floats above or below the mention like a face's card and hides when the
+  mention scrolls out of view. A hovered card closes when the pointer leaves;
+  using it selects the mention. Only the clicked mention is selected, and its line is
   marked on the scan. Ctrl/Cmd-click adds or removes a mention; Shift-click
   selects every shown mention from the last clicked one, in text order and
   across lines. Enter/Space with the same modifiers work on a focused mention.

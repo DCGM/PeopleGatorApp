@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY } from '@/composables/hover-card'
 import type { TranscriptionEntitySpan } from '@/viewmodels/document-workspace.types'
 
 describe('DocumentPageOverlay', () => {
@@ -411,6 +412,52 @@ it('expands the selected tag into one card through viewport movement and collaps
     await wrapper.setProps({ selectedFaceId: 'hidden' })
     await settle()
     expect(panel()).toBeNull()
+
+    // Hovering a face opens its full card without selecting it or moving focus (#203).
+    await wrapper.setProps({ selectedFaceId: 'two' })
+    await settle()
+    const selections = wrapper.emitted('selectFace')!.length
+    const rest = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay + 20))
+    ;(detection.element as HTMLElement).focus()
+    await detection.trigger('mouseenter')
+    await rest(HOVER_CARD_OPEN_DELAY)
+    await settle()
+    expect(document.querySelectorAll('[data-slot="popover-content"]')).toHaveLength(1)
+    expect(panel()!.getAttribute('data-detection-card')).toBe('one')
+    expect(document.activeElement).toBe(detection.element)
+    expect(wrapper.emitted('selectFace')).toHaveLength(selections)
+    // Left unused, it closes and the selected face's card returns.
+    await detection.trigger('mouseleave')
+    await rest(HOVER_CARD_CLOSE_DELAY)
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('two')
+    expect(document.activeElement).toBe(detection.element)
+    // Escape cancels a hovered card and keeps the selection.
+    const cleared = wrapper.emitted('clearFace')!.length
+    await detection.trigger('mouseenter')
+    await rest(HOVER_CARD_OPEN_DELAY)
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('one')
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('two')
+    expect(wrapper.emitted('clearFace')).toHaveLength(cleared)
+    await detection.trigger('mouseleave')
+    // The pointer may travel into the card; using the card selects its face.
+    await detection.trigger('mouseenter')
+    await rest(HOVER_CARD_OPEN_DELAY)
+    await settle()
+    await detection.trigger('mouseleave')
+    panel()!.dispatchEvent(new MouseEvent('mouseenter'))
+    await rest(HOVER_CARD_CLOSE_DELAY)
+    expect(panel()!.getAttribute('data-detection-card')).toBe('one')
+    press(panel()!.querySelector('button')!, 'pointerdown')
+    expect(wrapper.emitted('selectFace')!.slice(selections)).toEqual([['one']])
+    await wrapper.setProps({ selectedFaceId: 'one' })
+    panel()!.dispatchEvent(new MouseEvent('mouseleave'))
+    await rest(HOVER_CARD_CLOSE_DELAY)
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('one')
   } finally {
     wrapper.unmount()
     vi.unstubAllGlobals()

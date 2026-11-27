@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { h, nextTick, ref } from 'vue'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY } from '@/composables/hover-card'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import type {
   TranscriptionEntitySpan,
@@ -826,6 +827,100 @@ describe('DocumentTeleprompter', () => {
       expect(document.activeElement).toBe(card)
     })
 
+    it('shows the full card on hover and selects its mention once the card is used (#203)', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = mount(DocumentTeleprompter, {
+          attachTo: document.body,
+          props: {
+            transcription: sample(),
+            selectedLineIndex: 0,
+            selectedEntityKey: null,
+            relatedEntityId: null,
+            selectedMentionIds: [],
+          },
+          slots: { 'mention-card': () => h('button', { 'aria-label': 'Card action' }) },
+        })
+        cleanup.push(() => wrapper.unmount())
+        const lastPreview = () => wrapper.emitted('preview-mention')!.slice(-1)[0]
+        const card = () => document.querySelector<HTMLElement>('[data-mention-card]')
+        const mark = wrapper.get('[data-line-index="3"] mark')
+        const id = mark.attributes('data-mention-id')!
+        await mark.trigger('mouseenter')
+        // A pass over a mention opens nothing; a short rest does.
+        expect(card()).toBeNull()
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_OPEN_DELAY)
+        await flushPromises()
+        expect(card()!.getAttribute('aria-label')).toBe('Mention details')
+        expect(wrapper.emitted('preview-mention')).toEqual([[id]])
+        expect(wrapper.emitted('select-entity')).toBeUndefined()
+        // The pointer may travel from the mention into the card.
+        await mark.trigger('mouseleave')
+        card()!.dispatchEvent(new MouseEvent('mouseenter'))
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_CLOSE_DELAY * 2)
+        expect(card()).not.toBeNull()
+        // Using the card selects the mention, so its actions apply to it.
+        card()!
+          .querySelector('button')!
+          .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        const selected = wrapper.emitted('select-entity')!
+        expect(selected).toHaveLength(1)
+        expect(selected[0]!.slice(0, 3)).toEqual([
+          3,
+          expect.objectContaining({ mention_id: id }),
+          'replace',
+        ])
+        await wrapper.setProps({
+          selectedMentionIds: [id],
+          selectedEntityKey: mark.attributes('data-occurrence'),
+          selectedLineIndex: 3,
+        })
+        await flushPromises()
+        expect(lastPreview()).toEqual([null])
+        // Selected, the card stays after the pointer leaves it.
+        card()!.dispatchEvent(new MouseEvent('mouseleave'))
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_CLOSE_DELAY * 2)
+        expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
+
+        // Left unused, a hovered card closes and the selection's card returns.
+        const other = wrapper.get('[data-line-index="1"] mark')
+        await other.trigger('mouseenter')
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_OPEN_DELAY)
+        await flushPromises()
+        expect(card()!.getAttribute('aria-label')).toBe('Mention details')
+        expect(lastPreview()).toEqual([other.attributes('data-mention-id')])
+        await other.trigger('mouseleave')
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_CLOSE_DELAY)
+        await flushPromises()
+        expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
+        expect(lastPreview()).toEqual([null])
+        expect(wrapper.emitted('select-entity')).toHaveLength(1)
+        // Escape cancels a hovered card and keeps the selection.
+        await other.trigger('mouseenter')
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_OPEN_DELAY)
+        await flushPromises()
+        expect(card()!.getAttribute('aria-label')).toBe('Mention details')
+        const escape = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        })
+        document.body.dispatchEvent(escape)
+        await flushPromises()
+        expect(escape.defaultPrevented).toBe(true)
+        expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
+        expect(wrapper.emitted('clear-mentions')).toBeUndefined()
+        await other.trigger('mouseleave')
+        // A text-selection drag or a modifier never opens a card.
+        await other.trigger('mouseenter', { buttons: 1 })
+        await other.trigger('mouseenter', { ctrlKey: true })
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_OPEN_DELAY)
+        expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('offers Create mention for whole words selected in one line', async () => {
       const wrapper = render({ canCreateMention: true, canChangeMention: true })
       const line = wrapper.get('[data-line-index="2"] [data-line-text]').element
@@ -892,8 +987,13 @@ describe('DocumentTeleprompter', () => {
     })
 
     it('offers Merge mentions for a selection overlapping several mentions', async () => {
-      const wrapper = render({ canCreateMention: true, canChangeMention: true, canMergeMentions: true })
-      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      const wrapper = render({
+        canCreateMention: true,
+        canChangeMention: true,
+        canMergeMentions: true,
+      })
+      const text = (index: number) =>
+        wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
       // From inside Ada's L2 mention to inside L4's "Ada Novak" mention.
       await select(text(1).querySelector('mark')!, 4, 3, text(3).querySelector('mark')!)
       const action = wrapper.get('[data-selection-action]')
@@ -924,7 +1024,8 @@ describe('DocumentTeleprompter', () => {
         regionId: 'r',
       }))
       const wrapper = render({ transcription: lines, canCreateMention: true, selectedLineIndex: 0 })
-      const text = (index: number) => wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
+      const text = (index: number) =>
+        wrapper.get(`[data-line-index="${index}"] [data-line-text]`).element
       await select(text(1), 0, 3)
       await wrapper.get('[data-selection-action]').trigger('click')
       expect(wrapper.emitted('create-mention')).toEqual([
