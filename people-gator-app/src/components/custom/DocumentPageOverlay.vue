@@ -44,8 +44,9 @@ const overlay = ref<HTMLElement | null>(null)
 const drawableFaces = computed(() =>
   props.faces.filter((face) => face.position.width > 0 && face.position.height > 0),
 )
-// Only the selected face expands its name tag into its details card. An outside
-// click collapses the card; the face stays selected until another selection.
+// Only the selected face expands its name tag into its details card. A click
+// off it on the scan unselects it; the card also collapses at once, in case the
+// parent keeps the face selected.
 const dismissedFaceId = ref<string | null>(null)
 watch(
   () => props.selectedFaceId,
@@ -83,6 +84,12 @@ async function openFocus(event: Event, faceId: string) {
     ?.focus({ preventScroll: true })
 }
 
+function clickOff(faceId: string) {
+  if (props.selectedFaceId !== faceId) return
+  dismissedFaceId.value = faceId
+  emit('clearFace')
+}
+
 let outsidePress: { x: number; y: number; faceId: string; cancelled: boolean } | null = null
 function finishOutsidePress(event: PointerEvent) {
   const press = outsidePress
@@ -91,7 +98,7 @@ function finishOutsidePress(event: PointerEvent) {
   window.removeEventListener('pointercancel', finishOutsidePress, true)
   if (!press || press.cancelled || event.type === 'pointercancel') return
   if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > SCAN_DRAG_THRESHOLD) return
-  if (props.selectedFaceId === press.faceId) dismissedFaceId.value = press.faceId
+  clickOff(press.faceId)
 }
 // Reka reports a touch press only on the next click. A touch drag has none, so a later
 // click elsewhere, such as on the toolbar, would report that stale press.
@@ -100,15 +107,17 @@ function notePress(event: PointerEvent) {
   latestPress = event
 }
 onMounted(() => window.addEventListener('pointerdown', notePress, true))
-// Close on an outside click on the scan, but not when the press starts a scan
+// Unselect on an outside click on the scan, but not when the press starts a scan
 // drag or pinch. Work elsewhere, such as searching People for this face, keeps it.
 function pressOutside(event: CustomEvent<{ originalEvent: PointerEvent }>, faceId: string) {
   event.preventDefault()
   const press = event.detail.originalEvent
   const { clientX, clientY, pointerType, target } = press
   if (props.viewer && !(target instanceof Node && props.viewer.contains(target))) return
+  // A press on a face box selects that face; clearing first would flash the selection off.
+  if (target instanceof Element && target.closest('[data-region-type="face"]')) return
   if (pointerType === 'touch') {
-    if (press === latestPress && props.selectedFaceId === faceId) dismissedFaceId.value = faceId
+    if (press === latestPress) clickOff(faceId)
     return
   }
   if (outsidePress) {
@@ -133,16 +142,18 @@ function returnFocus(event: Event, faceId: string) {
   ;(selected ?? detectionButton(faceId))?.focus({ preventScroll: true })
 }
 
+// Faces share the lines' colors: accent for the selection, orange for the selected person.
 const faceSelectionClasses = {
-  selected: 'z-10 border-secondary bg-secondary/25 ring-2 ring-secondary/70',
-  matched: 'border-accent bg-accent/15 ring-2 ring-accent/80',
+  selected: 'z-10 border-accent bg-accent/20 ring-1 ring-background/75',
+  selectedMatched: 'z-10 border-accent bg-accent/20 ring-2 ring-orange-500',
+  matched: 'border-orange-500 bg-orange-500/15 hover:bg-orange-500/30',
   default: 'border-gray-500/20 bg-transparent hover:bg-accent/20',
 } as const
 
 function faceSelectionState(face: Face): keyof typeof faceSelectionClasses {
-  if (face.id === props.selectedFaceId) return 'selected'
-  if (face.personId === props.selectedPersonId || face.id === props.selectedCandidateFaceId)
-    return 'matched'
+  const ofSelectedPerson = face.personId !== null && face.personId === props.selectedPersonId
+  if (face.id === props.selectedFaceId) return ofSelectedPerson ? 'selectedMatched' : 'selected'
+  if (ofSelectedPerson || face.id === props.selectedCandidateFaceId) return 'matched'
   return 'default'
 }
 

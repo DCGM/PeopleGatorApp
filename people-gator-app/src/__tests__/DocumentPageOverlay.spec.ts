@@ -177,6 +177,21 @@ describe('DocumentPageOverlay', () => {
     await face.trigger('click')
     expect(wrapper.emitted('selectFace')).toEqual([['face-identifier']])
 
+    // A selected face is accent like a selected line; its selected person adds the orange ring.
+    await wrapper.setProps({ selectedFaceId: 'face-identifier' })
+    expect(face.classes()).toEqual(expect.arrayContaining(['border-accent', 'bg-accent/20']))
+    expect(face.classes()).not.toContain('ring-orange-500')
+    await wrapper.setProps({ selectedPersonId: 'person-1' })
+    expect(face.classes()).toEqual(
+      expect.arrayContaining(['border-accent', 'bg-accent/20', 'ring-orange-500']),
+    )
+    // Another face of the selected person is orange like a mention of that person.
+    await wrapper.setProps({ selectedFaceId: null })
+    expect(face.classes()).toEqual(
+      expect.arrayContaining(['border-orange-500', 'bg-orange-500/15']),
+    )
+    await wrapper.setProps({ selectedPersonId: null })
+
     await wrapper.setProps({ showBadgeNames: false })
     expect(badge.find('span').exists()).toBe(false)
     expect(badge.find('svg').exists()).toBe(true)
@@ -329,16 +344,29 @@ it('expands the selected tag into one card through viewport movement and collaps
     expect(panel()).toBe(reopened)
     await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
     expect(panel()).toBe(reopened)
-    // A click outside closes the actions but keeps the face selected.
+    // A click off the face unselects it; its actions close at once.
     press(document.body, 'pointerdown', 10)
     press(window, 'pointerup', 12)
     await settle()
     expect(panel()).toBeNull()
-    expect(wrapper.emitted('clearFace')).toHaveLength(1)
-    expect(detection.attributes('aria-pressed')).toBe('true')
-    expect(detection.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    await wrapper.setProps({ selectedFaceId: null })
+    expect(detection.attributes('aria-pressed')).toBe('false')
     await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
     await settle()
+    expect(panel()).not.toBeNull()
+
+    // A click on a face box only selects: the selected one stays, another one takes over.
+    for (const id of ['one', 'two']) {
+      const box = wrapper.get(`[data-detection-id="${id}"]`)
+      press(box.element, 'pointerdown', 10)
+      press(window, 'pointerup', 10)
+      await box.trigger('click')
+      await settle()
+      expect(wrapper.emitted('clearFace')).toHaveLength(2)
+      expect(wrapper.emitted('selectFace')!.slice(-1)).toEqual([[id]])
+    }
     expect(panel()).not.toBeNull()
 
     // A touch drag sends no click, so a later click on the toolbar must not report it.
@@ -354,19 +382,23 @@ it('expands the selected tag into one card through viewport movement and collaps
     toolbar.click()
     await settle()
     expect(panel()).not.toBeNull()
-    // A tap outside still closes them.
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    // A tap off the face still unselects it.
     touch(document.body, 'pointerdown')
     document.body.click()
     await settle()
     expect(panel()).toBeNull()
+    expect(wrapper.emitted('clearFace')).toHaveLength(3)
     toolbar.remove()
+    await wrapper.setProps({ selectedFaceId: null })
     await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
     await settle()
     expect(panel()).not.toBeNull()
 
     // Escape on the selected box clears the selection in one press.
     await detection.trigger('keydown', { key: 'Escape' })
-    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+    expect(wrapper.emitted('clearFace')).toHaveLength(4)
 
     // Selecting another face collapses the previous card to its tag.
     await wrapper.setProps({ selectedFaceId: 'two' })
