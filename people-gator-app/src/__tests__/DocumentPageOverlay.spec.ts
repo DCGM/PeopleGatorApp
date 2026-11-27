@@ -432,6 +432,17 @@ it('expands the selected tag into one card through viewport movement and collaps
     await settle()
     expect(panel()!.getAttribute('data-detection-card')).toBe('two')
     expect(document.activeElement).toBe(detection.element)
+    // Escape cancels a hovered card and keeps the selection.
+    const cleared = wrapper.emitted('clearFace')!.length
+    await detection.trigger('mouseenter')
+    await rest(HOVER_CARD_OPEN_DELAY)
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('one')
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await settle()
+    expect(panel()!.getAttribute('data-detection-card')).toBe('two')
+    expect(wrapper.emitted('clearFace')).toHaveLength(cleared)
+    await detection.trigger('mouseleave')
     // The pointer may travel into the card; using the card selects its face.
     await detection.trigger('mouseenter')
     await rest(HOVER_CARD_OPEN_DELAY)

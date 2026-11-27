@@ -1,4 +1,4 @@
-import { onBeforeUnmount, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
 
 export const HOVER_CARD_OPEN_DELAY = 250
 export const HOVER_CARD_CLOSE_DELAY = 200
@@ -6,8 +6,9 @@ export const HOVER_CARD_CLOSE_DELAY = 200
 /**
  * Hover intent for a floating card (#203): the card opens after a short rest on
  * its target and stays while the pointer travels from the target into the card.
+ * Escape cancels a card that is only hovered (`isPreview`), and nothing else.
  */
-export function useHoverCard<T>() {
+export function useHoverCard<T>(isPreview: (target: T) => boolean = () => true) {
   const target = shallowRef<T | null>(null)
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -26,7 +27,21 @@ export function useHoverCard<T>() {
     if (immediate || target.value === null) target.value = null
     else timer = setTimeout(() => (target.value = null), HOVER_CARD_CLOSE_DELAY)
   }
-  onBeforeUnmount(hold)
+  function cancelOnEscape(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return
+    const shown = target.value
+    hold()
+    if (shown === null || !isPreview(shown)) return
+    target.value = null
+    // The press is spent on the hovered card; the selection stays.
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  onMounted(() => window.addEventListener('keydown', cancelOnEscape, true))
+  onBeforeUnmount(() => {
+    hold()
+    window.removeEventListener('keydown', cancelOnEscape, true)
+  })
 
   return { target, open, close, hold }
 }

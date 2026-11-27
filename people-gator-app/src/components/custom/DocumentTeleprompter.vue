@@ -126,7 +126,7 @@ const hoverCard = useHoverCard<{
   entity: TranscriptionEntitySpan
   index: number
   element: HTMLElement
-}>()
+}>((hovered) => !isSelectedMention(hovered.entity))
 
 function mentionName(entity: TranscriptionEntitySpan) {
   if (!entity.entity_id) return undefined

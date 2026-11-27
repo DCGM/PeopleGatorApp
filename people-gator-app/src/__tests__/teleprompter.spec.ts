@@ -895,6 +895,22 @@ describe('DocumentTeleprompter', () => {
         expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
         expect(lastPreview()).toEqual([null])
         expect(wrapper.emitted('select-entity')).toHaveLength(1)
+        // Escape cancels a hovered card and keeps the selection.
+        await other.trigger('mouseenter')
+        await vi.advanceTimersByTimeAsync(HOVER_CARD_OPEN_DELAY)
+        await flushPromises()
+        expect(card()!.getAttribute('aria-label')).toBe('Mention details')
+        const escape = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        })
+        document.body.dispatchEvent(escape)
+        await flushPromises()
+        expect(escape.defaultPrevented).toBe(true)
+        expect(card()!.getAttribute('aria-label')).toBe('Selected mentions')
+        expect(wrapper.emitted('clear-mentions')).toBeUndefined()
+        await other.trigger('mouseleave')
         // A text-selection drag or a modifier never opens a card.
         await other.trigger('mouseenter', { buttons: 1 })
         await other.trigger('mouseenter', { ctrlKey: true })

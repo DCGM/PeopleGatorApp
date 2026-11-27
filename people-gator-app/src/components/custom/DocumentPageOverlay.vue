@@ -60,7 +60,7 @@ watch(
 )
 
 const slots = defineSlots<{ card?: (props: { face: Face }) => unknown }>()
-const hoverCard = useHoverCard<string>()
+const hoverCard = useHoverCard<string>((faceId) => faceId !== props.selectedFaceId)
 // Cards that opened on hover only; closing one leaves focus where it is.
 const hoverOnly = new Set<string>()
 watch(hoverCard.target, (faceId) => {
