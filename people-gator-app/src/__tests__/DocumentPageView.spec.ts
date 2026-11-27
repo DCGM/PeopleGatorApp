@@ -160,18 +160,20 @@ beforeEach(() => {
     pageImageUrl: ref(''),
     pageImageLoading: ref(false),
   })
+  pageTop = 0
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
+    const top = this.classList.contains('scan-page') ? pageTop : 0
     return {
       left: 0,
-      top: 0,
+      top,
       right: 800,
-      bottom: this.classList.contains('viewer-tools') ? 80 : 600,
+      bottom: top + 600,
       width: 800,
       height: 600,
       x: 0,
-      y: 0,
+      y: top,
       toJSON: () => ({}),
     }
   })
@@ -263,7 +265,31 @@ async function mountView(renderActions = false, mentionCard = false) {
   await settleFocus()
   return wrapper
 }
+// Where the scan page starts in the viewer; below 600 its regions are out of view.
+let pageTop = 0
 describe('evidence selection viewport focus', () => {
+  beforeEach(() => {
+    pageTop = 700
+  })
+  it('keeps the view when the selected region is already visible', async () => {
+    pageTop = 0
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('select-face', 'a')
+    wrapper.findComponent({ name: 'DocumentTeleprompter' }).vm.$emit('select-entity', 1, span('l2'))
+    await settleFocus()
+    expect(mocks.zoom).not.toHaveBeenCalled()
+    expect(mocks.pan).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('pans to an out-of-view region without changing the zoom', async () => {
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('select-face', 'a')
+    await settleFocus()
+    expect(mocks.zoom).not.toHaveBeenCalled()
+    // The face spans 820-940px; its bottom moves to the 24px gutter above 600px.
+    expect(mocks.pan).toHaveBeenCalledWith(0, -364, expect.anything())
+    wrapper.unmount()
+  })
   it('focuses gallery, overlay and keyboard face selections, including reselection', async () => {
     const wrapper = await mountView()
     for (const component of ['ScanFacesPanel', 'DocumentPageOverlay']) {

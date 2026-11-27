@@ -374,7 +374,6 @@ function applyPendingFocus() {
   }
   const viewerRect = viewer.getBoundingClientRect()
   const pageRect = pageNode.getBoundingClientRect()
-  const toolbar = viewer.querySelector('.viewer-tools')?.getBoundingClientRect()
   const transform = focusTransform(
     position,
     {
@@ -383,16 +382,15 @@ function applyPendingFocus() {
       width: pageRect.width,
       height: pageRect.height,
     },
-    {
-      width: viewerRect.width,
-      height: viewerRect.height,
-      toolbarBottom: toolbar ? toolbar.bottom - viewerRect.top : 0,
-    },
+    { width: viewerRect.width, height: viewerRect.height },
     { scale: panzoom.getScale(), ...panzoom.getPan() },
   )
   if (!transform) return
   pendingFocus.value = null
-  panzoom.zoom(transform.scale, { animate: false })
+  // A fully visible target keeps the view; only the selection changes.
+  const pan = panzoom.getPan()
+  if (transform.scale !== panzoom.getScale()) panzoom.zoom(transform.scale, { animate: false })
+  else if (transform.x === pan.x && transform.y === pan.y) return
   panzoom.pan(transform.x, transform.y, { animate: false, force: true })
 }
 

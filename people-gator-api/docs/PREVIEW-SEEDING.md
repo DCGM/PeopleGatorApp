@@ -524,11 +524,13 @@ polygons are not exposed by the workspace span type, and character offsets are
 not treated as image coordinates. An identity-level candidate preview does not
 choose an arbitrary spatial occurrence.
 
-Automatic focus uses the viewer's supported 55–350% range, with a named
-`MAXIMUM_AUTOMATIC_ZOOM` of 3.5 (350%), 20% proportional context and a 24 CSS-pixel
-gutter below the measured toolbar. Very large targets stop at the supported
-minimum even when they cannot completely fit. Pan/zoom manually, then activate
-the same evidence to recenter it. Data refreshes and resizing alone preserve
+Automatic focus changes the view only as far as needed. Evidence that is fully
+visible keeps the zoom and position. Evidence that fits the viewer at the
+current zoom is panned the shortest distance into view, with a 24 CSS-pixel
+gutter. Only evidence too large for the viewer is zoomed out, with 20%
+proportional context, and centered; it stops at the supported 55% minimum even
+when it cannot completely fit. Focus never zooms in. To explore it, zoom in and
+pan the evidence partly out of view, then activate it. Data refreshes and resizing alone preserve
 manual placement; pending focus waits for image readiness and usable bounds,
 and page changes discard it. The added fixture has new stable keys and adds
 missing records/media without rewriting existing reviewer edits or timestamps.
